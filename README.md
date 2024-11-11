@@ -8,7 +8,6 @@ This repository serves as the backend service for DDO Audit.
 - **Redis**: An in-memory data structure store used as a caching layer for characters and LFMs to improve performance.
 - **Postgres**: A powerful, open-source relational database system used for persistent storage of character data.
 - **Docker**: Containerization platform used to ensure a consistent and reproducible environment.
-- **Docker Compose**: Tool for defining and running multi-container Docker applications.
 
 ## Links:
 - **Main website**: [https://www.ddoaudit.com](https://www.ddoaudit.com)
