@@ -1,0 +1,41 @@
+services:
+  sanic:
+    build:
+      context: ./sanic
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "8000:8000"
+    expose:
+      - 8000
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - backend
+  redis:
+    build:
+      context: ./redis
+      dockerfile: Dockerfile
+    restart: always
+    networks:
+      - backend
+    # depends_on:
+    #   - postgres
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 30s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - redis_data:/data
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  redis_data:
