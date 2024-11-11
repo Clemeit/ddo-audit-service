@@ -18,8 +18,9 @@ from utils.server import is_server_name_valid
 from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
+from services.postgres import get_character_by_id as get_character_by_id_from_postgres, get_character_by_name_and_server as get_character_by_name_and_server_from_postgres
 
-character_blueprint = Blueprint("character", url_prefix="/character", version=1)
+character_blueprint = Blueprint("character", url_prefix="/characters", version=1)
 
 
 # ===== Client-facing endpoints =====
@@ -28,7 +29,7 @@ async def get_all_characters(request):
     """
     Method: GET
 
-    Route: /character
+    Route: /characters
 
     Description: Get all characters from all servers from the Redis cache.
     """
@@ -49,7 +50,7 @@ async def get_characters_by_server(request, server_name):
     """
     Method: GET
 
-    Route: /character/<server_name:str>
+    Route: /characters/<server_name:str>
 
     Description: Get all characters from a specific server from the Redis cache.
     """
@@ -66,22 +67,26 @@ async def get_character_by_id(request, character_id):
     """
     Method: GET
 
-    Route: /character/<character_id:str>
+    Route: /characters/<character_id:str>
 
     Description: Get a specific character from the Redis cache.
     """
     source = "cache"
     character = get_character_by_character_id(character_id)
+    if character:
+        character = character.model_dump()
+        character["is_online"] = True
 
     if not character:
-        # look up in database
         source = "database"
-        pass
+        character = get_character_by_id_from_postgres(character_id)
+        if character:
+            character["is_online"] = False
 
     if not character:
         return json({"message": "Character not found"}, status=404)
 
-    return json({"data": character.model_dump(), "source": source})
+    return json({"data": character, "source": source})
 
 
 @character_blueprint.get("/<server_name:str>/<character_name:str>")
@@ -91,19 +96,29 @@ async def get_character_by_server_name_and_character_name(
     """
     Method: GET
 
-    Route: /character/<server_name:str>/<character_name:str>
+    Route: /characters/<server_name:str>/<character_name:str>
 
     Description: Get a specific character from a specific server from the Redis cache.
     """
     if not is_server_name_valid(server_name):
         return json({"message": "Invalid server name"}, status=400)
 
+    source = "cache"
     character = get_character_by_name_and_server_name(character_name, server_name)
+    if character:
+        character = character.model_dump()
+        character["is_online"] = True
+
+    if not character:
+        source = "database"
+        character = get_character_by_name_and_server_from_postgres(character_name, server_name)
+        if character:
+            character["is_online"] = False
 
     if not character:
         return json({"message": "Character not found"}, status=404)
 
-    return json({"data": character.model_dump()})
+    return json({"data": character, "source": source})
 
 
 # ===================================
@@ -115,7 +130,7 @@ async def set_characters(request: Request):
     """
     Method: POST
 
-    Route: /character
+    Route: /characters
 
     Description: Set characters in the Redis cache. Should only be called by DDO Audit Collections. Keyfames.
     """
@@ -146,7 +161,7 @@ async def update_characters(request):
     """
     Method: PATCH
 
-    Route: /character
+    Route: /characters
 
     Description: Update characters in the Redis cache. Should only be called by DDO Audit Collections. Delta updates.
     """

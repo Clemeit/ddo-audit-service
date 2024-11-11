@@ -14,7 +14,7 @@ from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
 
-lfm_blueprint = Blueprint("lfm", url_prefix="/lfm", version=1)
+lfm_blueprint = Blueprint("lfm", url_prefix="/lfms", version=1)
 
 
 # ===== Client-facing endpoints =====
@@ -23,7 +23,7 @@ async def get_all_lfms(request):
     """
     Method: GET
 
-    Route: /lfm
+    Route: /lfms
 
     Description: Get all LFM posts from all servers from the Redis cache.
     """
@@ -42,7 +42,7 @@ async def get_lfms_by_server(request, server_name):
     """
     Method: GET
 
-    Route: /lfm/<server_name:str>
+    Route: /lfms/<server_name:str>
 
     Description: Get all LFM posts from a specific server from the Redis cache.
     """
@@ -63,7 +63,7 @@ async def set_lfms(request: Request):
     """
     Method: POST
 
-    Route: /lfm
+    Route: /lfms
 
     Description: Set LFM posts in the Redis cache. Should only be called by DDO Audit Collections. Keyframes.
     """
@@ -94,7 +94,7 @@ async def update_lfms(request):
     """
     Method: PATCH
 
-    Route: /lfm
+    Route: /lfms
 
     Description: Update LFM posts in the Redis cache. Should only be called by DDO Audit Collections. Delta updates.
     """

@@ -1,9 +1,9 @@
 import os
 
 from endpoints.activity import activity_blueprint
-from endpoints.character import character_blueprint
+from endpoints.characters import character_blueprint
 from endpoints.health import health_blueprint
-from endpoints.lfm import lfm_blueprint
+from endpoints.lfms import lfm_blueprint
 from services.redis import close_redis, initialize_redis
 from utils.route import is_method_open, is_route_open
 
