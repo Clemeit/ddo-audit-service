@@ -30,13 +30,12 @@ class GameInfo(BaseModel):
     servers: dict[str, ServerInfo] = {}
 
 
-class ServerCharacters(BaseModel):
+class ServerCharactersData(BaseModel):
     """
     This model will be used to store information about each server's characters in the redis database using reJSON.
     """
 
     characters: dict[str, Character] = {}
-    character_count: int = 0
     last_updated: Optional[float] = None
 
 
@@ -46,12 +45,14 @@ class ServerLFMs(BaseModel):
     """
 
     lfms: dict[str, LFM] = {}
-    lfm_count: int = 0
     last_updated: Optional[float] = None
 
 
 CACHE_MODEL = {
     "game_info": GameInfo(),
-    **{f"{server}:characters": ServerCharacters() for server in SERVER_NAMES_LOWERCASE},
+    **{
+        f"{server}:characters": ServerCharactersData()
+        for server in SERVER_NAMES_LOWERCASE
+    },
     **{f"{server}:lfms": ServerLFMs() for server in SERVER_NAMES_LOWERCASE},
 }

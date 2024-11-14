@@ -1,9 +1,13 @@
-import os
-
-from psycopg2 import pool # type: ignore
 import json
+import os
 from contextlib import contextmanager
 
+from utils.object import get_nested_value
+from models.character import Character, CharacterActivity
+from models.redis import GameInfo
+from models.game import PopulationPointInTime, PopulationDataPoint
+
+from psycopg2 import pool  # type: ignore
 
 # Load environment variables
 DB_CONFIG = {
@@ -59,139 +63,91 @@ def get_db_connection():
         postgres_singleton.get_client().putconn(conn)
 
 
-def add_or_update_character(character: dict) -> None:
-    character_fields = [f for f in character.keys()]
-
-    # Construct the query dynamically
-    columns = ", ".join(character_fields)
-    placeholders = ", ".join(["%s"] * len(character_fields))
-    updates = ", ".join([f"{field} = EXCLUDED.{field}" for field in character_fields])
-
-    query = f"""
-        INSERT INTO characters ({columns})
-        VALUES ({placeholders})
-        ON CONFLICT (id) DO UPDATE SET
-        {updates}
-    """
-
-    # Get the values of the Character model
-    values = [json.dumps(value) if isinstance(value, (dict, list)) else value for value in character.values()]
-
+def add_or_update_characters(characters: list[Character]) -> None:
     with get_db_connection() as conn:
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(query, values)
-                conn.commit()
-        except Exception as e:
-            print(f"Failed to add or update character in the database: {e}")
-            conn.rollback()
+        with conn.cursor() as cursor:
+            try:
+                for character in characters:
+                    character_dump = character.model_dump()
+                    exclude_fields = ["public_comment"]
+                    character_fields = [
+                        field
+                        for field in character_dump.keys()
+                        if field not in exclude_fields
+                    ]
 
-
-def get_nested_value(data: dict, field: str):
-    fields = field.split(".")
-    value = data
-    for f in fields:
-        value = value.get(f)
-        if value is None:
-            return None
-    return value
-
-
-def add_or_update_character_activity(
-    character_id: str, activity: dict[str, dict]
-) -> None:
-    with get_db_connection() as conn: 
-        try:
-            timestamp = activity.get("timestamp")
-            data = activity.get("data")
-
-            with conn.cursor() as cursor:
-
-                cursor.execute(
-                    "SELECT 1 FROM public.character_activity WHERE id = %s", (character_id,)
-                )
-                exists = cursor.fetchone()
-
-                relevant_fields = [
-                    "total_level",
-                    "location.id",
-                    "guild_name",
-                    "server_name",
-                    "is_online",
-                ]
-
-                values = []
-                for field in relevant_fields:
-                    value = get_nested_value(data, field)
-                    values.append(
-                        json.dumps(
-                            [{"timestamp": timestamp, "data": value}]
-                            if value is not None
-                            else []
-                        )
+                    # Construct the query dynamically
+                    columns = ", ".join(character_fields)
+                    placeholders = ", ".join(["%s"] * len(character_fields))
+                    updates = ", ".join(
+                        [f"{field} = EXCLUDED.{field}" for field in character_fields]
                     )
 
-                relevant_fields = [f.split(".")[0] for f in relevant_fields]
-
-                if exists:
-                    # Update the existing record
-                    query_fields = ", ".join(
-                        [f"{field} = {field} || %s::jsonb" for field in relevant_fields]
-                    )
                     query = f"""
-                        UPDATE public.character_activity
-                        SET
-                            {query_fields}
-                        WHERE id = %s
+                        INSERT INTO characters ({columns})
+                        VALUES ({placeholders})
+                        ON CONFLICT (id) DO UPDATE SET
+                        {updates}
                     """
 
-                    # print("query", query)
-                    # print("values", values)
+                    # Get the values of the Character model
+                    values = [
+                        json.dumps(value) if isinstance(value, (dict, list)) else value
+                        for key, value in character_dump.items()
+                        if key in character_fields
+                    ]
 
-                    cursor.execute(
-                        query,
-                        values + [character_id],
-                    )
-                else:
-                    # Insert a new record
-                    columns = ", ".join([*relevant_fields])
-                    placeholders = ", ".join(["%s::jsonb"] * len(relevant_fields))
-
-                    query = f"""
-                        INSERT INTO public.character_activity (id, {columns})
-                        VALUES (%s, {placeholders})"""
-
-                    # print("query", query)
-                    # print("values", values)
-
-                    cursor.execute(
-                        query,
-                        [character_id] + values,
-                    )
-
+                    cursor.execute(query, values)
                 conn.commit()
-        except Exception as e:
-            print(f"Failed to add or update character activity in the database: {e}")
-            conn.rollback()
+            except Exception as e:
+                print(f"Failed to commit changes to the database: {e}")
+                conn.rollback()
+
+
+def add_or_update_character_activities(activity_entries: list[dict]) -> None:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                for activity_entry in activity_entries:
+                    # timestamp = activity_entry.get("timestamp")
+                    character_id = activity_entry.get("id")
+                    activity_type = activity_entry.get("type")
+                    data = activity_entry.get("data")
+
+                    cursor.execute(
+                        """
+                        INSERT INTO public.character_activity (timestamp, id, activity_type, data)
+                        VALUES (NOW(), %s, %s, %s)
+                        """,
+                        (character_id, activity_type, json.dumps(data)),
+                    )
+                conn.commit()
+            except Exception as e:
+                print(
+                    f"Failed to add or update character activity in the database: {e}"
+                )
+                conn.rollback()
 
 
 def get_character_by_id(character_id: str) -> dict:
     with get_db_connection() as conn:
-        try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM public.characters WHERE id = %s", (character_id,))
-            character = cursor.fetchone()
-            if character:
-                return build_character_from_row(character)
-        except Exception as e:
-            print(f"Failed to get character by ID from the database: {e}")
+        with conn.cursor() as cursor:
+            try:
+                cursor.execute(
+                    "SELECT * FROM public.characters WHERE id = %s", (character_id,)
+                )
+                character = cursor.fetchone()
+                if character:
+                    return build_character_from_row(character)
+            except Exception as e:
+                print(f"Failed to get character by ID from the database: {e}")
     return {}
 
 
 def get_character_by_name_and_server(character_name: str, server_name: str) -> dict:
     with get_db_connection() as conn:
-        try:
-            with conn.cursor() as cursor: 
+        with conn.cursor() as cursor:
+            try:
                 cursor.execute(
                     "SELECT * FROM public.characters WHERE LOWER(name) = %s AND LOWER(server_name) = %s",
                     (character_name.lower(), server_name.lower()),
@@ -199,34 +155,17 @@ def get_character_by_name_and_server(character_name: str, server_name: str) -> d
                 character = cursor.fetchone()
                 if character:
                     return build_character_from_row(character)
-        except Exception as e:
-            print(f"Failed to get character by name and server from the database: {e}")
+            except Exception as e:
+                print(
+                    f"Failed to get character by name and server from the database: {e}"
+                )
     return {}
-
-
-def build_character_from_row(row: tuple) -> dict:
-    return {
-        "id": str(row[0]),
-        "name": row[1],
-        "gender": row[2],
-        "race": row[3],
-        "total_level": row[4],
-        "classes": row[5],
-        "location": row[6],
-        "guild_name": row[7],
-        "server_name": row[8],
-        "home_server_name": row[9],
-        "group_id": str(row[10]),
-        "is_in_party": row[11],
-        "is_recruiting": row[12],
-        "is_anonymous": row[13],
-    }
 
 
 def get_character_activity_summary_by_character_id(character_id: str) -> dict:
     with get_db_connection() as conn:
-        try:
-            with conn.cursor() as cursor:
+        with conn.cursor() as cursor:
+            try:
                 cursor.execute(
                     """
                     SELECT
@@ -243,10 +182,10 @@ def get_character_activity_summary_by_character_id(character_id: str) -> dict:
                 activity = cursor.fetchone()
                 if activity:
                     return build_character_activity_summary_from_row(activity)
-        except Exception as e:
-            print(
-                f"Failed to get character activity by character ID from the database: {e}"
-            )
+            except Exception as e:
+                print(
+                    f"Failed to get character activity by character ID from the database: {e}"
+                )
     return {}
 
 
@@ -266,8 +205,8 @@ def get_character_activity_field_by_character_id(
         return []
 
     with get_db_connection() as conn:
-        try:
-            with conn.cursor() as cursor:
+        with conn.cursor() as cursor:
+            try:
                 cursor.execute(
                     f"""
                     SELECT {field}
@@ -279,11 +218,126 @@ def get_character_activity_field_by_character_id(
                 activity = cursor.fetchone()
                 if activity:
                     return activity[0]
-        except Exception as e:
-            print(
-                f"Failed to get character activity field by character ID from the database: {e}"
-            )
+            except Exception as e:
+                print(
+                    f"Failed to get character activity field by character ID from the database: {e}"
+                )
     return []
+
+
+def get_game_population(start_date: str = None, end_date: str = None) -> list[dict]:
+    if not start_date:
+        start_date = "NOW() - INTERVAL '1 day'"
+    if not end_date:
+        end_date = "NOW()"
+
+    # get all entries from the game_info table
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                cursor.execute(
+                    f"""
+                    SELECT
+                        EXTRACT(EPOCH FROM timestamp) as timestamp,
+                        data
+                    FROM public.game_info
+                    WHERE timestamp BETWEEN {start_date} AND {end_date}
+                    """
+                )
+                game_info_list = cursor.fetchall()
+                population_points: list[dict] = []
+                for game_info in game_info_list:
+                    try:
+                        timestamp = game_info[0]
+                        data = GameInfo(**game_info[1])
+                        population_data_points: list[dict[str, PopulationDataPoint]] = (
+                            []
+                        )
+                        for server_name, server_info in data.servers.items():
+                            character_count = 0
+                            lfm_count = 0
+                            if server_info:
+                                if server_info.character_count:
+                                    character_count = server_info.character_count
+                                if server_info.lfm_count:
+                                    lfm_count = server_info.lfm_count
+                            population_data_point = PopulationDataPoint(
+                                character_count=character_count,
+                                lfm_count=lfm_count,
+                            )
+                            population_data_points.append(
+                                {server_name: population_data_point}
+                            )
+                        population_point = PopulationPointInTime(
+                            timestamp=timestamp, data=population_data_points
+                        )
+                        population_points.append(population_point.model_dump())
+                    except Exception:
+                        pass
+                return population_points
+            except Exception as e:
+                print(f"Failed to get game population from the database: {e}")
+
+
+def add_game_info(game_info: GameInfo):
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                insert_query = """
+                    INSERT INTO game_info (data)
+                    VALUES (%s)
+                    """
+                cursor.execute(
+                    insert_query,
+                    (game_info.model_dump_json(),),
+                )
+                conn.commit()
+            except Exception as e:
+                print(f"Failed to add game info to the database: {e}")
+                conn.rollback()
+
+
+def add_character_activity(game_activity: dict[str, list[CharacterActivity]]):
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                for server_activity in game_activity.values():
+                    for activity in server_activity:
+                        insert_query = """
+                            INSERT INTO character_activity (timestamp, id, activity_type, data)
+                            VALUES (NOW(), %s, %s, %s)
+                        """
+                        cursor.execute(
+                            insert_query,
+                            (
+                                activity.id,
+                                activity.activity_type.name,
+                                json.dumps(activity.data),
+                            ),
+                        )
+                conn.commit()
+            except Exception as e:
+                print(f"Failed to add character activity to the database: {e}")
+                conn.rollback()
+
+
+def build_character_from_row(row: tuple) -> dict:
+    return {
+        "id": str(row[0]),
+        "name": row[1],
+        "gender": row[2],
+        "race": row[3],
+        "total_level": row[4],
+        "classes": row[5],
+        "location": row[6],
+        "guild_name": row[7],
+        "server_name": row[8],
+        "home_server_name": row[9],
+        "group_id": str(row[10]),
+        "is_in_party": row[11],
+        "is_recruiting": row[12],
+        "is_anonymous": row[13],
+    }
 
 
 def build_character_activity_summary_from_row(row: tuple) -> dict:

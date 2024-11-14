@@ -40,6 +40,16 @@ class Quest(BaseModel):
     tip: Optional[str] = None
 
 
+class LFMActivityEvent(BaseModel):
+    tag: Optional[str] = None
+    data: Optional[str] = None
+
+
+class LFMActivity(BaseModel):
+    timestamp: Optional[float] = None
+    evebts: Optional[list[LFMActivityEvent]] = None
+
+
 class LFM(BaseModel):
     id: str
     comment: Optional[str] = None
@@ -53,3 +63,4 @@ class LFM(BaseModel):
     adventure_active_time: Optional[int] = None
     leader: Optional[Character] = None
     members: Optional[list[Character]] = None
+    activity: Optional[list[LFMActivity]] = None

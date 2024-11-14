@@ -1,3 +1,6 @@
+-- Enable TimescaleDB extension
+CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+
 CREATE TABLE IF NOT EXISTS public."characters"
 (
     id bigint NOT NULL,
@@ -38,16 +41,19 @@ ALTER TABLE IF EXISTS public."game_info"
 
 CREATE TABLE IF NOT EXISTS public."character_activity"
 (
-    id bigint NOT NULL,
-    total_level jsonb NOT NULL DEFAULT '[]'::jsonb,
-    location jsonb NOT NULL DEFAULT '[]'::jsonb,
-    guild_name jsonb NOT NULL DEFAULT '[]'::jsonb,
-    server_name jsonb NOT NULL DEFAULT '[]'::jsonb,
-    is_online jsonb NOT NULL DEFAULT '[]'::jsonb,
-    CONSTRAINT character_activity_pkey PRIMARY KEY (id)
-)
+	timestamp TIMESTAMPTZ NOT NULL,
+	id BIGINT NOT NULL,
+	activity_type TEXT,
+	data jsonb
+);
 
-TABLESPACE pg_default;
+SELECT create_hypertable('character_activity', 'timestamp');
+
+-- Add a retention policy to delete data older than 90 days
+SELECT add_retention_policy('character_activity', INTERVAL '90 days');
+
+-- Add an index on the id column
+CREATE INDEX ON public."character_activity" (id);
 
 ALTER TABLE IF EXISTS public."character_activity"
     OWNER to pgadmin;

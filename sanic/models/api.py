@@ -2,19 +2,19 @@ from typing import Optional
 
 from models.character import Character
 from models.lfm import LFM
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class ServerCharacterDataApiModel(BaseModel):
-    data: list[Character]
-    updated: list[str]
-    deleted: list[str]
+    data: Optional[list[Character]] = None
+    updated: Optional[list[str]] = None
+    deleted: Optional[list[str]] = None
 
 
 class ServerLfmDataApiModel(BaseModel):
-    data: list[LFM]
-    updated: list[str]
-    deleted: list[str]
+    data: Optional[list[LFM]] = None
+    updated: Optional[list[str]] = None
+    deleted: Optional[list[str]] = None
 
 
 class CharacterRequestApiModel(BaseModel):

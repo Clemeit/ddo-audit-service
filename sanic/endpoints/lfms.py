@@ -7,7 +7,7 @@ import time
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.api import LfmRequestApiModel, ServerLfmDataApiModel
 from models.redis import ServerLFMs
-from services.redis import get_lfms_by_server_name, set_lfms_by_server_name
+import services.redis as redis_client
 from utils.server import is_server_name_valid
 
 from sanic import Blueprint
@@ -30,7 +30,37 @@ async def get_all_lfms(request):
     try:
         response = {}
         for server_name in SERVER_NAMES_LOWERCASE:
-            response[server_name] = get_lfms_by_server_name(server_name).model_dump()
+            response[server_name] = redis_client.get_lfms_by_server_name(
+                server_name
+            ).model_dump()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": response})
+
+
+@lfm_blueprint.get("/summary")
+async def get_online_characters(request):
+    """
+    Method: GET
+
+    Route: /lfms/summary
+
+    Description: Get the number of LFMs for each server from the Redis cache.
+    """
+    try:
+        response = {}
+        for server_name in SERVER_NAMES_LOWERCASE:
+            server_data = redis_client.get_lfms_by_server_name(server_name)
+            raid_count = sum(
+                1
+                for lfm in server_data.lfms.values()
+                if lfm.quest and lfm.quest.group_size == "Raid"
+            )
+            response[server_name] = {
+                "lfm_count": len(server_data.lfms),
+                "raid_count": raid_count,
+            }
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -49,7 +79,7 @@ async def get_lfms_by_server(request, server_name):
     if not is_server_name_valid(server_name):
         return json({"message": "Invalid server name"}, status=400)
 
-    server_lfms = get_lfms_by_server_name(server_name)
+    server_lfms = redis_client.get_lfms_by_server_name(server_name)
 
     return json({"data": server_lfms.model_dump()})
 
@@ -79,10 +109,9 @@ async def set_lfms(request: Request):
             server_data = ServerLfmDataApiModel(**server_lfms)
             server_lfms = ServerLFMs(
                 lfms={lfm.id: lfm for lfm in server_data.data},
-                lfm_count=len(server_data.data),
                 last_updated=time.time(),
             )
-            set_lfms_by_server_name(server_name, server_lfms)
+            redis_client.set_lfms_by_server_name(server_name, server_lfms)
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
