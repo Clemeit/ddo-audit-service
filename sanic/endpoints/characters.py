@@ -170,24 +170,50 @@ async def set_characters(request: Request):
 
     # update in redis cache
     try:
+        all_servers_activity: dict[str, list[CharacterActivity]] = {}
         for server_name, server_data in body.model_dump().items():
             server_data = ServerCharacterDataApiModel(**server_data)
-            data = server_data.data  # diff data
-            updated_ids = server_data.updated  # updated ids
-            deleted_ids = server_data.deleted
-            server_characters = ServerCharactersData(
+            data = server_data.data  # keyframe data
+
+            # current character data, characters, and character ID for this server
+            current_characters_data = ServerCharactersData(
                 characters={character.id: character for character in data},
+                character_count=len(data),
                 last_updated=time.time(),
             )
+            current_characters = current_characters_data.characters
+            current_character_ids = set(current_characters.keys())
 
+            # previous character data, characters, and character ID for this server
+            previous_characters_data = redis_client.get_characters_by_server_name(
+                server_name
+            )
+            previous_characters = previous_characters_data.characters
+            previous_character_ids = set(previous_characters.keys())
+
+            # the set of all character IDs from characters that just logged off
+            deleted_ids = previous_character_ids - current_character_ids
+
+            # get all of the character activity for this server
+            character_activity = aggregate_character_activity_for_server(
+                previous_characters,
+                current_characters,
+                previous_character_ids,
+                current_character_ids,
+            )
+            all_servers_activity[server_name] = character_activity
+
+            # TODO: probably better to use pipelining here instead of making these
+            # calls for each server
             persist_deleted_characters_to_db_by_id(deleted_ids)
+            redis_client.set_characters_by_server_name(
+                server_name, current_characters_data
+            )
 
-            # ========= Update the activity table in the database =========
-            # TODO: create a dict with all the activity events for this server and then
-            # pass it to the postgres client to update the activity table
-            # =============================================================
-
-            redis_client.set_characters_by_server_name(server_name, server_characters)
+        # persist all of the character activity events to the database for
+        # all servers at the same time using pipelining
+        print(all_servers_activity)
+        persist_character_activity_to_db(all_servers_activity)
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -214,8 +240,6 @@ async def update_characters(request: Request):
         for server_name, server_data in body.model_dump(exclude_unset=True).items():
             server_data = ServerCharacterDataApiModel(**server_data)
             data = server_data.data  # diff data
-            updated_ids = server_data.updated  # updated ids
-            # deleted_ids = server_data.deleted  # deleted ids
 
             # current character data, characters, and character ID for this server
             current_characters_data = ServerCharactersData(
@@ -257,7 +281,6 @@ async def update_characters(request: Request):
 
         # persist all of the character activity events to the database for
         # all servers at the same time using pipelining
-        print(all_servers_activity)
         persist_character_activity_to_db(all_servers_activity)
     except Exception as e:
         return json({"message": str(e)}, status=500)
@@ -302,6 +325,13 @@ def aggregate_character_activity_for_server(
     # before processing them. If any current fields are left unset, then
     # we really don't care about them.
 
+    print(
+        previous_characters,
+        current_characters,
+        previous_character_ids,
+        current_character_ids,
+    )
+
     activities: list[CharacterActivity] = []
 
     # characters that just logged in:
@@ -326,107 +356,95 @@ def aggregate_character_activity_for_server(
             )
         )
 
-    # characters that moved to a new location:
-    moved_location_ids: set[str] = set()
-    for character_id in current_character_ids:
+    # character ids that potentially have activity:
+    # (we don't care about character's that just logged in)
+    # TODO: for characters that are just logging in, we should
+    # actually diff their data against whatever data is store
+    # in the database. Scenario: character logs off, changes
+    # server, and then logs in.
+    potential_activity_ids = current_character_ids - new_ids
+    for character_id in potential_activity_ids:
+        # location change
         try:
-            if current_characters[character_id].location is None:
-                continue
 
-            previous_location_name = ""
-            if previous_characters[character_id].location is not None:
-                previous_location_name = previous_characters[character_id].location.name
-            current_location_name = current_characters[character_id].location.name
+            def is_location_change(cur_char: Character, prev_char: Character) -> bool:
+                if cur_char.location is None:
+                    return False
 
-            if previous_location_name != current_location_name:
-                moved_location_ids.add(character_id)
-        except Exception:
-            pass
-    for character_id in moved_location_ids:
-        try:
-            activities.append(
-                CharacterActivity(
-                    id=character_id,
-                    activity_type=CharacterActivityType.location,
-                    data=current_characters[character_id].location.model_dump(),
+                previous_location_name = ""
+                if prev_char.location is not None:
+                    previous_location_name = prev_char.location.name
+                current_location_name = cur_char.location.name
+
+                if previous_location_name != current_location_name:
+                    return True
+                return False
+
+            if is_location_change(
+                current_characters[character_id], previous_characters[character_id]
+            ):
+                activities.append(
+                    CharacterActivity(
+                        id=character_id,
+                        activity_type=CharacterActivityType.location,
+                        data=current_characters[character_id].location.model_dump(),
+                    )
                 )
-            )
         except Exception:
             pass
 
-    # characters that joined a new guild:
-    changed_guild_ids: set[str] = set()
-    for character_id in current_character_ids:
+        # guild change
         try:
             if (
                 current_characters[character_id].guild_name
                 != previous_characters[character_id].guild_name
             ):
-                changed_guild_ids.add(character_id)
-        except Exception:
-            pass
-    for character_id in changed_guild_ids:
-        try:
-            activities.append(
-                CharacterActivity(
-                    id=character_id,
-                    activity_type=CharacterActivityType.guild_name,
-                    data={"value": current_characters[character_id].guild_name},
+                activities.append(
+                    CharacterActivity(
+                        id=character_id,
+                        activity_type=CharacterActivityType.guild_name,
+                        data={"value": current_characters[character_id].guild_name},
+                    )
                 )
-            )
         except Exception:
             pass
 
-    # characters that changed classes (based on total level):
-    leveled_up_ids: set[str] = set()
-    for character_id in current_character_ids:
+        # classes changed (level up)
         try:
             if (
                 current_characters[character_id].total_level
                 != previous_characters[character_id].total_level
             ):
-                leveled_up_ids.add(character_id)
-        except Exception:
-            pass
-    for character_id in leveled_up_ids:
-        try:
-            class_list = [
-                class_list_item.model_dump()
-                for class_list_item in current_characters[character_id].classes
-            ]
-            activities.append(
-                CharacterActivity(
-                    id=character_id,
-                    activity_type=CharacterActivityType.classes,
-                    data={
-                        "total_level": current_characters[character_id].total_level,
-                        "classes": class_list,
-                    },
+                class_list = [
+                    class_list_item.model_dump()
+                    for class_list_item in current_characters[character_id].classes
+                ]
+                activities.append(
+                    CharacterActivity(
+                        id=character_id,
+                        activity_type=CharacterActivityType.classes,
+                        data={
+                            "total_level": current_characters[character_id].total_level,
+                            "classes": class_list,
+                        },
+                    )
                 )
-            )
         except Exception:
             pass
 
-    # characters that moved servers:
-    moved_server_ids: set[str] = set()
-    for character_id in current_character_ids:
+        # server change
         try:
             if current_characters[character_id].server_name is not None and (
                 current_characters[character_id].server_name
                 != previous_characters[character_id].server_name
             ):
-                moved_server_ids.add(character_id)
-        except Exception:
-            pass
-    for character_id in moved_server_ids:
-        try:
-            activities.append(
-                CharacterActivity(
-                    id=character_id,
-                    activity_type=CharacterActivityType.server_name,
-                    data={"value": current_characters[character_id].server_name},
+                activities.append(
+                    CharacterActivity(
+                        id=character_id,
+                        activity_type=CharacterActivityType.server_name,
+                        data={"value": current_characters[character_id].server_name},
+                    )
                 )
-            )
         except Exception:
             pass
 
