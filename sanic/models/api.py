@@ -1,7 +1,7 @@
 from typing import Optional
 
 from models.character import Character
-from models.lfm import LFM
+from models.lfm import Lfm
 from pydantic import BaseModel
 
 
@@ -12,7 +12,7 @@ class ServerCharacterDataApiModel(BaseModel):
 
 
 class ServerLfmDataApiModel(BaseModel):
-    data: Optional[list[LFM]] = None
+    data: Optional[list[Lfm]] = None
     updated: Optional[list[str]] = None
     deleted: Optional[list[str]] = None
 

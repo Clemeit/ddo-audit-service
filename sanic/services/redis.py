@@ -7,9 +7,9 @@ import time
 
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.character import Character
-from models.lfm import LFM
+from models.lfm import Lfm
 from models.redis import GameInfo
-from models.redis import CACHE_MODEL, ServerCharactersData, ServerLFMs
+from models.redis import CACHE_MODEL, ServerCharactersData, ServerLFMsData
 
 import redis
 
@@ -93,9 +93,9 @@ def get_character_by_name_and_server_name(
             return character
 
 
-def get_lfms_by_server_name(server_name: str) -> ServerLFMs:
+def get_lfms_by_server_name(server_name: str) -> ServerLFMsData:
     server_name = server_name.lower()
-    return ServerLFMs(**get_redis_client().json().get(f"{server_name}:lfms"))
+    return ServerLFMsData(**get_redis_client().json().get(f"{server_name}:lfms"))
 
 
 def set_characters_by_server_name(
@@ -143,10 +143,21 @@ def delete_characters_by_server_name_and_character_ids(
     pipeline.execute()
 
 
-def set_lfms_by_server_name(server_name: str, server_lfms: ServerLFMs):
+def set_lfms_by_server_name(server_name: str, server_lfms: ServerLFMsData):
     server_name = server_name.lower()
     get_redis_client().json().set(
         f"{server_name}:lfms", path="$", obj=server_lfms.model_dump()
+    )
+
+
+def update_lfms_by_server_name(server_name: str, server_lfms: ServerLFMsData):
+    server_name = server_name.lower()
+    client = get_redis_client()
+
+    client.json().merge(
+        name=f"{server_name}:lfms",
+        path="$",
+        obj=server_lfms.model_dump(exclude_unset=True),
     )
 
 

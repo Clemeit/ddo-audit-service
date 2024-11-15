@@ -2,6 +2,7 @@ from typing import Optional
 
 from models.character import Character
 from pydantic import BaseModel
+from enum import Enum
 
 
 class QuestLevel(BaseModel):
@@ -40,17 +41,17 @@ class Quest(BaseModel):
     tip: Optional[str] = None
 
 
-class LFMActivityEvent(BaseModel):
+class LfmActivityEvent(BaseModel):
     tag: Optional[str] = None
     data: Optional[str] = None
 
 
-class LFMActivity(BaseModel):
+class LfmActivity(BaseModel):
     timestamp: Optional[float] = None
-    evebts: Optional[list[LFMActivityEvent]] = None
+    events: Optional[list[LfmActivityEvent]] = None
 
 
-class LFM(BaseModel):
+class Lfm(BaseModel):
     id: str
     comment: Optional[str] = None
     quest: Optional[Quest] = None
@@ -63,4 +64,12 @@ class LFM(BaseModel):
     adventure_active_time: Optional[int] = None
     leader: Optional[Character] = None
     members: Optional[list[Character]] = None
-    activity: Optional[list[LFMActivity]] = None
+    activity: Optional[list[LfmActivity]] = None
+
+
+class LfmActivityType(str, Enum):
+    posted = "posted"
+    comment = "comment"
+    quest = "quest"
+    member_joined = "member_joined"
+    member_left = "member_left"

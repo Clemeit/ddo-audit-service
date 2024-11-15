@@ -2,7 +2,7 @@ from typing import Optional
 
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.character import Character
-from models.lfm import LFM
+from models.lfm import Lfm
 from pydantic import BaseModel
 
 
@@ -39,12 +39,12 @@ class ServerCharactersData(BaseModel):
     last_updated: Optional[float] = None
 
 
-class ServerLFMs(BaseModel):
+class ServerLFMsData(BaseModel):
     """
     This model will be used to store information about each server's LFMs in the redis database using reJSON.
     """
 
-    lfms: dict[str, LFM] = {}
+    lfms: dict[str, Lfm] = {}
     last_updated: Optional[float] = None
 
 
@@ -54,5 +54,5 @@ CACHE_MODEL = {
         f"{server}:characters": ServerCharactersData()
         for server in SERVER_NAMES_LOWERCASE
     },
-    **{f"{server}:lfms": ServerLFMs() for server in SERVER_NAMES_LOWERCASE},
+    **{f"{server}:lfms": ServerLFMsData() for server in SERVER_NAMES_LOWERCASE},
 }

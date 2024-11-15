@@ -178,7 +178,6 @@ async def set_characters(request: Request):
             # current character data, characters, and character ID for this server
             current_characters_data = ServerCharactersData(
                 characters={character.id: character for character in data},
-                character_count=len(data),
                 last_updated=time.time(),
             )
             current_characters = current_characters_data.characters
@@ -244,7 +243,6 @@ async def update_characters(request: Request):
             # current character data, characters, and character ID for this server
             current_characters_data = ServerCharactersData(
                 characters={character.id: character for character in data},
-                character_count=len(data),
                 last_updated=time.time(),
             )
             current_characters = current_characters_data.characters
