@@ -98,19 +98,17 @@ async def get_character_by_id(request, character_id):
     source = "cache"
     character = redis_client.get_character_by_character_id(character_id)
     if character:
-        character = character.model_dump()
-        character["is_online"] = True
-
-    if not character:
+        character.is_online = True
+    else:
         source = "database"
         character = postgres_client.get_character_by_id(character_id)
         if character:
-            character["is_online"] = False
+            character.is_online = False
 
     if not character:
         return json({"message": "Character not found"}, status=404)
 
-    return json({"data": character, "source": source})
+    return json({"data": character.model_dump(), "source": source})
 
 
 @character_blueprint.get("/<server_name:str>/<character_name:str>")
@@ -132,21 +130,19 @@ async def get_character_by_server_name_and_character_name(
         character_name, server_name
     )
     if character:
-        character = character.model_dump()
-        character["is_online"] = True
-
-    if not character:
+        character.is_online = True
+    else:
         source = "database"
         character = postgres_client.get_character_by_name_and_server(
             character_name, server_name
         )
         if character:
-            character["is_online"] = False
+            character.is_online = False
 
     if not character:
         return json({"message": "Character not found"}, status=404)
 
-    return json({"data": character, "source": source})
+    return json({"data": character.model_dump(), "source": source})
 
 
 # ===================================
@@ -304,6 +300,7 @@ def persist_deleted_characters_to_db_by_id(deleted_ids: list[str]):
     from the cache. Persist them to the database for long-term storage.
     """
     # get all of the characters' last known data from the cache:
+    print(deleted_ids)
     deleted_characters = redis_client.get_characters_by_character_ids(deleted_ids)
     # add all of the characters that are about to be deleted to the database:
     postgres_client.add_or_update_characters(deleted_characters)

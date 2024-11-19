@@ -57,3 +57,30 @@ CREATE INDEX ON public."character_activity" (id);
 
 ALTER TABLE IF EXISTS public."character_activity"
     OWNER to pgadmin;
+
+CREATE TABLE IF NOT EXISTS public."news"
+(
+    id serial NOT NULL,
+    message text NOT NULL,
+    PRIMARY KEY (id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."news"
+    OWNER to pgadmin;
+
+CREATE TABLE IF NOT EXISTS public."page_messages"
+(
+    id serial NOT NULL,
+    message text NOT NULL,
+    affected_pages jsonb NOT NULL,
+    start_date timestamp with time zone NOT NULL,
+    end_date timestamp with time zone NOT NULL,
+    PRIMARY KEY (id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."page_messages"
+    OWNER to pgadmin;

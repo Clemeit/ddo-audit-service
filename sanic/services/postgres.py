@@ -1,11 +1,13 @@
 import json
 import os
 from contextlib import contextmanager
+from typing import Optional
+from time import time
 
-from utils.object import get_nested_value
 from models.character import Character, CharacterActivity
 from models.redis import GameInfo
 from models.game import PopulationPointInTime, PopulationDataPoint
+from models.service import News, PageMessage
 
 from psycopg2 import pool  # type: ignore
 
@@ -69,7 +71,7 @@ def add_or_update_characters(characters: list[Character]) -> None:
             try:
                 for character in characters:
                     character_dump = character.model_dump()
-                    exclude_fields = ["public_comment"]
+                    exclude_fields = ["public_comment", "is_online"]
                     character_fields = [
                         field
                         for field in character_dump.keys()
@@ -129,7 +131,7 @@ def add_or_update_character_activities(activity_entries: list[dict]) -> None:
                 conn.rollback()
 
 
-def get_character_by_id(character_id: str) -> dict:
+def get_character_by_id(character_id: str) -> Character:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             try:
@@ -144,7 +146,9 @@ def get_character_by_id(character_id: str) -> dict:
     return {}
 
 
-def get_character_by_name_and_server(character_name: str, server_name: str) -> dict:
+def get_character_by_name_and_server(
+    character_name: str, server_name: str
+) -> Character:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             try:
@@ -321,8 +325,51 @@ def add_character_activity(game_activity: dict[str, list[CharacterActivity]]):
                 conn.rollback()
 
 
-def build_character_from_row(row: tuple) -> dict:
-    return {
+def get_news() -> list[News]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                cursor.execute("SELECT * FROM public.news")
+                news = cursor.fetchall()
+                return [build_news_from_row(news_item) for news_item in news]
+            except Exception as e:
+                print(f"Failed to get news from the database: {e}")
+    return []
+
+
+def get_page_messages(page_name: Optional[str] = None) -> list[PageMessage]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                if page_name:
+                    cursor.execute(
+                        f"""
+                        SELECT * FROM public.page_messages
+                        WHERE page_name = ANY(%s)
+                        """,
+                        page_name,
+                    )
+                else:
+                    cursor.execute("SELECT * FROM public.page_messages")
+                page_messages = cursor.fetchall()
+                messages = [
+                    build_page_message_from_row(message) for message in page_messages
+                ]
+                filtered_messages = [
+                    message
+                    for message in messages
+                    if message.start_date.timestamp()
+                    < time()
+                    < message.end_date.timestamp()
+                ]
+                return filtered_messages
+            except Exception as e:
+                print(f"Failed to get page messages from the database: {e}")
+    return []
+
+
+def build_character_from_row(row: tuple) -> Character:
+    character_data = {
         "id": str(row[0]),
         "name": row[1],
         "gender": row[2],
@@ -338,6 +385,21 @@ def build_character_from_row(row: tuple) -> dict:
         "is_recruiting": row[12],
         "is_anonymous": row[13],
     }
+    return Character(**character_data)
+
+
+def build_news_from_row(row: tuple) -> News:
+    return News(id=row[0], message=row[1])
+
+
+def build_page_message_from_row(row: tuple) -> PageMessage:
+    return PageMessage(
+        id=row[0],
+        message=row[1],
+        affected_pages=row[2],
+        start_date=row[3],
+        end_date=row[4],
+    )
 
 
 def build_character_activity_summary_from_row(row: tuple) -> dict:

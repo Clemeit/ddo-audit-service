@@ -27,6 +27,7 @@ class Character(BaseModel):
     server_name: Optional[str] = None
     home_server_name: Optional[str] = None
     group_id: Optional[str] = None
+    is_online: Optional[bool] = True
     is_in_party: Optional[bool] = None
     is_anonymous: Optional[bool] = None
     is_recruiting: Optional[bool] = None
