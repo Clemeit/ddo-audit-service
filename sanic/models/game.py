@@ -1,6 +1,5 @@
 from typing import Optional
-
-from pydantic import BaseModel
+from models.base_model import ConfiguredBaseModel as BaseModel
 
 
 class PopulationDataPoint(BaseModel):

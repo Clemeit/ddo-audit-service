@@ -1,16 +1,16 @@
-import os
 import functools
-import orjson
+import os
 
+import orjson
 from endpoints.activity import activity_blueprint
 from endpoints.characters import character_blueprint
+from endpoints.game import game_blueprint
 from endpoints.health import health_blueprint
 from endpoints.lfms import lfm_blueprint
-from endpoints.game import game_blueprint
 from endpoints.service import service_blueprint
+from reports.server_status import get_game_info_scheduler
 from services.redis import close_redis, initialize_redis
 from utils.route import is_method_open, is_route_open
-from reports.server_status import get_game_info_scheduler
 from utils.service import datetime_to_json_formatting
 
 from sanic import Sanic, json

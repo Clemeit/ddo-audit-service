@@ -3,13 +3,11 @@ Service to interface with the Redis server.
 """
 
 import os
-import time
+from datetime import datetime
 
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.character import Character
-from models.lfm import Lfm
-from models.redis import GameInfo
-from models.redis import CACHE_MODEL, ServerCharactersData, ServerLFMsData
+from models.redis import CACHE_MODEL, GameInfo, ServerCharactersData, ServerLFMsData
 
 import redis
 
@@ -34,7 +32,6 @@ class RedisSingleton:
 
         # we want to initialize the cache with keys
         for key, value in CACHE_MODEL.items():
-            print(f"Setting {key} to {value}")
             self.client.json().set(key, path="$", obj=value.model_dump())
 
     def close(self):
@@ -138,7 +135,7 @@ def delete_characters_by_server_name_and_character_ids(
             key=f"{server_name}:characters", path=f"characters.{character_id}"
         )
     pipeline.json().set(
-        f"{server_name}:characters", path="last_updated", obj=time.time()
+        f"{server_name}:characters", path="last_updated", obj=datetime.now()
     )
     pipeline.execute()
 
@@ -161,11 +158,28 @@ def update_lfms_by_server_name(server_name: str, server_lfms: ServerLFMsData):
     )
 
 
+def delete_lfms_by_server_name_and_lfm_ids(server_name: str, lfm_ids: list[str]):
+    if not lfm_ids:
+        return
+
+    server_name = server_name.lower()
+    client = get_redis_client()
+    pipeline = client.pipeline()
+
+    # Pipeline deletion and update
+    for lfm_id in lfm_ids:
+        pipeline.json().delete(key=f"{server_name}:lfms", path=f"lfms.{lfm_id}")
+    pipeline.json().set(f"{server_name}:lfms", path="last_updated", obj=datetime.now())
+    pipeline.execute()
+
+
 def get_game_info() -> GameInfo:
     return GameInfo(**get_redis_client().json().get("game_info"))
 
 
 def set_game_info(game_info: GameInfo):
-    get_redis_client().json().merge(
-        "game_info", path="$", obj=game_info.model_dump(exclude_unset=True)
-    )
+    print(game_info)
+    print(game_info.model_dump())
+    # get_redis_client().json().merge(
+    #     "game_info", path="$", obj=game_info.model_dump(exclude_unset=True)
+    # )

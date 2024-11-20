@@ -1,9 +1,10 @@
+from datetime import datetime
 from typing import Optional
 
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.character import Character
 from models.lfm import Lfm
-from pydantic import BaseModel
+from models.base_model import ConfiguredBaseModel as BaseModel
 
 
 class ServerInfo(BaseModel):
@@ -12,9 +13,9 @@ class ServerInfo(BaseModel):
     """
 
     index: Optional[int] = None
-    created: Optional[float] = None
-    last_status_check: Optional[float] = None
-    last_data_fetch: Optional[float] = None
+    created: Optional[datetime] = None
+    last_status_check: Optional[datetime] = None
+    last_data_fetch: Optional[datetime] = None
     is_online: Optional[bool] = None
     character_count: Optional[int] = None
     lfm_count: Optional[int] = None
@@ -36,7 +37,7 @@ class ServerCharactersData(BaseModel):
     """
 
     characters: dict[str, Character] = {}
-    last_updated: Optional[float] = None
+    last_updated: Optional[datetime] = None
 
 
 class ServerLFMsData(BaseModel):
@@ -45,7 +46,7 @@ class ServerLFMsData(BaseModel):
     """
 
     lfms: dict[str, Lfm] = {}
-    last_updated: Optional[float] = None
+    last_updated: Optional[datetime] = None
 
 
 CACHE_MODEL = {

@@ -2,15 +2,15 @@
 Character endpoints.
 """
 
-import time
+from datetime import datetime
 
 import services.postgres as postgres_client
 import services.redis as redis_client
 from constants.server import SERVER_NAMES_LOWERCASE
-from models.api import CharacterRequestApiModel, ServerCharacterDataApiModel
+from models.api import CharacterRequestApiModel, CharacterRequestType
+from models.character import Character, CharacterActivity, CharacterActivityType
 from models.redis import ServerCharactersData
 from utils.server import is_server_name_valid
-from models.character import Character, CharacterActivity, CharacterActivityType
 
 from sanic import Blueprint
 from sanic.request import Request
@@ -42,7 +42,7 @@ async def get_all_characters(request):
 
 
 @character_blueprint.get("/summary")
-async def get_online_characters(request):
+async def get_online_character_summary(request):
     """
     Method: GET
 
@@ -59,9 +59,15 @@ async def get_online_characters(request):
                 for character in server_data.characters.values()
                 if character.is_anonymous
             )
+            complete_data_count = sum(
+                1
+                for character in server_data.characters.values()
+                if character.is_complete_data
+            )
             response[server_name] = {
                 "character_count": len(server_data.characters),
                 "anonymous_count": anon_character_count,
+                "complete_data_count": complete_data_count,
             }
     except Exception as e:
         return json({"message": str(e)}, status=500)
@@ -104,6 +110,7 @@ async def get_character_by_id(request, character_id):
         character = postgres_client.get_character_by_id(character_id)
         if character:
             character.is_online = False
+            character.is_complete_data = True
 
     if not character:
         return json({"message": "Character not found"}, status=404)
@@ -138,6 +145,7 @@ async def get_character_by_server_name_and_character_name(
         )
         if character:
             character.is_online = False
+            character.is_complete_data = True
 
     if not character:
         return json({"message": "Character not found"}, status=404)
@@ -156,59 +164,17 @@ async def set_characters(request: Request):
 
     Route: /characters
 
-    Description: Set characters in the Redis cache. Should only be called by DDO Audit Collections. Keyfames.
+    Description: Set characters in the Redis cache. Should only be called by DDO Audit Collections. Keyframes.
     """
     # validate request body
     try:
-        body = CharacterRequestApiModel(**request.json)
+        request_body = CharacterRequestApiModel(**request.json)
     except Exception:
         return json({"message": "Invalid request body"}, status=400)
 
     # update in redis cache
     try:
-        all_servers_activity: dict[str, list[CharacterActivity]] = {}
-        for server_name, server_data in body.model_dump().items():
-            server_data = ServerCharacterDataApiModel(**server_data)
-            data = server_data.data  # keyframe data
-
-            # current character data, characters, and character ID for this server
-            current_characters_data = ServerCharactersData(
-                characters={character.id: character for character in data},
-                last_updated=time.time(),
-            )
-            current_characters = current_characters_data.characters
-            current_character_ids = set(current_characters.keys())
-
-            # previous character data, characters, and character ID for this server
-            previous_characters_data = redis_client.get_characters_by_server_name(
-                server_name
-            )
-            previous_characters = previous_characters_data.characters
-            previous_character_ids = set(previous_characters.keys())
-
-            # the set of all character IDs from characters that just logged off
-            deleted_ids = previous_character_ids - current_character_ids
-
-            # get all of the character activity for this server
-            character_activity = aggregate_character_activity_for_server(
-                previous_characters,
-                current_characters,
-                previous_character_ids,
-                current_character_ids,
-            )
-            all_servers_activity[server_name] = character_activity
-
-            # TODO: probably better to use pipelining here instead of making these
-            # calls for each server
-            persist_deleted_characters_to_db_by_id(deleted_ids)
-            redis_client.set_characters_by_server_name(
-                server_name, current_characters_data
-            )
-
-        # persist all of the character activity events to the database for
-        # all servers at the same time using pipelining
-        print(all_servers_activity)
-        persist_character_activity_to_db(all_servers_activity)
+        handle_incoming_characters(request_body, CharacterRequestType.set)
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -226,72 +192,77 @@ async def update_characters(request: Request):
     """
 
     try:
-        body = CharacterRequestApiModel(**request.json)
+        request_body = CharacterRequestApiModel(**request.json)
     except Exception:
         return json({"message": "Invalid request body"}, status=400)
 
     try:
-        all_servers_activity: dict[str, list[CharacterActivity]] = {}
-        for server_name, server_data in body.model_dump(exclude_unset=True).items():
-            server_data = ServerCharacterDataApiModel(**server_data)
-            data = server_data.data  # diff data
-
-            # current character data, characters, and character ID for this server
-            current_characters_data = ServerCharactersData(
-                characters={character.id: character for character in data},
-                last_updated=time.time(),
-            )
-            current_characters = current_characters_data.characters
-            current_character_ids = set(current_characters.keys())
-
-            # previous character data, characters, and character ID for this server
-            previous_characters_data = redis_client.get_characters_by_server_name(
-                server_name
-            )
-            previous_characters = previous_characters_data.characters
-            previous_character_ids = set(previous_characters.keys())
-
-            # the set of all character IDs from characters that just logged off
-            deleted_ids = previous_character_ids - current_character_ids
-
-            # get all of the character activity for this server
-            character_activity = aggregate_character_activity_for_server(
-                previous_characters,
-                current_characters,
-                previous_character_ids,
-                current_character_ids,
-            )
-            all_servers_activity[server_name] = character_activity
-
-            # TODO: probably better to use pipelining here instead of making these
-            # calls for each server
-            persist_deleted_characters_to_db_by_id(list(deleted_ids))
-            redis_client.update_characters_by_server_name(
-                server_name, current_characters_data
-            )
-            redis_client.delete_characters_by_server_name_and_character_ids(
-                server_name, list(deleted_ids)
-            )
-
-        # persist all of the character activity events to the database for
-        # all servers at the same time using pipelining
-        persist_character_activity_to_db(all_servers_activity)
+        handle_incoming_characters(request_body, CharacterRequestType.update)
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
     return json({"message": "success"})
 
 
-def get_character_activity_events(
-    current_characters: list[Character], previous_characters: list[Character]
+def handle_incoming_characters(
+    request_body: CharacterRequestApiModel,
+    type: CharacterRequestType,
 ):
-    relevant_fields = [
-        "classes",
-        "location",
-        "guild_name",
-        "server_name",
-        "is_online",
-    ]
+    all_server_characters: dict[str, ServerCharactersData] = {}
+    for server_name in SERVER_NAMES_LOWERCASE:
+        all_server_characters[server_name] = ServerCharactersData(
+            characters={},
+            last_updated=datetime.now(),
+        )
+    all_servers_activity: dict[str, list[CharacterActivity]] = {}
+
+    # organize characters by server
+    for character in request_body.characters:
+        server_name = character.server_name.lower()
+        character.last_seen = datetime.now()
+        if type == CharacterRequestType.set:
+            character.is_complete_data = True
+        all_server_characters[server_name].characters[character.id] = character
+
+    # process each server's characters
+    for server_name, data in all_server_characters.items():
+        data: ServerCharactersData
+        current_characters = data.characters
+        current_character_ids = set(current_characters.keys())
+
+        # previous character data, characters, and character ID for this server
+        previous_characters_data = redis_client.get_characters_by_server_name(
+            server_name
+        )
+        previous_characters = previous_characters_data.characters
+        previous_character_ids = set(previous_characters.keys())
+
+        # the set of all character IDs from characters that just logged off
+        deleted_ids = previous_character_ids - current_character_ids
+
+        # get all of the character activity for this server
+        character_activity = aggregate_character_activity_for_server(
+            previous_characters,
+            current_characters,
+            previous_character_ids,
+            current_character_ids,
+        )
+        all_servers_activity[server_name] = character_activity
+
+        # TODO: probably better to use pipelining here instead of making these
+        # calls for each server
+        persist_deleted_characters_to_db_by_id(deleted_ids)
+        if type == CharacterRequestType.set:
+            redis_client.set_characters_by_server_name(server_name, data)
+        elif type == CharacterRequestType.update:
+            redis_client.update_characters_by_server_name(server_name, data)
+            redis_client.delete_characters_by_server_name_and_character_ids(
+                server_name, list(deleted_ids)
+            )
+
+    # persist all of the character activity events to the database for
+    # all servers at the same time using pipelining
+    persist_character_activity_to_db(all_servers_activity)
 
 
 def persist_deleted_characters_to_db_by_id(deleted_ids: list[str]):
@@ -319,13 +290,6 @@ def aggregate_character_activity_for_server(
     # TODO: Probably call .model_dump(exclude_unset=True) on the characters
     # before processing them. If any current fields are left unset, then
     # we really don't care about them.
-
-    print(
-        previous_characters,
-        current_characters,
-        previous_character_ids,
-        current_character_ids,
-    )
 
     activities: list[CharacterActivity] = []
 
@@ -390,7 +354,7 @@ def aggregate_character_activity_for_server(
 
         # guild change
         try:
-            if (
+            if current_characters[character_id].guild_name is not None and (
                 current_characters[character_id].guild_name
                 != previous_characters[character_id].guild_name
             ):
@@ -406,7 +370,7 @@ def aggregate_character_activity_for_server(
 
         # classes changed (level up)
         try:
-            if (
+            if current_characters[character_id].total_level is not None and (
                 current_characters[character_id].total_level
                 != previous_characters[character_id].total_level
             ):

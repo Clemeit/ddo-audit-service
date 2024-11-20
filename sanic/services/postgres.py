@@ -1,14 +1,14 @@
 import json
 import os
 from contextlib import contextmanager
-from typing import Optional
 from time import time
+from typing import Optional
 
-from models.character import Character, CharacterActivity
+from models.character import (Character, CharacterActivity,
+                              CharacterActivitySummary)
+from models.game import PopulationDataPoint, PopulationPointInTime
 from models.redis import GameInfo
-from models.game import PopulationPointInTime, PopulationDataPoint
 from models.service import News, PageMessage
-
 from psycopg2 import pool  # type: ignore
 
 # Load environment variables
@@ -65,13 +65,13 @@ def get_db_connection():
         postgres_singleton.get_client().putconn(conn)
 
 
-def add_or_update_characters(characters: list[Character]) -> None:
+def add_or_update_characters(characters: list[Character]):
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             try:
                 for character in characters:
                     character_dump = character.model_dump()
-                    exclude_fields = ["public_comment", "is_online"]
+                    exclude_fields = ["public_comment", "is_online", "is_complete_data"]
                     character_fields = [
                         field
                         for field in character_dump.keys()
@@ -104,9 +104,10 @@ def add_or_update_characters(characters: list[Character]) -> None:
             except Exception as e:
                 print(f"Failed to commit changes to the database: {e}")
                 conn.rollback()
+                raise e
 
 
-def add_or_update_character_activities(activity_entries: list[dict]) -> None:
+def add_or_update_character_activities(activity_entries: list[dict]):
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             try:
@@ -129,73 +130,72 @@ def add_or_update_character_activities(activity_entries: list[dict]) -> None:
                     f"Failed to add or update character activity in the database: {e}"
                 )
                 conn.rollback()
+                raise e
 
 
-def get_character_by_id(character_id: str) -> Character:
+def get_character_by_id(character_id: str) -> Character | None:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            try:
-                cursor.execute(
-                    "SELECT * FROM public.characters WHERE id = %s", (character_id,)
-                )
-                character = cursor.fetchone()
-                if character:
-                    return build_character_from_row(character)
-            except Exception as e:
-                print(f"Failed to get character by ID from the database: {e}")
-    return {}
+            cursor.execute(
+                "SELECT * FROM public.characters WHERE id = %s", (character_id,)
+            )
+            character = cursor.fetchone()
+            if not character:
+                return None
+
+            return build_character_from_row(character)
 
 
 def get_character_by_name_and_server(
     character_name: str, server_name: str
-) -> Character:
+) -> Character | None:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            try:
-                cursor.execute(
-                    "SELECT * FROM public.characters WHERE LOWER(name) = %s AND LOWER(server_name) = %s",
-                    (character_name.lower(), server_name.lower()),
-                )
-                character = cursor.fetchone()
-                if character:
-                    return build_character_from_row(character)
-            except Exception as e:
-                print(
-                    f"Failed to get character by name and server from the database: {e}"
-                )
-    return {}
+            cursor.execute(
+                "SELECT * FROM public.characters WHERE LOWER(name) = %s AND LOWER(server_name) = %s",
+                (character_name.lower(), server_name.lower()),
+            )
+            character = cursor.fetchone()
+            if not character:
+                return None
+
+            return build_character_from_row(character)
 
 
-def get_character_activity_summary_by_character_id(character_id: str) -> dict:
+def get_character_activity_summary_by_character_id(
+    character_id: str,
+) -> CharacterActivitySummary:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            try:
-                cursor.execute(
-                    """
-                    SELECT
-                        jsonb_array_length(total_level),
-                        jsonb_array_length(location),
-                        jsonb_array_length(guild_name),
-                        jsonb_array_length(server_name),
-                        jsonb_array_length(is_online)
-                    FROM public.character_activity
-                    WHERE id = %s
-                    """,
-                    (character_id,),
+            cursor.execute(
+                """
+                SELECT
+                    jsonb_array_length(total_level),
+                    jsonb_array_length(location),
+                    jsonb_array_length(guild_name),
+                    jsonb_array_length(server_name),
+                    jsonb_array_length(is_online)
+                FROM public.character_activity
+                WHERE id = %s
+                """,
+                (character_id,),
+            )
+            activity = cursor.fetchone()
+            if not activity:
+                return CharacterActivitySummary(
+                    level_event_count=0,
+                    location_event_count=0,
+                    guild_name_event_count=0,
+                    server_name_event_count=0,
+                    status_event_count=0,
                 )
-                activity = cursor.fetchone()
-                if activity:
-                    return build_character_activity_summary_from_row(activity)
-            except Exception as e:
-                print(
-                    f"Failed to get character activity by character ID from the database: {e}"
-                )
-    return {}
+
+            return build_character_activity_summary_from_row(activity)
 
 
 def get_character_activity_field_by_character_id(
     character_id: str, field: str
-) -> list[dict]:
+) -> list[dict]:  # TODO: add type
 
     # Validate the field
     VALID_FIELDS = [
@@ -210,26 +210,24 @@ def get_character_activity_field_by_character_id(
 
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            try:
-                cursor.execute(
-                    f"""
-                    SELECT {field}
-                    FROM public.character_activity
-                    WHERE id = %s
-                    """,
-                    (character_id,),
-                )
-                activity = cursor.fetchone()
-                if activity:
-                    return activity[0]
-            except Exception as e:
-                print(
-                    f"Failed to get character activity field by character ID from the database: {e}"
-                )
-    return []
+            cursor.execute(
+                f"""
+                SELECT {field}
+                FROM public.character_activity
+                WHERE id = %s
+                """,
+                (character_id,),
+            )
+            activity = cursor.fetchone()
+            if not activity:
+                return []
+
+            return activity[0]
 
 
-def get_game_population(start_date: str = None, end_date: str = None) -> list[dict]:
+def get_game_population(
+    start_date: str = None, end_date: str = None
+) -> list[dict]:  # TODO: add type
     if not start_date:
         start_date = "NOW() - INTERVAL '1 day'"
     if not end_date:
@@ -238,49 +236,47 @@ def get_game_population(start_date: str = None, end_date: str = None) -> list[di
     # get all entries from the game_info table
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            try:
-                cursor.execute(
-                    f"""
-                    SELECT
-                        EXTRACT(EPOCH FROM timestamp) as timestamp,
-                        data
-                    FROM public.game_info
-                    WHERE timestamp BETWEEN {start_date} AND {end_date}
-                    """
-                )
-                game_info_list = cursor.fetchall()
-                population_points: list[dict] = []
-                for game_info in game_info_list:
-                    try:
-                        timestamp = game_info[0]
-                        data = GameInfo(**game_info[1])
-                        population_data_points: list[dict[str, PopulationDataPoint]] = (
-                            []
+            cursor.execute(
+                f"""
+                SELECT
+                    EXTRACT(EPOCH FROM timestamp) as timestamp,
+                    data
+                FROM public.game_info
+                WHERE timestamp BETWEEN {start_date} AND {end_date}
+                """
+            )
+            game_info_list = cursor.fetchall()
+            if not game_info_list:
+                return []
+
+            population_points: list[dict] = []
+            for game_info in game_info_list:
+                try:
+                    timestamp = game_info[0]
+                    data = GameInfo(**game_info[1])
+                    population_data_points: list[dict[str, PopulationDataPoint]] = []
+                    for server_name, server_info in data.servers.items():
+                        character_count = 0
+                        lfm_count = 0
+                        if server_info:
+                            if server_info.character_count:
+                                character_count = server_info.character_count
+                            if server_info.lfm_count:
+                                lfm_count = server_info.lfm_count
+                        population_data_point = PopulationDataPoint(
+                            character_count=character_count,
+                            lfm_count=lfm_count,
                         )
-                        for server_name, server_info in data.servers.items():
-                            character_count = 0
-                            lfm_count = 0
-                            if server_info:
-                                if server_info.character_count:
-                                    character_count = server_info.character_count
-                                if server_info.lfm_count:
-                                    lfm_count = server_info.lfm_count
-                            population_data_point = PopulationDataPoint(
-                                character_count=character_count,
-                                lfm_count=lfm_count,
-                            )
-                            population_data_points.append(
-                                {server_name: population_data_point}
-                            )
-                        population_point = PopulationPointInTime(
-                            timestamp=timestamp, data=population_data_points
+                        population_data_points.append(
+                            {server_name: population_data_point}
                         )
-                        population_points.append(population_point.model_dump())
-                    except Exception:
-                        pass
-                return population_points
-            except Exception as e:
-                print(f"Failed to get game population from the database: {e}")
+                    population_point = PopulationPointInTime(
+                        timestamp=timestamp, data=population_data_points
+                    )
+                    population_points.append(population_point.model_dump())
+                except Exception:
+                    pass
+            return population_points
 
 
 def add_game_info(game_info: GameInfo):
@@ -299,6 +295,7 @@ def add_game_info(game_info: GameInfo):
             except Exception as e:
                 print(f"Failed to add game info to the database: {e}")
                 conn.rollback()
+                raise e
 
 
 def add_character_activity(game_activity: dict[str, list[CharacterActivity]]):
@@ -323,69 +320,68 @@ def add_character_activity(game_activity: dict[str, list[CharacterActivity]]):
             except Exception as e:
                 print(f"Failed to add character activity to the database: {e}")
                 conn.rollback()
+                raise e
 
 
 def get_news() -> list[News]:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            try:
-                cursor.execute("SELECT * FROM public.news")
-                news = cursor.fetchall()
-                return [build_news_from_row(news_item) for news_item in news]
-            except Exception as e:
-                print(f"Failed to get news from the database: {e}")
-    return []
+            cursor.execute("SELECT * FROM public.news")
+            news = cursor.fetchall()
+            if not news:
+                return []
+
+            return [build_news_from_row(news_item) for news_item in news]
 
 
 def get_page_messages(page_name: Optional[str] = None) -> list[PageMessage]:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            try:
-                if page_name:
-                    cursor.execute(
-                        f"""
-                        SELECT * FROM public.page_messages
-                        WHERE page_name = ANY(%s)
-                        """,
-                        page_name,
-                    )
-                else:
-                    cursor.execute("SELECT * FROM public.page_messages")
-                page_messages = cursor.fetchall()
-                messages = [
-                    build_page_message_from_row(message) for message in page_messages
-                ]
-                filtered_messages = [
-                    message
-                    for message in messages
-                    if message.start_date.timestamp()
-                    < time()
-                    < message.end_date.timestamp()
-                ]
-                return filtered_messages
-            except Exception as e:
-                print(f"Failed to get page messages from the database: {e}")
-    return []
+            if page_name:
+                cursor.execute(
+                    """
+                    SELECT * FROM public.page_messages
+                    WHERE page_name = ANY(%s)
+                    """,
+                    page_name,
+                )
+            else:
+                cursor.execute("SELECT * FROM public.page_messages")
+            page_messages = cursor.fetchall()
+            if not page_messages:
+                return []
+
+            messages = [
+                build_page_message_from_row(message) for message in page_messages
+            ]
+            filtered_messages = [
+                message
+                for message in messages
+                if message.start_date.timestamp()
+                < time()
+                < message.end_date.timestamp()
+            ]
+            return filtered_messages
 
 
 def build_character_from_row(row: tuple) -> Character:
-    character_data = {
-        "id": str(row[0]),
-        "name": row[1],
-        "gender": row[2],
-        "race": row[3],
-        "total_level": row[4],
-        "classes": row[5],
-        "location": row[6],
-        "guild_name": row[7],
-        "server_name": row[8],
-        "home_server_name": row[9],
-        "group_id": str(row[10]),
-        "is_in_party": row[11],
-        "is_recruiting": row[12],
-        "is_anonymous": row[13],
-    }
-    return Character(**character_data)
+    return Character(
+        id=str(row[0]),
+        name=row[1],
+        gender=row[2],
+        race=row[3],
+        total_level=row[4],
+        classes=row[5],
+        location=row[6],
+        guild_name=row[7],
+        server_name=row[8],
+        home_server_name=row[9],
+        group_id=str(row[10]),
+        is_in_party=row[11],
+        is_recruiting=row[12],
+        is_anonymous=row[13],
+        last_seen=row[14],
+    )
 
 
 def build_news_from_row(row: tuple) -> News:
@@ -402,13 +398,11 @@ def build_page_message_from_row(row: tuple) -> PageMessage:
     )
 
 
-def build_character_activity_summary_from_row(row: tuple) -> dict:
-    return {
-        "event_totals": {
-            "total_level": row[0],
-            "location": row[1],
-            "guild_name": row[2],
-            "server_name": row[3],
-            "is_online": row[4],
-        }
-    }
+def build_character_activity_summary_from_row(row: tuple) -> CharacterActivitySummary:
+    return CharacterActivitySummary(
+        level_event_count=row[0],
+        location_event_count=row[1],
+        guild_name_event_count=row[2],
+        server_name_event_count=row[3],
+        status_event_count=row[4],
+    )

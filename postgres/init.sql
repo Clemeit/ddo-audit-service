@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS public."characters"
     is_in_party boolean NOT NULL,
     is_recruiting boolean NOT NULL,
     is_anonymous boolean NOT NULL,
+    last_seen timestamp with time zone NOT NULL,
     CONSTRAINT character_pkey PRIMARY KEY (id)
 )
 

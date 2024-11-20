@@ -1,11 +1,12 @@
-import requests
-from requests import HTTPError
-import xml.etree.ElementTree as ET
-import services.redis as redis_client
-import services.postgres as postgres_client
-from time import time
-from models.redis import ServerInfo, GameInfo
 import json
+import xml.etree.ElementTree as ET
+from time import time
+
+import requests
+import services.postgres as postgres_client
+import services.redis as redis_client
+from models.redis import GameInfo, ServerInfo
+from requests import HTTPError
 from utils.scheduler import run_batch_on_schedule
 
 

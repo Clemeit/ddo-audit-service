@@ -3,13 +3,14 @@ LFM endpoints.
 """
 
 import time
+from datetime import datetime
 
-from constants.server import SERVER_NAMES_LOWERCASE
-from models.api import LfmRequestApiModel, ServerLfmDataApiModel
-from models.redis import ServerLFMsData
 import services.redis as redis_client
+from constants.server import SERVER_NAMES_LOWERCASE
+from models.api import LfmRequestApiModel, LfmRequestType
+from models.lfm import Lfm, LfmActivity, LfmActivityEvent, LfmActivityType
+from models.redis import ServerLFMsData
 from utils.server import is_server_name_valid
-from models.lfm import LfmActivityEvent, LfmActivity, LfmActivityType, Lfm
 
 from sanic import Blueprint
 from sanic.request import Request
@@ -100,26 +101,13 @@ async def set_lfms(request: Request):
     """
     # validate request body
     try:
-        body = LfmRequestApiModel(**request.json)
+        request_body = LfmRequestApiModel(**request.json)
     except Exception:
         return json({"message": "Invalid request body"}, status=400)
 
     # update in redis cache
     try:
-        for server_name, current_lfms_data in body.model_dump().items():
-            server_data = ServerLfmDataApiModel(**current_lfms_data)
-            current_lfms_data = ServerLFMsData(
-                lfms={lfm.id: lfm for lfm in server_data.data},
-                last_updated=time.time(),
-            )
-            previous_lfms_data = redis_client.get_lfms_by_server_name(server_name)
-
-            lfms_with_activity = add_activity_to_lfms_for_server(
-                previous_lfms_data.lfms, current_lfms_data.lfms
-            )
-            current_lfms_data.lfms = lfms_with_activity
-
-            redis_client.set_lfms_by_server_name(server_name, current_lfms_data)
+        handle_incoming_lfms(request_body, LfmRequestType.set)
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -127,7 +115,7 @@ async def set_lfms(request: Request):
 
 
 @lfm_blueprint.patch("")
-async def update_lfms(request):
+async def update_lfms(request: Request):
     """
     Method: PATCH
 
@@ -137,25 +125,52 @@ async def update_lfms(request):
     """
     # validate request body
     try:
-        body = LfmRequestApiModel(**request.json)
+        request_body = LfmRequestApiModel(**request.json)
     except Exception:
         return json({"message": "Invalid request body"}, status=400)
 
     # update in redis cache
     try:
-        for server_name, current_lfms_data in body.model_dump(
-            exclude_unset=True
-        ).items():
-            server_data = ServerLfmDataApiModel(**current_lfms_data)
-            current_lfms_data = ServerLFMsData(
-                lfms={lfm.id: lfm for lfm in server_data.data},
-                last_updated=time.time(),
-            )
-            redis_client.update_lfms_by_server_name(server_name, current_lfms_data)
+        handle_incoming_lfms(request_body, LfmRequestType.update)
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
     return json({"message": "success"})
+
+
+def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType):
+    all_server_lfms: dict[str, ServerLFMsData] = {}
+    for server_name in SERVER_NAMES_LOWERCASE:
+        all_server_lfms[server_name] = ServerLFMsData(
+            lfms={},
+            last_updated=datetime.now(),
+        )
+
+    for lfm in request_body.lfms:
+        server_name = lfm.server_name.lower()
+        all_server_lfms[server_name].lfms[lfm.id] = lfm
+
+    for server_name, data in all_server_lfms.items():
+        data: ServerLFMsData
+        current_lfm_ids = set(data.lfms.keys())
+
+        previous_lfms_data = redis_client.get_lfms_by_server_name(server_name)
+        previous_lfm_ids = set(previous_lfms_data.lfms.keys())
+
+        deleted_lfm_ids = previous_lfm_ids - current_lfm_ids
+
+        lfms_with_activity = add_activity_to_lfms_for_server(
+            previous_lfms_data.lfms, data.lfms
+        )
+        data.lfms = lfms_with_activity
+
+        if type == LfmRequestType.set:
+            redis_client.set_lfms_by_server_name(server_name, data)
+        elif type == LfmRequestType.update:
+            redis_client.update_lfms_by_server_name(server_name, data)
+            redis_client.delete_lfms_by_server_name_and_lfm_ids(
+                server_name, deleted_lfm_ids
+            )
 
 
 def add_activity_to_lfms_for_server(
@@ -242,7 +257,7 @@ def add_activity_to_lfms_for_server(
 
         # comine the old and new activity
         new_lfm_activity = LfmActivity(
-            timestamp=time.time(), events=new_activity_events_list
+            timestamp=datetime.now(), events=new_activity_events_list
         )
         aggregate_activity = old_lfm_activity + (
             [new_lfm_activity] if new_activity_events_list else []

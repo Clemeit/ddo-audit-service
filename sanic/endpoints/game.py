@@ -2,8 +2,8 @@
 Game endpoints.
 """
 
-import services.redis as redis_client
 import services.postgres as postgres_client
+import services.redis as redis_client
 from models.redis import GameInfo
 
 from sanic import Blueprint

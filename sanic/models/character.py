@@ -1,7 +1,7 @@
-from typing import Optional
-
-from pydantic import BaseModel
+from datetime import datetime
 from enum import Enum
+from typing import Optional
+from models.base_model import ConfiguredBaseModel as BaseModel
 
 
 class CharacterClass(BaseModel):
@@ -31,7 +31,9 @@ class Character(BaseModel):
     is_in_party: Optional[bool] = None
     is_anonymous: Optional[bool] = None
     is_recruiting: Optional[bool] = None
+    is_complete_data: Optional[bool] = False
     public_comment: Optional[str] = None
+    last_seen: Optional[datetime] = None
 
 
 class CharacterActivityType(str, Enum):
@@ -50,11 +52,14 @@ class CharacterActivity(BaseModel):
     id: str
     activity_type: CharacterActivityType
     data: dict
-    # classes: Optional[dict] = None
-    # location: Optional[dict] = None
-    # guild_name: Optional[dict] = None
-    # server_name: Optional[dict] = None
-    # is_online: Optional[dict] = None
+
+
+class CharacterActivitySummary(BaseModel):
+    level_event_count: Optional[int]
+    location_event_count: Optional[int]
+    guild_name_event_count: Optional[int]
+    server_name_event_count: Optional[int]
+    status_event_count: Optional[int]
 
 
 CHARACTER_ACTIVITY_TYPES = [item.value for item in CharacterActivityType]

@@ -1,6 +1,7 @@
-import schedule
 import threading
 import time
+
+import schedule
 
 
 def run_on_schedule(event: callable, interval: int) -> tuple[callable, callable]:
