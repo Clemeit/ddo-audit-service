@@ -178,8 +178,6 @@ def get_game_info() -> GameInfo:
 
 
 def set_game_info(game_info: GameInfo):
-    print(game_info)
-    print(game_info.model_dump())
-    # get_redis_client().json().merge(
-    #     "game_info", path="$", obj=game_info.model_dump(exclude_unset=True)
-    # )
+    get_redis_client().json().merge(
+        "game_info", path="$", obj=game_info.model_dump(exclude_unset=True)
+    )

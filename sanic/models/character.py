@@ -1,7 +1,6 @@
-from datetime import datetime
 from enum import Enum
 from typing import Optional
-from models.base_model import ConfiguredBaseModel as BaseModel
+from pydantic import BaseModel
 
 
 class CharacterClass(BaseModel):
@@ -10,9 +9,10 @@ class CharacterClass(BaseModel):
 
 
 class CharacterLocation(BaseModel):
-    name: str
+    id: int
+    name: Optional[str]
     region: Optional[str]
-    is_public_space: bool
+    is_public_space: Optional[bool]
 
 
 class Character(BaseModel):
@@ -33,7 +33,7 @@ class Character(BaseModel):
     is_recruiting: Optional[bool] = None
     is_complete_data: Optional[bool] = False
     public_comment: Optional[str] = None
-    last_seen: Optional[datetime] = None
+    last_seen: Optional[float] = None
 
 
 class CharacterActivityType(str, Enum):

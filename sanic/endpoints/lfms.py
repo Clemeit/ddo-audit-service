@@ -2,8 +2,7 @@
 LFM endpoints.
 """
 
-import time
-from datetime import datetime
+from time import time
 
 import services.redis as redis_client
 from constants.server import SERVER_NAMES_LOWERCASE
@@ -143,7 +142,7 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
     for server_name in SERVER_NAMES_LOWERCASE:
         all_server_lfms[server_name] = ServerLFMsData(
             lfms={},
-            last_updated=datetime.now(),
+            last_updated=time(),
         )
 
     for lfm in request_body.lfms:
@@ -257,7 +256,7 @@ def add_activity_to_lfms_for_server(
 
         # comine the old and new activity
         new_lfm_activity = LfmActivity(
-            timestamp=datetime.now(), events=new_activity_events_list
+            timestamp=time(), events=new_activity_events_list
         )
         aggregate_activity = old_lfm_activity + (
             [new_lfm_activity] if new_activity_events_list else []

@@ -1,7 +1,6 @@
-import json
 import xml.etree.ElementTree as ET
-from time import time
 
+from time import time
 import requests
 import services.postgres as postgres_client
 import services.redis as redis_client

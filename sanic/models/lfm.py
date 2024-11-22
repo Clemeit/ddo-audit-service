@@ -1,9 +1,8 @@
-from datetime import datetime
 from enum import Enum
 from typing import Optional
 
 from models.character import Character
-from models.base_model import ConfiguredBaseModel as BaseModel
+from pydantic import BaseModel
 
 
 class QuestLevel(BaseModel):
@@ -48,7 +47,7 @@ class LfmActivityEvent(BaseModel):
 
 
 class LfmActivity(BaseModel):
-    timestamp: Optional[datetime] = None
+    timestamp: Optional[float] = None
     events: Optional[list[LfmActivityEvent]] = None
 
 

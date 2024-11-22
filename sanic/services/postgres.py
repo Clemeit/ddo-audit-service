@@ -3,9 +3,9 @@ import os
 from contextlib import contextmanager
 from time import time
 from typing import Optional
+from datetime import datetime
 
-from models.character import (Character, CharacterActivity,
-                              CharacterActivitySummary)
+from models.character import Character, CharacterActivity, CharacterActivitySummary
 from models.game import PopulationDataPoint, PopulationPointInTime
 from models.redis import GameInfo
 from models.service import News, PageMessage
@@ -93,11 +93,22 @@ def add_or_update_characters(characters: list[Character]):
                     """
 
                     # Get the values of the Character model
-                    values = [
-                        json.dumps(value) if isinstance(value, (dict, list)) else value
-                        for key, value in character_dump.items()
-                        if key in character_fields
-                    ]
+                    # values = [
+                    #     json.dumps(value) if isinstance(value, (dict, list)) else value
+                    #     for key, value in character_dump.items()
+                    #     if key in character_fields
+                    # ]
+                    values = []
+                    for key, value in character_dump.items():
+                        if key not in character_fields:
+                            continue
+                        if key == "last_seen":
+                            value: float
+                            values.append(datetime.fromtimestamp(value).isoformat())
+                        elif isinstance(value, (dict, list)):
+                            values.append(json.dumps(value))
+                        else:
+                            values.append(value)
 
                     cursor.execute(query, values)
                 conn.commit()

@@ -2,8 +2,6 @@
 Character endpoints.
 """
 
-from datetime import datetime
-
 import services.postgres as postgres_client
 import services.redis as redis_client
 from constants.server import SERVER_NAMES_LOWERCASE
@@ -11,6 +9,7 @@ from models.api import CharacterRequestApiModel, CharacterRequestType
 from models.character import Character, CharacterActivity, CharacterActivityType
 from models.redis import ServerCharactersData
 from utils.server import is_server_name_valid
+from time import time
 
 from sanic import Blueprint
 from sanic.request import Request
@@ -212,17 +211,21 @@ def handle_incoming_characters(
     for server_name in SERVER_NAMES_LOWERCASE:
         all_server_characters[server_name] = ServerCharactersData(
             characters={},
-            last_updated=datetime.now(),
+            last_updated=0,
         )
     all_servers_activity: dict[str, list[CharacterActivity]] = {}
 
     # organize characters by server
     for character in request_body.characters:
         server_name = character.server_name.lower()
-        character.last_seen = datetime.now()
+        character.last_seen = time()
         if type == CharacterRequestType.set:
             character.is_complete_data = True
         all_server_characters[server_name].characters[character.id] = character
+
+    # update last_updated timestamp for each server
+    for server_name, value in request_body.last_update_timestamps:
+        all_server_characters[server_name].last_updated = value
 
     # process each server's characters
     for server_name, data in all_server_characters.items():
