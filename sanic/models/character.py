@@ -33,7 +33,7 @@ class Character(BaseModel):
     is_recruiting: Optional[bool] = None
     is_complete_data: Optional[bool] = False
     public_comment: Optional[str] = None
-    last_seen: Optional[float] = None
+    last_seen: Optional[str] = None
 
 
 class CharacterActivityType(str, Enum):

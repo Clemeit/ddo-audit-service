@@ -10,5 +10,5 @@ class PageMessage(BaseModel):
     id: int
     message: str
     affected_pages: list[str]
-    start_date: float
-    end_date: float
+    start_date: str
+    end_date: str

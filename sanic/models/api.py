@@ -7,16 +7,16 @@ from models.lfm import Lfm
 
 
 class LastUpdateTimestamps(BaseModel):
-    argonnessen: Optional[float] = None
-    cannith: Optional[float] = None
-    ghallanda: Optional[float] = None
-    khyber: Optional[float] = None
-    orien: Optional[float] = None
-    sarlona: Optional[float] = None
-    thelanis: Optional[float] = None
-    wayfinder: Optional[float] = None
-    hardcore: Optional[float] = None
-    cormyr: Optional[float] = None
+    argonnessen: Optional[str] = None
+    cannith: Optional[str] = None
+    ghallanda: Optional[str] = None
+    khyber: Optional[str] = None
+    orien: Optional[str] = None
+    sarlona: Optional[str] = None
+    thelanis: Optional[str] = None
+    wayfinder: Optional[str] = None
+    hardcore: Optional[str] = None
+    cormyr: Optional[str] = None
 
 
 class CharacterRequestApiModel(BaseModel):

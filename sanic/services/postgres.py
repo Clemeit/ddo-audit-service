@@ -93,22 +93,22 @@ def add_or_update_characters(characters: list[Character]):
                     """
 
                     # Get the values of the Character model
-                    # values = [
-                    #     json.dumps(value) if isinstance(value, (dict, list)) else value
-                    #     for key, value in character_dump.items()
-                    #     if key in character_fields
-                    # ]
-                    values = []
-                    for key, value in character_dump.items():
-                        if key not in character_fields:
-                            continue
-                        if key == "last_seen":
-                            value: float
-                            values.append(datetime.fromtimestamp(value).isoformat())
-                        elif isinstance(value, (dict, list)):
-                            values.append(json.dumps(value))
-                        else:
-                            values.append(value)
+                    values = [
+                        json.dumps(value) if isinstance(value, (dict, list)) else value
+                        for key, value in character_dump.items()
+                        if key in character_fields
+                    ]
+                    # values = []
+                    # for key, value in character_dump.items():
+                    #     if key not in character_fields:
+                    #         continue
+                    #     if key == "last_seen":
+                    #         value: float
+                    #         values.append(datetime.fromtimestamp(value).isoformat())
+                    #     elif isinstance(value, (dict, list)):
+                    #         values.append(json.dumps(value))
+                    #     else:
+                    #         values.append(value)
 
                     cursor.execute(query, values)
                 conn.commit()
@@ -391,7 +391,7 @@ def build_character_from_row(row: tuple) -> Character:
         is_in_party=row[11],
         is_recruiting=row[12],
         is_anonymous=row[13],
-        last_seen=row[14],
+        last_seen=row[14].isoformat() if isinstance(row[14], datetime) else "",
     )
 
 
@@ -404,8 +404,8 @@ def build_page_message_from_row(row: tuple) -> PageMessage:
         id=row[0],
         message=row[1],
         affected_pages=row[2],
-        start_date=row[3],
-        end_date=row[4],
+        start_date=row[3].isoformat() if isinstance(row[3], datetime) else "",
+        end_date=row[4].isoformat() if isinstance(row[4], datetime) else "",
     )
 
 

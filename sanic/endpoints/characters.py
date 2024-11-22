@@ -9,7 +9,7 @@ from models.api import CharacterRequestApiModel, CharacterRequestType
 from models.character import Character, CharacterActivity, CharacterActivityType
 from models.redis import ServerCharactersData
 from utils.server import is_server_name_valid
-from time import time
+from datetime import datetime
 
 from sanic import Blueprint
 from sanic.request import Request
@@ -211,21 +211,25 @@ def handle_incoming_characters(
     for server_name in SERVER_NAMES_LOWERCASE:
         all_server_characters[server_name] = ServerCharactersData(
             characters={},
-            last_updated=0,
         )
     all_servers_activity: dict[str, list[CharacterActivity]] = {}
+
+    # update last_updated timestamp for each server
+    for server_name, value in request_body.last_update_timestamps:
+        value: str
+        all_server_characters[server_name].last_update = value
 
     # organize characters by server
     for character in request_body.characters:
         server_name = character.server_name.lower()
-        character.last_seen = time()
+
+        # the last time the player was seen was the last time data was
+        # pulled from the game client
+        character.last_seen = all_server_characters[server_name].last_update
+
         if type == CharacterRequestType.set:
             character.is_complete_data = True
         all_server_characters[server_name].characters[character.id] = character
-
-    # update last_updated timestamp for each server
-    for server_name, value in request_body.last_update_timestamps:
-        all_server_characters[server_name].last_updated = value
 
     # process each server's characters
     for server_name, data in all_server_characters.items():

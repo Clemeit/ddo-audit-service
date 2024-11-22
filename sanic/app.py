@@ -1,7 +1,5 @@
-import functools
 import os
 
-import orjson
 from endpoints.activity import activity_blueprint
 from endpoints.characters import character_blueprint
 from endpoints.game import game_blueprint
@@ -11,7 +9,6 @@ from endpoints.service import service_blueprint
 from reports.server_status import get_game_info_scheduler
 from services.redis import close_redis, initialize_redis
 from utils.route import is_method_open, is_route_open
-from utils.service import datetime_to_json_formatting
 
 from sanic import Sanic, json
 from sanic.request import Request
@@ -20,9 +17,7 @@ API_KEY = os.getenv("API_KEY")
 APP_HOST = os.getenv("APP_HOST")
 APP_PORT = int(os.getenv("APP_PORT"))
 
-custom_dumps = functools.partial(orjson.dumps, default=datetime_to_json_formatting)
-
-app = Sanic("ddo-audit-server", dumps=custom_dumps)
+app = Sanic("ddo-audit-server")
 app.blueprint(
     [
         character_blueprint,
@@ -35,7 +30,9 @@ app.blueprint(
 )
 
 # Set up all of the updaters
-start_game_info_polling, stop_game_info_polling = get_game_info_scheduler(5, 10)
+start_game_info_polling, stop_game_info_polling = get_game_info_scheduler(
+    query_game_info_interval=5, save_game_info_interval=10
+)
 
 
 @app.listener("before_server_start")

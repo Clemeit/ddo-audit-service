@@ -142,7 +142,7 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
     for server_name in SERVER_NAMES_LOWERCASE:
         all_server_lfms[server_name] = ServerLFMsData(
             lfms={},
-            last_updated=time(),
+            last_update=time(),
         )
 
     for lfm in request_body.lfms:

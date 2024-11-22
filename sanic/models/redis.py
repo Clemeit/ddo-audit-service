@@ -12,9 +12,9 @@ class ServerInfo(BaseModel):
     """
 
     index: Optional[int] = None
-    created: Optional[float] = None
-    last_status_check: Optional[float] = None
-    last_data_fetch: Optional[float] = None
+    created: Optional[str] = None
+    last_status_check: Optional[str] = None
+    last_data_fetch: Optional[str] = None
     is_online: Optional[bool] = None
     character_count: Optional[int] = None
     lfm_count: Optional[int] = None
@@ -36,7 +36,7 @@ class ServerCharactersData(BaseModel):
     """
 
     characters: dict[str, Character] = {}
-    last_updated: Optional[float] = None
+    last_update: Optional[str] = None
 
 
 class ServerLFMsData(BaseModel):
@@ -45,7 +45,7 @@ class ServerLFMsData(BaseModel):
     """
 
     lfms: dict[str, Lfm] = {}
-    last_updated: Optional[float] = None
+    last_update: Optional[str] = None
 
 
 CACHE_MODEL = {

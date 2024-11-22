@@ -47,7 +47,7 @@ class LfmActivityEvent(BaseModel):
 
 
 class LfmActivity(BaseModel):
-    timestamp: Optional[float] = None
+    timestamp: Optional[str] = None
     events: Optional[list[LfmActivityEvent]] = None
 
 
