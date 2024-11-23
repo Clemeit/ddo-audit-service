@@ -96,7 +96,7 @@ def add_or_update_characters(characters: list[Character]):
                         INSERT INTO characters ({columns})
                         VALUES ({placeholders})
                         ON CONFLICT (id) DO UPDATE SET
-                        {updates}
+                        {updates}, last_saved = NOW()
                     """
 
                     # Get the values of the Character model
