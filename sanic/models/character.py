@@ -10,9 +10,9 @@ class CharacterClass(BaseModel):
 
 class CharacterLocation(BaseModel):
     id: int
-    name: Optional[str]
-    region: Optional[str]
-    is_public_space: Optional[bool]
+    name: Optional[str] = None
+    region: Optional[str] = None
+    is_public_space: Optional[bool] = None
 
 
 class Character(BaseModel):
@@ -31,9 +31,13 @@ class Character(BaseModel):
     is_in_party: Optional[bool] = None
     is_anonymous: Optional[bool] = None
     is_recruiting: Optional[bool] = None
-    is_complete_data: Optional[bool] = False
     public_comment: Optional[str] = None
-    last_seen: Optional[str] = None
+    last_updated: Optional[str] = (
+        None  # the last time the character was updated from Collections
+    )
+    last_saved: Optional[str] = (
+        None  # the last time the character was persisted in the database
+    )
 
 
 class CharacterActivityType(str, Enum):
@@ -55,11 +59,11 @@ class CharacterActivity(BaseModel):
 
 
 class CharacterActivitySummary(BaseModel):
-    level_event_count: Optional[int]
-    location_event_count: Optional[int]
-    guild_name_event_count: Optional[int]
-    server_name_event_count: Optional[int]
-    status_event_count: Optional[int]
+    level_event_count: Optional[int] = None
+    location_event_count: Optional[int] = None
+    guild_name_event_count: Optional[int] = None
+    server_name_event_count: Optional[int] = None
+    status_event_count: Optional[int] = None
 
 
 CHARACTER_ACTIVITY_TYPES = [item.value for item in CharacterActivityType]

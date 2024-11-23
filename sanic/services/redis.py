@@ -71,12 +71,58 @@ def get_character_by_character_id(character_id: int) -> Character:
             return server_characters.characters.get(character_id)
 
 
-def get_characters_by_character_ids(character_ids: list[int]) -> list[Character]:
-    characters = []
-    for character_id in character_ids:
-        character = get_character_by_character_id(character_id)
-        if character:
-            characters.append(character)
+def get_characters_by_character_ids(
+    character_ids: list[str] | set[str],
+) -> list[Character]:
+    # performance difference per 1000 characters with 50 logging off:
+    # Old code: 8-10 seconds
+    # New code: 35-50 milliseconds
+    # A 200x improvement
+
+    characters: list[Character] = []
+    remaining_character_ids = set(character_ids)
+
+    with get_redis_client() as client:
+        for server_name in SERVER_NAMES_LOWERCASE:
+            server_character_keys = client.json().objkeys(
+                f"{server_name}:characters", "characters"
+            )
+            discovered_character_ids: set[str] = set()
+            for character_id in remaining_character_ids:
+                if character_id not in server_character_keys:
+                    continue
+                character = client.json().get(
+                    f"{server_name}:characters", f"characters.{character_id}"
+                )
+                characters.append(Character(**character))
+                discovered_character_ids.add(character_id)
+                if not remaining_character_ids:
+                    break
+            remaining_character_ids -= discovered_character_ids
+            if not remaining_character_ids:
+                break
+    return characters
+
+
+def get_characters_by_server_name_and_character_ids(
+    server_name: str,
+    character_ids: list[str] | set[str],
+) -> list[Character]:
+    characters: list[Character] = []
+
+    with get_redis_client() as client:
+        server_character_keys = client.json().objkeys(
+            f"{server_name}:characters", "characters"
+        )
+        discovered_character_ids: set[str] = set()
+        for character_id in character_ids:
+            if character_id not in server_character_keys:
+                continue
+            character = client.json().get(
+                f"{server_name}:characters", f"characters.{character_id}"
+            )
+            characters.append(Character(**character))
+            discovered_character_ids.add(character_id)
     return characters
 
 
@@ -129,14 +175,11 @@ def delete_characters_by_server_name_and_character_ids(
     client = get_redis_client()
     pipeline = client.pipeline()
 
-    # Pipeline deletion and update
+    # Pipeline deletion
     for character_id in character_ids:
         pipeline.json().delete(
             key=f"{server_name}:characters", path=f"characters.{character_id}"
         )
-    pipeline.json().set(
-        f"{server_name}:characters", path="last_updated", obj=datetime.now()
-    )
     pipeline.execute()
 
 
@@ -169,7 +212,7 @@ def delete_lfms_by_server_name_and_lfm_ids(server_name: str, lfm_ids: list[str])
     # Pipeline deletion and update
     for lfm_id in lfm_ids:
         pipeline.json().delete(key=f"{server_name}:lfms", path=f"lfms.{lfm_id}")
-    pipeline.json().set(f"{server_name}:lfms", path="last_updated", obj=datetime.now())
+    # pipeline.json().set(f"{server_name}:lfms", path="last_updated", obj=datetime.now())
     pipeline.execute()
 
 

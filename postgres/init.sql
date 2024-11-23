@@ -13,11 +13,9 @@ CREATE TABLE IF NOT EXISTS public."characters"
     guild_name character varying(50) COLLATE pg_catalog."default",
     server_name character varying(25) COLLATE pg_catalog."default" NOT NULL,
     home_server_name character varying(25) COLLATE pg_catalog."default",
-    group_id bigint,
-    is_in_party boolean NOT NULL,
-    is_recruiting boolean NOT NULL,
     is_anonymous boolean NOT NULL,
-    last_seen timestamp with time zone NOT NULL,
+    last_updated timestamp with time zone NOT NULL,
+    last_saved timestamp with time zone NOT NULL DEFAULT current_timestamp,
     CONSTRAINT character_pkey PRIMARY KEY (id)
 )
 

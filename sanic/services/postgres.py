@@ -71,7 +71,14 @@ def add_or_update_characters(characters: list[Character]):
             try:
                 for character in characters:
                     character_dump = character.model_dump()
-                    exclude_fields = ["public_comment", "is_online", "is_complete_data"]
+                    exclude_fields = [
+                        "public_comment",
+                        "group_id",
+                        "is_in_party",
+                        "is_recruiting",
+                        "is_online",
+                        "last_saved",
+                    ]
                     character_fields = [
                         field
                         for field in character_dump.keys()
@@ -98,48 +105,11 @@ def add_or_update_characters(characters: list[Character]):
                         for key, value in character_dump.items()
                         if key in character_fields
                     ]
-                    # values = []
-                    # for key, value in character_dump.items():
-                    #     if key not in character_fields:
-                    #         continue
-                    #     if key == "last_seen":
-                    #         value: float
-                    #         values.append(datetime.fromtimestamp(value).isoformat())
-                    #     elif isinstance(value, (dict, list)):
-                    #         values.append(json.dumps(value))
-                    #     else:
-                    #         values.append(value)
 
                     cursor.execute(query, values)
                 conn.commit()
             except Exception as e:
                 print(f"Failed to commit changes to the database: {e}")
-                conn.rollback()
-                raise e
-
-
-def add_or_update_character_activities(activity_entries: list[dict]):
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            try:
-                for activity_entry in activity_entries:
-                    # timestamp = activity_entry.get("timestamp")
-                    character_id = activity_entry.get("id")
-                    activity_type = activity_entry.get("type")
-                    data = activity_entry.get("data")
-
-                    cursor.execute(
-                        """
-                        INSERT INTO public.character_activity (timestamp, id, activity_type, data)
-                        VALUES (NOW(), %s, %s, %s)
-                        """,
-                        (character_id, activity_type, json.dumps(data)),
-                    )
-                conn.commit()
-            except Exception as e:
-                print(
-                    f"Failed to add or update character activity in the database: {e}"
-                )
                 conn.rollback()
                 raise e
 
@@ -310,23 +280,29 @@ def add_game_info(game_info: GameInfo):
 
 
 def add_character_activity(game_activity: dict[str, list[CharacterActivity]]):
+    insert_query = """
+        INSERT INTO character_activity (timestamp, id, activity_type, data)
+        VALUES (NOW(), %s, %s, %s)
+    """
+    batch_size = 500
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             try:
+                batch = []
                 for server_activity in game_activity.values():
                     for activity in server_activity:
-                        insert_query = """
-                            INSERT INTO character_activity (timestamp, id, activity_type, data)
-                            VALUES (NOW(), %s, %s, %s)
-                        """
-                        cursor.execute(
-                            insert_query,
+                        batch.append(
                             (
                                 activity.id,
                                 activity.activity_type.name,
                                 json.dumps(activity.data),
-                            ),
+                            )
                         )
+                        if len(batch) >= batch_size:
+                            cursor.executemany(insert_query, batch)
+                            batch.clear()
+                if batch:
+                    cursor.executemany(insert_query, batch)
                 conn.commit()
             except Exception as e:
                 print(f"Failed to add character activity to the database: {e}")
@@ -387,11 +363,9 @@ def build_character_from_row(row: tuple) -> Character:
         guild_name=row[7],
         server_name=row[8],
         home_server_name=row[9],
-        group_id=str(row[10]),
-        is_in_party=row[11],
-        is_recruiting=row[12],
-        is_anonymous=row[13],
-        last_seen=row[14].isoformat() if isinstance(row[14], datetime) else "",
+        is_anonymous=row[10],
+        last_updated=row[11].isoformat() if isinstance(row[11], datetime) else "",
+        last_saved=row[12].isoformat() if isinstance(row[12], datetime) else "",
     )
 
 

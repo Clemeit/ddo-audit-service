@@ -22,11 +22,17 @@ class LastUpdateTimestamps(BaseModel):
 class CharacterRequestApiModel(BaseModel):
     last_update_timestamps: Optional[LastUpdateTimestamps] = None
     characters: Optional[list[Character]] = None
+    deleted_ids: Optional[list[str]] = []  # characters logging off
+    updated_ids: Optional[list[str]] = (
+        []
+    )  # characters that have activity updates to persist
 
 
 class LfmRequestApiModel(BaseModel):
     last_update_timestamps: Optional[LastUpdateTimestamps] = None
     lfms: Optional[list[Lfm]] = None
+    deleted_ids: Optional[list[str]] = []
+    updated_ids: Optional[list[str]] = []
 
 
 class CharacterRequestType(str, Enum):

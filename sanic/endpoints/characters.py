@@ -9,7 +9,6 @@ from models.api import CharacterRequestApiModel, CharacterRequestType
 from models.character import Character, CharacterActivity, CharacterActivityType
 from models.redis import ServerCharactersData
 from utils.server import is_server_name_valid
-from datetime import datetime
 
 from sanic import Blueprint
 from sanic.request import Request
@@ -58,15 +57,9 @@ async def get_online_character_summary(request):
                 for character in server_data.characters.values()
                 if character.is_anonymous
             )
-            complete_data_count = sum(
-                1
-                for character in server_data.characters.values()
-                if character.is_complete_data
-            )
             response[server_name] = {
                 "character_count": len(server_data.characters),
                 "anonymous_count": anon_character_count,
-                "complete_data_count": complete_data_count,
             }
     except Exception as e:
         return json({"message": str(e)}, status=500)
@@ -109,7 +102,6 @@ async def get_character_by_id(request, character_id):
         character = postgres_client.get_character_by_id(character_id)
         if character:
             character.is_online = False
-            character.is_complete_data = True
 
     if not character:
         return json({"message": "Character not found"}, status=404)
@@ -144,7 +136,6 @@ async def get_character_by_server_name_and_character_name(
         )
         if character:
             character.is_online = False
-            character.is_complete_data = True
 
     if not character:
         return json({"message": "Character not found"}, status=404)
@@ -207,6 +198,10 @@ def handle_incoming_characters(
     request_body: CharacterRequestApiModel,
     type: CharacterRequestType,
 ):
+    # deleted and updated keys (for characters that logged off or had avtivity)
+    deleted_ids = set(request_body.deleted_ids)
+    updated_ids = set(request_body.updated_ids)
+
     all_server_characters: dict[str, ServerCharactersData] = {}
     for server_name in SERVER_NAMES_LOWERCASE:
         all_server_characters[server_name] = ServerCharactersData(
@@ -225,10 +220,8 @@ def handle_incoming_characters(
 
         # the last time the player was seen was the last time data was
         # pulled from the game client
-        character.last_seen = all_server_characters[server_name].last_update
+        character.last_updated = all_server_characters[server_name].last_update
 
-        if type == CharacterRequestType.set:
-            character.is_complete_data = True
         all_server_characters[server_name].characters[character.id] = character
 
     # process each server's characters
@@ -244,8 +237,7 @@ def handle_incoming_characters(
         previous_characters = previous_characters_data.characters
         previous_character_ids = set(previous_characters.keys())
 
-        # the set of all character IDs from characters that just logged off
-        deleted_ids = previous_character_ids - current_character_ids
+        deleted_ids_on_server = deleted_ids.intersection(previous_character_ids)
 
         # get all of the character activity for this server
         character_activity = aggregate_character_activity_for_server(
@@ -253,18 +245,21 @@ def handle_incoming_characters(
             current_characters,
             previous_character_ids,
             current_character_ids,
+            deleted_character_ids=deleted_ids_on_server,
         )
         all_servers_activity[server_name] = character_activity
 
         # TODO: probably better to use pipelining here instead of making these
         # calls for each server
-        persist_deleted_characters_to_db_by_id(deleted_ids)
+        persist_deleted_characters_to_db_by_server_name_and_ids(
+            server_name, deleted_ids_on_server
+        )
         if type == CharacterRequestType.set:
             redis_client.set_characters_by_server_name(server_name, data)
         elif type == CharacterRequestType.update:
             redis_client.update_characters_by_server_name(server_name, data)
             redis_client.delete_characters_by_server_name_and_character_ids(
-                server_name, list(deleted_ids)
+                server_name, deleted_ids
             )
 
     # persist all of the character activity events to the database for
@@ -272,14 +267,20 @@ def handle_incoming_characters(
     persist_character_activity_to_db(all_servers_activity)
 
 
-def persist_deleted_characters_to_db_by_id(deleted_ids: list[str]):
+def persist_deleted_characters_to_db_by_server_name_and_ids(
+    server_name: str, deleted_keys: set[str]
+):
     """
     Characters that have just logged off are about to be deleted
     from the cache. Persist them to the database for long-term storage.
     """
+    if not deleted_keys:
+        return
+
     # get all of the characters' last known data from the cache:
-    print(deleted_ids)
-    deleted_characters = redis_client.get_characters_by_character_ids(deleted_ids)
+    deleted_characters = redis_client.get_characters_by_server_name_and_character_ids(
+        server_name, deleted_keys
+    )
     # add all of the characters that are about to be deleted to the database:
     postgres_client.add_or_update_characters(deleted_characters)
 
@@ -289,6 +290,7 @@ def aggregate_character_activity_for_server(
     current_characters: dict[str, Character],
     previous_character_ids: set[str],
     current_character_ids: set[str],
+    deleted_character_ids: set[str],
 ) -> list[CharacterActivity]:
     """
     Handle character activity events for a single server at a time.
@@ -312,8 +314,7 @@ def aggregate_character_activity_for_server(
         )
 
     # characters that just logged off:
-    deleted_ids = previous_character_ids - current_character_ids
-    for character_id in deleted_ids:
+    for character_id in deleted_character_ids:
         activities.append(
             CharacterActivity(
                 id=character_id,
