@@ -63,6 +63,11 @@ def get_characters_by_server_name(server_name: str) -> ServerCharactersData:
     )
 
 
+def get_character_count_by_server_name(server_name: str) -> int:
+    server_name = server_name.lower()
+    return get_redis_client().json().objlen(f"{server_name}:characters", "characters")
+
+
 def get_character_by_character_id(character_id: int) -> Character:
     character_id = str(character_id)
     for server_name in SERVER_NAMES_LOWERCASE:

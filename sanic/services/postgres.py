@@ -3,13 +3,14 @@ import os
 from contextlib import contextmanager
 from time import time
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from models.character import Character, CharacterActivity, CharacterActivitySummary
 from models.game import PopulationDataPoint, PopulationPointInTime
 from models.redis import GameInfo
 from models.service import News, PageMessage
-from psycopg2 import pool  # type: ignore
+from psycopg2 import pool, sql  # type: ignore
+from constants.activity import CharacterActivityType
 
 # Load environment variables
 DB_CONFIG = {
@@ -174,43 +175,45 @@ def get_character_activity_summary_by_character_id(
             return build_character_activity_summary_from_row(activity)
 
 
-def get_character_activity_field_by_character_id(
-    character_id: str, field: str
-) -> list[dict]:  # TODO: add type
-
-    # Validate the field
-    VALID_FIELDS = [
-        "total_level",
-        "location",
-        "guild_name",
-        "server_name",
-        "is_online",
-    ]
-    if field not in VALID_FIELDS:
-        return []
+def get_character_activity_by_type_and_character_id(
+    character_id: str,
+    activity_Type: CharacterActivityType,
+    start_date: datetime = None,
+    end_date: datetime = None,
+) -> list[dict]:
+    if not start_date:
+        start_date = datetime.now() - timedelta(days=90)
+    if not end_date:
+        end_date = datetime.now()
 
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
-                f"""
-                SELECT {field}
+                """
+                SELECT timestamp, data
                 FROM public.character_activity
-                WHERE id = %s
+                WHERE id = %s AND activity_type = %s AND timestamp BETWEEN %s AND %s
                 """,
-                (character_id,),
+                (
+                    character_id,
+                    activity_Type.name,
+                    start_date.isoformat(),
+                    end_date.isoformat(),
+                ),
             )
-            activity = cursor.fetchone()
+            activity = cursor.fetchall()
+            print(activity)
             if not activity:
                 return []
 
-            return activity[0]
+            return build_character_activity_from_rows(activity)
 
 
 def get_game_population(
     start_date: str = None, end_date: str = None
 ) -> list[dict]:  # TODO: add type
     if not start_date:
-        start_date = "NOW() - INTERVAL '1 day'"
+        start_date = "NOW() - INTERVAL 1 day"
     if not end_date:
         end_date = "NOW()"
 
@@ -223,8 +226,12 @@ def get_game_population(
                     EXTRACT(EPOCH FROM timestamp) as timestamp,
                     data
                 FROM public.game_info
-                WHERE timestamp BETWEEN {start_date} AND {end_date}
-                """
+                WHERE timestamp BETWEEN %s AND %s
+                """,
+                (
+                    start_date,
+                    end_date,
+                ),
             )
             game_info_list = cursor.fetchall()
             if not game_info_list:
@@ -391,3 +398,13 @@ def build_character_activity_summary_from_row(row: tuple) -> CharacterActivitySu
         server_name_event_count=row[3],
         status_event_count=row[4],
     )
+
+
+def build_character_activity_from_rows(rows: list[tuple]) -> list[dict]:
+    return [
+        {
+            "timestamp": row[0].isoformat() if isinstance(row[0], datetime) else "",
+            "data": row[1],
+        }
+        for row in rows
+    ]

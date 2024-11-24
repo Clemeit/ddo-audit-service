@@ -6,9 +6,10 @@ import services.postgres as postgres_client
 import services.redis as redis_client
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.api import CharacterRequestApiModel, CharacterRequestType
-from models.character import Character, CharacterActivity, CharacterActivityType
+from models.character import Character, CharacterActivity
+from constants.activity import CharacterActivityType
 from models.redis import ServerCharactersData
-from utils.server import is_server_name_valid
+from utils.validation import is_server_name_valid
 
 from sanic import Blueprint
 from sanic.request import Request
@@ -48,18 +49,15 @@ async def get_online_character_summary(request):
 
     Description: Get the number of online characters for each server from the Redis cache.
     """
+    # TODO: test this method
     try:
         response = {}
         for server_name in SERVER_NAMES_LOWERCASE:
-            server_data = redis_client.get_characters_by_server_name(server_name)
-            anon_character_count = sum(
-                1
-                for character in server_data.characters.values()
-                if character.is_anonymous
+            character_count = redis_client.get_character_count_by_server_name(
+                server_name
             )
             response[server_name] = {
-                "character_count": len(server_data.characters),
-                "anonymous_count": anon_character_count,
+                "character_count": character_count,
             }
     except Exception as e:
         return json({"message": str(e)}, status=500)
@@ -308,7 +306,7 @@ def aggregate_character_activity_for_server(
         activities.append(
             CharacterActivity(
                 id=character_id,
-                activity_type=CharacterActivityType.is_online,
+                activity_type=CharacterActivityType.status,
                 data={"value": True},
             )
         )
@@ -318,7 +316,7 @@ def aggregate_character_activity_for_server(
         activities.append(
             CharacterActivity(
                 id=character_id,
-                activity_type=CharacterActivityType.is_online,
+                activity_type=CharacterActivityType.status,
                 data={"value": False},
             )
         )
@@ -338,12 +336,12 @@ def aggregate_character_activity_for_server(
                 if cur_char.location is None:
                     return False
 
-                previous_location_name = ""
+                previous_location_id: int = 0
                 if prev_char.location is not None:
-                    previous_location_name = prev_char.location.name
-                current_location_name = cur_char.location.name
+                    previous_location_id = prev_char.location.id
+                current_location_id = cur_char.location.id
 
-                if previous_location_name != current_location_name:
+                if previous_location_id != current_location_id:
                     return True
                 return False
 
@@ -389,7 +387,7 @@ def aggregate_character_activity_for_server(
                 activities.append(
                     CharacterActivity(
                         id=character_id,
-                        activity_type=CharacterActivityType.classes,
+                        activity_type=CharacterActivityType.total_level,
                         data={
                             "total_level": current_characters[character_id].total_level,
                             "classes": class_list,

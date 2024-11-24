@@ -9,7 +9,7 @@ from constants.server import SERVER_NAMES_LOWERCASE
 from models.api import LfmRequestApiModel, LfmRequestType
 from models.lfm import Lfm, LfmActivity, LfmActivityEvent, LfmActivityType
 from models.redis import ServerLFMsData
-from utils.server import is_server_name_valid
+from utils.validation import is_server_name_valid
 
 from sanic import Blueprint
 from sanic.request import Request

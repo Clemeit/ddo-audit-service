@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel
+from constants.activity import CharacterActivityType
 
 
 class CharacterClass(BaseModel):
@@ -38,14 +39,6 @@ class Character(BaseModel):
     last_saved: Optional[str] = (
         None  # the last time the character was persisted in the database
     )
-
-
-class CharacterActivityType(str, Enum):
-    classes = "classes"
-    location = "location"
-    guild_name = "guild_name"
-    server_name = "server_name"
-    is_online = "is_online"
 
 
 class CharacterActivity(BaseModel):
