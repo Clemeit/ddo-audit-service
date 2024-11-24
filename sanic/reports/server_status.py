@@ -1,11 +1,10 @@
 import xml.etree.ElementTree as ET
-
-from models.game import GameWorld
-
 from datetime import datetime
+
 import requests
 import services.postgres as postgres_client
 import services.redis as redis_client
+from models.game import GameWorld
 from models.redis import GameInfo, ServerInfo
 from requests import HTTPError
 from utils.scheduler import run_batch_on_schedule

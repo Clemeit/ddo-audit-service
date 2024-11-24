@@ -4,10 +4,10 @@ Character endpoints.
 
 import services.postgres as postgres_client
 import services.redis as redis_client
+from constants.activity import CharacterActivityType
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.api import CharacterRequestApiModel, CharacterRequestType
 from models.character import Character, CharacterActivity
-from constants.activity import CharacterActivityType
 from models.redis import ServerCharactersData
 from utils.validation import is_server_name_valid
 
@@ -198,7 +198,6 @@ def handle_incoming_characters(
 ):
     # deleted and updated keys (for characters that logged off or had avtivity)
     deleted_ids = set(request_body.deleted_ids)
-    updated_ids = set(request_body.updated_ids)
 
     all_server_characters: dict[str, ServerCharactersData] = {}
     for server_name in SERVER_NAMES_LOWERCASE:

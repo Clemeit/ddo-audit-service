@@ -2,11 +2,11 @@
 Activity endpoints.
 """
 
-from sanic import Blueprint
-from sanic.response import json
-
 import services.postgres as postgres_client
 from constants.activity import CharacterActivityType
+
+from sanic import Blueprint
+from sanic.response import json
 
 activity_blueprint = Blueprint("activity", url_prefix="/activity", version=1)
 

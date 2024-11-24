@@ -1,9 +1,9 @@
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel
 
 from models.character import Character
 from models.lfm import Lfm
+from pydantic import BaseModel
 
 
 class LastUpdateTimestamps(BaseModel):

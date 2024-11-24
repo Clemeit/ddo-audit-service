@@ -1,16 +1,16 @@
 import json
 import os
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 from time import time
 from typing import Optional
-from datetime import datetime, timedelta
 
+from constants.activity import CharacterActivityType
 from models.character import Character, CharacterActivity, CharacterActivitySummary
 from models.game import PopulationDataPoint, PopulationPointInTime
 from models.redis import GameInfo
 from models.service import News, PageMessage
-from psycopg2 import pool, sql  # type: ignore
-from constants.activity import CharacterActivityType
+from psycopg2 import pool  # type: ignore
 
 # Load environment variables
 DB_CONFIG = {
@@ -221,7 +221,7 @@ def get_game_population(
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
-                f"""
+                """
                 SELECT
                     EXTRACT(EPOCH FROM timestamp) as timestamp,
                     data

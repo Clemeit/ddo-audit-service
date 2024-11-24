@@ -3,7 +3,6 @@ Service to interface with the Redis server.
 """
 
 import os
-from datetime import datetime
 
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.character import Character
