@@ -6,7 +6,13 @@ import os
 
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.character import Character
-from models.redis import CACHE_MODEL, GameInfo, ServerCharactersData, ServerLFMsData
+from models.redis import (
+    CACHE_MODEL,
+    GameInfo,
+    ServerCharactersData,
+    ServerLFMsData,
+    ServerInfo,
+)
 
 import redis
 
@@ -55,11 +61,13 @@ def close_redis():
     redis_singleton.close()
 
 
-def get_characters_by_server_name(server_name: str) -> ServerCharactersData:
+def get_characters_by_server_name_as_class(server_name: str) -> ServerCharactersData:
+    return ServerCharactersData(**get_characters_by_server_name_as_dict(server_name))
+
+
+def get_characters_by_server_name_as_dict(server_name: str) -> dict:
     server_name = server_name.lower()
-    return ServerCharactersData(
-        **get_redis_client().json().get(f"{server_name}:characters")
-    )
+    return get_redis_client().json().get(f"{server_name.lower()}:characters")
 
 
 def get_character_count_by_server_name(server_name: str) -> int:
@@ -70,7 +78,7 @@ def get_character_count_by_server_name(server_name: str) -> int:
 def get_character_by_character_id(character_id: int) -> Character:
     character_id = str(character_id)
     for server_name in SERVER_NAMES_LOWERCASE:
-        server_characters = get_characters_by_server_name(server_name)
+        server_characters = get_characters_by_server_name_as_class(server_name)
         if character_id in server_characters.characters:
             return server_characters.characters.get(character_id)
 
@@ -134,15 +142,24 @@ def get_character_by_name_and_server_name(
     character_name: str, server_name: str
 ) -> Character:
     character_name = character_name.lower()
-    server_characters = get_characters_by_server_name(server_name)
+    server_characters = get_characters_by_server_name_as_class(server_name)
     for character in server_characters.characters.values():
         if character.name.lower() == character_name:
             return character
 
 
-def get_lfms_by_server_name(server_name: str) -> ServerLFMsData:
+def get_lfms_by_server_name_as_class(server_name: str) -> ServerLFMsData:
+    return ServerLFMsData(**get_lfms_by_server_name_as_dict(server_name))
+
+
+def get_lfms_by_server_name_as_dict(server_name: str) -> dict:
     server_name = server_name.lower()
-    return ServerLFMsData(**get_redis_client().json().get(f"{server_name}:lfms"))
+    return get_redis_client().json().get(f"{server_name.lower()}:lfms")
+
+
+def get_lfm_count_by_server_name(server_name: str) -> int:
+    server_name = server_name.lower()
+    return get_redis_client().json().objlen(f"{server_name}:lfms", "lfms")
 
 
 def set_characters_by_server_name(
@@ -176,33 +193,29 @@ def delete_characters_by_server_name_and_character_ids(
         return
 
     server_name = server_name.lower()
-    client = get_redis_client()
-    pipeline = client.pipeline()
-
-    # Pipeline deletion
-    for character_id in character_ids:
-        pipeline.json().delete(
-            key=f"{server_name}:characters", path=f"characters.{character_id}"
-        )
-    pipeline.execute()
+    with get_redis_client() as client:
+        with client.pipeline() as pipeline:
+            for character_id in character_ids:
+                pipeline.json().delete(
+                    key=f"{server_name}:characters", path=f"characters.{character_id}"
+                )
+            pipeline.execute()
 
 
 def set_lfms_by_server_name(server_name: str, server_lfms: ServerLFMsData):
     server_name = server_name.lower()
-    get_redis_client().json().set(
-        f"{server_name}:lfms", path="$", obj=server_lfms.model_dump()
-    )
+    with get_redis_client() as client:
+        client.json().set(f"{server_name}:lfms", path="$", obj=server_lfms.model_dump())
 
 
 def update_lfms_by_server_name(server_name: str, server_lfms: ServerLFMsData):
     server_name = server_name.lower()
-    client = get_redis_client()
-
-    client.json().merge(
-        name=f"{server_name}:lfms",
-        path="$",
-        obj=server_lfms.model_dump(exclude_unset=True),
-    )
+    with get_redis_client() as client:
+        client.json().merge(
+            name=f"{server_name}:lfms",
+            path="$",
+            obj=server_lfms.model_dump(exclude_unset=True),
+        )
 
 
 def delete_lfms_by_server_name_and_lfm_ids(server_name: str, lfm_ids: list[str]):
@@ -210,18 +223,27 @@ def delete_lfms_by_server_name_and_lfm_ids(server_name: str, lfm_ids: list[str])
         return
 
     server_name = server_name.lower()
-    client = get_redis_client()
-    pipeline = client.pipeline()
-
-    # Pipeline deletion and update
-    for lfm_id in lfm_ids:
-        pipeline.json().delete(key=f"{server_name}:lfms", path=f"lfms.{lfm_id}")
-    # pipeline.json().set(f"{server_name}:lfms", path="last_updated", obj=datetime.now())
-    pipeline.execute()
+    with get_redis_client() as client:
+        with client.pipeline() as pipeline:
+            for lfm_id in lfm_ids:
+                pipeline.json().delete(key=f"{server_name}:lfms", path=f"lfms.{lfm_id}")
+            pipeline.execute()
 
 
-def get_game_info() -> GameInfo:
-    return GameInfo(**get_redis_client().json().get("game_info"))
+def get_all_server_info_as_class() -> GameInfo:
+    return GameInfo(**get_all_server_info_as_dict())
+
+
+def get_all_server_info_as_dict() -> dict:
+    return get_redis_client().json().get("game_info")
+
+
+def get_server_info_by_server_name_as_class(server_name: str) -> ServerInfo:
+    return ServerInfo(**get_server_info_by_server_name_as_dict(server_name))
+
+
+def get_server_info_by_server_name_as_dict(server_name: str) -> dict:
+    return get_redis_client().json().get("game_info", f"servers.{server_name}")
 
 
 def set_game_info(game_info: GameInfo):

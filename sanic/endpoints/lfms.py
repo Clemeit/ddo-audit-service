@@ -2,8 +2,6 @@
 LFM endpoints.
 """
 
-from time import time
-
 import services.redis as redis_client
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.api import LfmRequestApiModel, LfmRequestType
@@ -31,7 +29,7 @@ async def get_all_lfms(request):
     try:
         response = {}
         for server_name in SERVER_NAMES_LOWERCASE:
-            response[server_name] = redis_client.get_lfms_by_server_name(
+            response[server_name] = redis_client.get_lfms_by_server_name_as_class(
                 server_name
             ).model_dump()
     except Exception as e:
@@ -52,15 +50,9 @@ async def get_online_characters(request):
     try:
         response = {}
         for server_name in SERVER_NAMES_LOWERCASE:
-            server_data = redis_client.get_lfms_by_server_name(server_name)
-            raid_count = sum(
-                1
-                for lfm in server_data.lfms.values()
-                if lfm.quest and lfm.quest.group_size == "Raid"
-            )
+            lfm_count = redis_client.get_lfm_count_by_server_name(server_name)
             response[server_name] = {
-                "lfm_count": len(server_data.lfms),
-                "raid_count": raid_count,
+                "lfm_count": lfm_count,
             }
     except Exception as e:
         return json({"message": str(e)}, status=500)
@@ -80,9 +72,12 @@ async def get_lfms_by_server(request, server_name):
     if not is_server_name_valid(server_name):
         return json({"message": "Invalid server name"}, status=400)
 
-    server_lfms = redis_client.get_lfms_by_server_name(server_name)
+    try:
+        server_lfms = redis_client.get_lfms_by_server_name_as_dict(server_name)
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
 
-    return json({"data": server_lfms.model_dump()})
+    return json({"data": server_lfms})
 
 
 # ===================================
@@ -138,25 +133,29 @@ async def update_lfms(request: Request):
 
 
 def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType):
+    deleted_ids = set(request_body.deleted_ids)
+
     all_server_lfms: dict[str, ServerLFMsData] = {}
     for server_name in SERVER_NAMES_LOWERCASE:
         all_server_lfms[server_name] = ServerLFMsData(
             lfms={},
-            last_update=time(),
         )
 
+    # update last_update timestamp for each server
+    for server_name, value in request_body.last_update_timestamps:
+        value: str
+        all_server_lfms[server_name].last_update = value
+
+    # organize lfms by server
     for lfm in request_body.lfms:
         server_name = lfm.server_name.lower()
+        lfm.last_updated = all_server_lfms[server_name].last_update
         all_server_lfms[server_name].lfms[lfm.id] = lfm
 
     for server_name, data in all_server_lfms.items():
         data: ServerLFMsData
-        current_lfm_ids = set(data.lfms.keys())
 
-        previous_lfms_data = redis_client.get_lfms_by_server_name(server_name)
-        previous_lfm_ids = set(previous_lfms_data.lfms.keys())
-
-        deleted_lfm_ids = previous_lfm_ids - current_lfm_ids
+        previous_lfms_data = redis_client.get_lfms_by_server_name_as_class(server_name)
 
         lfms_with_activity = add_activity_to_lfms_for_server(
             previous_lfms_data.lfms, data.lfms
@@ -168,7 +167,7 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
         elif type == LfmRequestType.update:
             redis_client.update_lfms_by_server_name(server_name, data)
             redis_client.delete_lfms_by_server_name_and_lfm_ids(
-                server_name, deleted_lfm_ids
+                server_name, deleted_ids
             )
 
 
@@ -256,7 +255,7 @@ def add_activity_to_lfms_for_server(
 
         # comine the old and new activity
         new_lfm_activity = LfmActivity(
-            timestamp=time(), events=new_activity_events_list
+            timestamp=current_lfm.last_updated, events=new_activity_events_list
         )
         aggregate_activity = old_lfm_activity + (
             [new_lfm_activity] if new_activity_events_list else []

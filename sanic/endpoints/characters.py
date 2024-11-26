@@ -31,7 +31,7 @@ async def get_all_characters(request):
     try:
         response = {}
         for server_name in SERVER_NAMES_LOWERCASE:
-            response[server_name] = redis_client.get_characters_by_server_name(
+            response[server_name] = redis_client.get_characters_by_server_name_as_class(
                 server_name
             ).model_dump()
     except Exception as e:
@@ -77,9 +77,14 @@ async def get_characters_by_server(request, server_name):
     if not is_server_name_valid(server_name):
         return json({"message": "Invalid server name"}, status=400)
 
-    server_characters = redis_client.get_characters_by_server_name(server_name)
+    try:
+        server_characters = redis_client.get_characters_by_server_name_as_dict(
+            server_name
+        )
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
 
-    return json({"data": server_characters.model_dump()})
+    return json({"data": server_characters})
 
 
 @character_blueprint.get("/<character_id:int>")
@@ -206,7 +211,7 @@ def handle_incoming_characters(
         )
     all_servers_activity: dict[str, list[CharacterActivity]] = {}
 
-    # update last_updated timestamp for each server
+    # update last_update timestamp for each server
     for server_name, value in request_body.last_update_timestamps:
         value: str
         all_server_characters[server_name].last_update = value
@@ -228,7 +233,7 @@ def handle_incoming_characters(
         current_character_ids = set(current_characters.keys())
 
         # previous character data, characters, and character ID for this server
-        previous_characters_data = redis_client.get_characters_by_server_name(
+        previous_characters_data = redis_client.get_characters_by_server_name_as_class(
             server_name
         )
         previous_characters = previous_characters_data.characters

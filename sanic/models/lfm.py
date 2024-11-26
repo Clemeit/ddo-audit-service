@@ -65,6 +65,7 @@ class Lfm(BaseModel):
     leader: Optional[Character] = None
     members: Optional[list[Character]] = None
     activity: Optional[list[LfmActivity]] = None
+    last_updated: Optional[str] = None
     server_name: Optional[str] = None
 
 

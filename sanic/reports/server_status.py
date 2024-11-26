@@ -111,7 +111,7 @@ class ServerStatusUpdater:
 
     def save_game_info(self):
         try:
-            game_info = redis_client.get_game_info()
+            game_info = redis_client.get_all_server_info_as_class()
             postgres_client.add_game_info(game_info)
         except Exception as e:
             print(f"Failed to save game info: {e}")
