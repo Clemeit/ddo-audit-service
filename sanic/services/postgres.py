@@ -408,3 +408,35 @@ def build_character_activity_from_rows(rows: list[tuple]) -> list[dict]:
         }
         for row in rows
     ]
+
+
+def save_access_token(character_id: str, access_token: str):
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO public.access_tokens (character_id, access_token)
+                    VALUES (%s, %s)
+                    ON CONFLICT (character_id) DO UPDATE SET access_token = EXCLUDED.access_token
+                    """,
+                    (character_id, access_token),
+                )
+                conn.commit()
+            except Exception as e:
+                print(f"Failed to save access token to the database: {e}")
+                conn.rollback()
+                raise e
+
+
+def get_access_token_by_character_id(character_id: str) -> str:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT access_token FROM public.access_tokens WHERE character_id = %s",
+                (character_id,),
+            )
+            access_token = cursor.fetchone()
+            if not access_token:
+                return ""
+            return access_token[0]

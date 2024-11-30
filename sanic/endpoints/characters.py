@@ -92,7 +92,7 @@ async def get_character_by_id(request, character_id):
     """
     Method: GET
 
-    Route: /characters/<character_id:str>
+    Route: /characters/<character_id:int>
 
     Description: Get a specific character from the Redis cache.
     """

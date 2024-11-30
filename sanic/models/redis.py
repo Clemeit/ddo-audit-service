@@ -56,4 +56,5 @@ CACHE_MODEL = {
         for server in SERVER_NAMES_LOWERCASE
     },
     **{f"{server}:lfms": ServerLFMsData() for server in SERVER_NAMES_LOWERCASE},
+    "verification_challenges": {},
 }

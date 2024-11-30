@@ -6,6 +6,7 @@ from endpoints.game import game_blueprint
 from endpoints.health import health_blueprint
 from endpoints.lfms import lfm_blueprint
 from endpoints.service import service_blueprint
+from endpoints.verification import verification_blueprint
 from reports.server_status import get_game_info_scheduler
 from services.redis import close_redis, initialize_redis
 from utils.route import is_method_open, is_route_open
@@ -26,6 +27,7 @@ app.blueprint(
         health_blueprint,
         game_blueprint,
         service_blueprint,
+        verification_blueprint,
     ]
 )
 

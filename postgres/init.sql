@@ -83,3 +83,15 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."page_messages"
     OWNER to pgadmin;
+
+CREATE TABLE IF NOT EXISTS public."access_tokens"
+(
+    character_id bigint NOT NULL,
+    access_token text NOT NULL,
+    PRIMARY KEY (character_id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."access_tokens"
+    OWNER to pgadmin;

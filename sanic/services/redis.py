@@ -3,6 +3,7 @@ Service to interface with the Redis server.
 """
 
 import os
+import random
 
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.character import Character
@@ -37,7 +38,11 @@ class RedisSingleton:
 
         # we want to initialize the cache with keys
         for key, value in CACHE_MODEL.items():
-            self.client.json().set(key, path="$", obj=value.model_dump())
+            # model_dump if inherits from BaseModel, else just value
+            if hasattr(value, "model_dump"):
+                self.client.json().set(key, path="$", obj=value.model_dump())
+            else:
+                self.client.json().set(key, path="$", obj=value)
 
     def close(self):
         self.client.close()
@@ -250,3 +255,31 @@ def set_game_info(game_info: GameInfo):
     get_redis_client().json().merge(
         "game_info", path="$", obj=game_info.model_dump(exclude_unset=True)
     )
+
+
+def get_verification_challenge(character_id: str) -> str:
+    # TODO: move this out
+    challenge_words = [
+        "kobold",
+        "goblin",
+        "dwarf",
+        "elf",
+        "halfling",
+        "aasimar",
+        "dragonborn",
+        "gnome",
+        "tiefling",
+        "orc",
+        "bugbear",
+        "eladrin",
+        "tabaxi",
+    ]
+
+    challenge_word = random.choice(challenge_words)
+    get_redis_client().json().set(
+        "verification_challenges", path=character_id, obj=challenge_word, nx=True
+    )
+    cached_challenge_word = (
+        get_redis_client().json().get("verification_challenges", character_id)
+    )
+    return cached_challenge_word
