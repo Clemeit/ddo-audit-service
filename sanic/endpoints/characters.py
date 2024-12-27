@@ -9,7 +9,7 @@ from constants.server import SERVER_NAMES_LOWERCASE
 from models.api import CharacterRequestApiModel, CharacterRequestType
 from models.character import Character, CharacterActivity
 from models.redis import ServerCharactersData
-from utils.validation import is_server_name_valid
+from utils.validation import is_server_name_valid, is_character_name_valid
 
 from sanic import Blueprint
 from sanic.request import Request
@@ -114,7 +114,7 @@ async def get_character_by_id(request, character_id):
 
 @character_blueprint.get("/<server_name:str>/<character_name:str>")
 async def get_character_by_server_name_and_character_name(
-    request, server_name, character_name
+    request, server_name: str, character_name: str
 ):
     """
     Method: GET
@@ -125,7 +125,10 @@ async def get_character_by_server_name_and_character_name(
     """
     if not is_server_name_valid(server_name):
         return json({"message": "Invalid server name"}, status=400)
+    if not is_character_name_valid(character_name):
+        return json({"message": "Invalid character name"}, status=400)
 
+    character_name = character_name.lower().strip()
     source = "cache"
     character = redis_client.get_character_by_name_and_server_name(
         character_name, server_name

@@ -11,6 +11,10 @@ from models.game import PopulationDataPoint, PopulationPointInTime
 from models.redis import GameInfo
 from models.service import News, PageMessage
 from psycopg2 import pool  # type: ignore
+from constants.activity import (
+    MAX_CHARACTER_ACTIVITY_READ_LENGTH,
+    MAX_CHARACTER_ACTIVITY_READ_HISTORY,
+)
 
 # Load environment variables
 DB_CONFIG = {
@@ -180,11 +184,25 @@ def get_character_activity_by_type_and_character_id(
     activity_Type: CharacterActivityType,
     start_date: datetime = None,
     end_date: datetime = None,
+    limit: int = MAX_CHARACTER_ACTIVITY_READ_LENGTH,
 ) -> list[dict]:
     if not start_date:
         start_date = datetime.now() - timedelta(days=90)
     if not end_date:
         end_date = datetime.now()
+
+    # if the total number of days is greater than the maximum allowed, set
+    # the end date to the maximum allowed
+    if (end_date - start_date).days > MAX_CHARACTER_ACTIVITY_READ_HISTORY:
+        end_date = start_date + timedelta(days=MAX_CHARACTER_ACTIVITY_READ_HISTORY)
+
+    limit = max(
+        1,
+        min(
+            limit if limit is not None else MAX_CHARACTER_ACTIVITY_READ_LENGTH,
+            MAX_CHARACTER_ACTIVITY_READ_LENGTH,
+        ),
+    )
 
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
@@ -193,16 +211,18 @@ def get_character_activity_by_type_and_character_id(
                 SELECT timestamp, data
                 FROM public.character_activity
                 WHERE id = %s AND activity_type = %s AND timestamp BETWEEN %s AND %s
+                ORDER BY timestamp DESC
+                LIMIT %s
                 """,
                 (
                     character_id,
                     activity_Type.name,
                     start_date.isoformat(),
                     end_date.isoformat(),
+                    limit,
                 ),
             )
             activity = cursor.fetchall()
-            print(activity)
             if not activity:
                 return []
 
