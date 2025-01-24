@@ -11,4 +11,4 @@ This repository serves as the backend service for DDO Audit.
 
 ## Links:
 - **Main website**: [https://www.ddoaudit.com](https://www.ddoaudit.com)
-- **Frontend repository**: [https://github.com/Clemeit/ddo-audit](https://github.com/Clemeit/ddo-audit)
+- **Frontend repository**: [https://github.com/Clemeit/ddo-audit-ui](https://github.com/Clemeit/ddo-audit-ui)
