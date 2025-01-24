@@ -34,7 +34,7 @@ class Quest(BaseModel):
     is_free_to_vip: Optional[bool] = None
     required_adventure_pack: Optional[str] = None
     adventure_area: Optional[str] = None
-    quest_journal_group: Optional[str] = None
+    quest_journal_area: Optional[str] = None
     group_size: Optional[str] = None
     patron: Optional[str] = None
     average_time: Optional[float] = None

@@ -94,7 +94,7 @@ async def get_character_by_id(request, character_id):
 
     Route: /characters/<character_id:int>
 
-    Description: Get a specific character from the Redis cache.
+    Description: Get a specific character from either the Redis cache or the database.
     """
     source = "cache"
     character = redis_client.get_character_by_character_id(character_id)
@@ -110,6 +110,50 @@ async def get_character_by_id(request, character_id):
         return json({"message": "Character not found"}, status=404)
 
     return json({"data": character.model_dump(), "source": source})
+
+
+@character_blueprint.get("/ids/<character_ids:str>")
+async def get_characters_by_ids(request, character_ids: str):
+    """
+    Method: GET
+
+    Route: /characters/ids/<character_ids:str>
+
+    Description: Get a list of characters by their IDs from either the Redis cache or the database.
+    """
+    # validate that all character_ids are numbers
+    if not all(character_id.isdigit() for character_id in character_ids.split(",")):
+        return json({"message": "Invalid character IDs"}, status=400)
+
+    try:
+        character_ids_list = character_ids.split(",")
+        discovered_characters: list[Character] = []
+        cached_character_ids: set[str] = set()
+
+        cached_characters = redis_client.get_characters_by_character_ids(
+            character_ids_list
+        )
+        for character in cached_characters:
+            character.is_online = True
+            discovered_characters.append(character)
+            cached_character_ids.add(character.id)
+
+        if len(discovered_characters) < len(character_ids_list):
+            remaining_ids = set(character_ids_list) - cached_character_ids
+            persisted_characters = postgres_client.get_characters_by_ids(
+                list(remaining_ids)
+            )
+            for character in persisted_characters:
+                character.is_online = False
+                discovered_characters.append(character)
+
+        dumped_characters = [
+            character.model_dump() for character in discovered_characters
+        ]
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": dumped_characters})
 
 
 @character_blueprint.get("/<server_name:str>/<character_name:str>")

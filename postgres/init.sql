@@ -95,3 +95,44 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."access_tokens"
     OWNER to pgadmin;
+
+CREATE TABLE IF NOT EXISTS public."quests"
+(
+    id integer NOT NULL,
+    alt_id integer,
+    area_id integer,
+    name text NOT NULL,
+    heroic_normal_cr smallint,
+    epic_normal_cr smallint,
+    is_free_to_vip boolean DEFAULT false,
+    required_adventure_pack text,
+    adventure_area text,
+    quest_journal_area text,
+    group_size text,
+    patron text,
+    xp jsonb,
+    length smallint,
+    tip text,
+    PRIMARY KEY (id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."quests"
+    OWNER to pgadmin;
+
+CREATE TABLE IF NOT EXISTS public."areas"
+(
+    id integer NOT NULL,
+    name text NOT NULL,
+    is_public boolean default true,
+    is_wilderness boolean default false,
+    region text,
+    PRIMARY KEY (id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."areas"
+    OWNER to pgadmin;
+    CREATE INDEX idx_quests_group_size ON public."quests" (group_size);

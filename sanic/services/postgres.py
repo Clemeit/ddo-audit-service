@@ -6,7 +6,12 @@ from time import time
 from typing import Optional
 
 from constants.activity import CharacterActivityType
-from models.character import Character, CharacterActivity, CharacterActivitySummary
+from models.character import (
+    Character,
+    CharacterActivity,
+    CharacterActivitySummary,
+    QuestTimer,
+)
 from models.game import PopulationDataPoint, PopulationPointInTime
 from models.redis import GameInfo
 from models.service import News, PageMessage
@@ -15,6 +20,9 @@ from constants.activity import (
     MAX_CHARACTER_ACTIVITY_READ_LENGTH,
     MAX_CHARACTER_ACTIVITY_READ_HISTORY,
 )
+
+from models.quest import Quest
+from models.area import Area
 
 # Load environment variables
 DB_CONFIG = {
@@ -132,6 +140,20 @@ def get_character_by_id(character_id: str) -> Character | None:
             return build_character_from_row(character)
 
 
+def get_characters_by_ids(character_ids: list[str]) -> list[Character]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM public.characters WHERE id = ANY(%s::bigint[])",
+                (character_ids,),
+            )
+            characters = cursor.fetchall()
+            if not characters:
+                return []
+
+            return [build_character_from_row(character) for character in characters]
+
+
 def get_character_by_name_and_server(
     character_name: str, server_name: str
 ) -> Character | None:
@@ -227,6 +249,28 @@ def get_character_activity_by_type_and_character_id(
                 return []
 
             return build_character_activity_from_rows(activity)
+
+
+def get_recent_quest_activity_by_character_id(
+    character_id: str,
+) -> list[dict[str, Quest]]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT timestamp, public.quests.name FROM public.character_activity
+                LEFT JOIN public.quests ON public.quests.area_id = CAST(public.character_activity.data ->> 'id' as INTEGER)
+                WHERE public.character_activity.id = %s AND activity_type = 'location' AND timestamp >= NOW() - INTERVAL '7 days'
+                ORDER BY timestamp DESC
+                LIMIT 500
+                """,
+                (character_id,),
+            )
+            activity = cursor.fetchall()
+            if not activity:
+                return []
+
+            return activity
 
 
 def get_game_population(
@@ -460,3 +504,229 @@ def get_access_token_by_character_id(character_id: str) -> str:
             if not access_token:
                 return ""
             return access_token[0]
+
+
+def get_all_quest_names() -> list[str]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT name FROM public.quests")
+            quest_names = cursor.fetchall()
+            if not quest_names:
+                return []
+
+            return [name for name, in quest_names]
+
+
+def get_quest_by_name(name: str) -> Quest | None:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM public.quests WHERE name = %s",
+                (name,),
+            )
+            quest = cursor.fetchone()
+            if not quest:
+                return None
+
+            return build_quest_from_row(quest)
+
+
+def get_quest_by_id(id: int) -> Quest | None:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM public.quests WHERE id = %s",
+                (id,),
+            )
+            quest = cursor.fetchone()
+            if not quest:
+                return None
+
+            return build_quest_from_row(quest)
+
+
+def update_quest_by_id(id: int, quest: Quest) -> None:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO public.quests (id, alt_id, area_id, name, heroic_normal_cr, epic_normal_cr, is_free_to_vip, required_adventure_pack, adventure_area, quest_journal_area, group_size, patron, xp, length, tip)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (id) DO UPDATE SET
+                    alt_id = EXCLUDED.alt_id,
+                    area_id = EXCLUDED.area_id,
+                    name = EXCLUDED.name,
+                    heroic_normal_cr = EXCLUDED.heroic_normal_cr,
+                    epic_normal_cr = EXCLUDED.epic_normal_cr,
+                    is_free_to_vip = EXCLUDED.is_free_to_vip,
+                    required_adventure_pack = EXCLUDED.required_adventure_pack,
+                    adventure_area = EXCLUDED.adventure_area,
+                    quest_journal_area = EXCLUDED.quest_journal_area,
+                    group_size = EXCLUDED.group_size,
+                    patron = EXCLUDED.patron,
+                    xp = EXCLUDED.xp,
+                    length = EXCLUDED.length,
+                    tip = EXCLUDED.tip
+                    """,
+                    (
+                        id,
+                        quest.alt_id,
+                        quest.area_id,
+                        quest.name,
+                        quest.heroic_normal_cr,
+                        quest.epic_normal_cr,
+                        quest.is_free_to_vip,
+                        quest.required_adventure_pack,
+                        quest.adventure_area,
+                        quest.quest_journal_area,
+                        quest.group_size,
+                        quest.patron,
+                        json.dumps(quest.xp),
+                        quest.length,
+                        quest.tip,
+                    ),
+                )
+                conn.commit()
+            except Exception as e:
+                print(f"Failed to save quest to the database: {e}")
+                conn.rollback()
+                raise e
+
+
+def update_quests(quests: list[Quest]) -> None:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                for quest in quests:
+                    cursor.execute(
+                        """
+                        INSERT INTO public.quests (id, alt_id, area_id, name, heroic_normal_cr, epic_normal_cr, is_free_to_vip, required_adventure_pack, adventure_area, quest_journal_area, group_size, patron, xp, length, tip)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (id) DO UPDATE SET
+                        alt_id = EXCLUDED.alt_id,
+                        area_id = EXCLUDED.area_id,
+                        name = EXCLUDED.name,
+                        heroic_normal_cr = EXCLUDED.heroic_normal_cr,
+                        epic_normal_cr = EXCLUDED.epic_normal_cr,
+                        is_free_to_vip = EXCLUDED.is_free_to_vip,
+                        required_adventure_pack = EXCLUDED.required_adventure_pack,
+                        adventure_area = EXCLUDED.adventure_area,
+                        quest_journal_area = EXCLUDED.quest_journal_area,
+                        group_size = EXCLUDED.group_size,
+                        patron = EXCLUDED.patron,
+                        xp = EXCLUDED.xp,
+                        length = EXCLUDED.length,
+                        tip = EXCLUDED.tip
+                        """,
+                        (
+                            quest.id,
+                            quest.alt_id,
+                            quest.area_id,
+                            quest.name,
+                            quest.heroic_normal_cr,
+                            quest.epic_normal_cr,
+                            quest.is_free_to_vip,
+                            quest.required_adventure_pack,
+                            quest.adventure_area,
+                            quest.quest_journal_area,
+                            quest.group_size,
+                            quest.patron,
+                            json.dumps(quest.xp),
+                            quest.length,
+                            quest.tip,
+                        ),
+                    )
+                conn.commit()
+            except Exception as e:
+                print(f"Failed to save quests to the database: {e}")
+                conn.rollback()
+                raise e
+
+
+def get_area_by_name(name: str) -> Area | None:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM public.areas WHERE name = %s",
+                (name,),
+            )
+            area = cursor.fetchone()
+            if not area:
+                return None
+
+            return build_area_from_row(area)
+
+
+def get_area_by_id(id: int) -> Area | None:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM public.areas WHERE id = %s",
+                (id,),
+            )
+            area = cursor.fetchone()
+            if not area:
+                return None
+
+            return build_area_from_row(area)
+
+
+def update_areas(areas_list: list[Area]) -> None:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                for area in areas_list:
+                    cursor.execute(
+                        """
+                        INSERT INTO public.areas (id, name, is_public, is_wilderness, region)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (id) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        is_public = EXCLUDED.is_public,
+                        is_wilderness = EXCLUDED.is_wilderness,
+                        region = EXCLUDED.region
+                        """,
+                        (
+                            area.id,
+                            area.name,
+                            area.is_public,
+                            area.is_wilderness,
+                            area.region,
+                        ),
+                    )
+                conn.commit()
+            except Exception as e:
+                print(f"Failed to save area to the database: {e}")
+                conn.rollback()
+                raise e
+
+
+def build_quest_from_row(row: tuple) -> Quest:
+    return Quest(
+        id=row[0],
+        alt_id=row[1],
+        area_id=row[2],
+        name=row[3],
+        heroic_normal_cr=row[4],
+        epic_normal_cr=row[5],
+        is_free_to_vip=row[6],
+        required_adventure_pack=row[7],
+        adventure_area=row[8],
+        quest_journal_area=row[9],
+        group_size=row[10],
+        patron=row[11],
+        xp=row[12],
+        length=row[13],
+        tip=row[14],
+    )
+
+
+def build_area_from_row(row: tuple) -> Area:
+    return Area(
+        id=row[0],
+        name=row[1],
+        is_public=row[2],
+        is_wilderness=row[3],
+        region=row[4],
+    )

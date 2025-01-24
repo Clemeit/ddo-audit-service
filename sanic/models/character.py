@@ -3,6 +3,8 @@ from typing import Optional
 from constants.activity import CharacterActivityType
 from pydantic import BaseModel
 
+from models.quest import Quest
+
 
 class CharacterClass(BaseModel):
     name: str
@@ -60,3 +62,8 @@ class CharacterActivitySummary(BaseModel):
 
 
 CHARACTER_ACTIVITY_TYPES = [item.value for item in CharacterActivityType]
+
+
+class QuestTimer(BaseModel):
+    quest: Quest
+    instances: list[str]

@@ -2,10 +2,11 @@
 Activity endpoints.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import services.postgres as postgres_client
 from constants.activity import CharacterActivityType
+from models.character import QuestTimer
 
 from sanic import Blueprint
 from sanic.response import json
@@ -169,6 +170,30 @@ async def get_status_activity_by_character_id(request, character_id: str):
     except Exception as e:
         return json({"message": str(e)}, status=500)
     return json({"data": activity})
+
+
+@activity_blueprint.get("/<character_id:int>/quests")
+async def get_quest_quests_by_character_id(request, character_id: str):
+    """
+    Method: GET
+
+    Route: /activity/<character_id:int>/quests
+
+    Description: Get quest quests by character ID.
+    """
+
+    try:
+        verify_authorization(request, character_id)
+        quest_activity = postgres_client.get_recent_quest_activity_by_character_id(
+            character_id
+        )
+    except AuthorizationError as e:
+        return json({"message": str(e)}, status=401)
+    except VerificationError as e:
+        return json({"message": str(e)}, status=403)
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+    return json({"data": quest_activity})
 
 
 def verify_authorization(request: Request, character_id: int):
