@@ -8,6 +8,7 @@ from models.game import GameWorld
 from models.redis import GameInfo, ServerInfo
 from requests import HTTPError
 from utils.scheduler import run_batch_on_schedule
+from constants.server import SERVER_NAMES_LOWERCASE
 
 
 class ServerStatusUpdater:
@@ -94,6 +95,12 @@ class ServerStatusUpdater:
                 server_status[world.name.lower()] = server_info
             except Exception:
                 server_status[world.name.lower()] = ServerInfo(
+                    last_status_check=datetime.now().isoformat(), is_online=False
+                )
+        # for any server that is missing in server_status, add it with is_online=False
+        for server_name in SERVER_NAMES_LOWERCASE:
+            if server_name not in server_status:
+                server_status[server_name] = ServerInfo(
                     last_status_check=datetime.now().isoformat(), is_online=False
                 )
         game_info = GameInfo(servers=server_status)
