@@ -12,3 +12,9 @@ This repository serves as the backend service for DDO Audit.
 ## Links:
 - **Main website**: [https://www.ddoaudit.com](https://www.ddoaudit.com)
 - **Frontend repository**: [https://github.com/Clemeit/ddo-audit](https://github.com/Clemeit/ddo-audit)
+
+### Setup
+- Add certbot
+- Set certbot to auto renew
+- Open etc/letsencrypt/renewal/me.com.conf and under [renewalparams] add: renew_hook = docker exec -it html-nginx-1 nginx reload
+  - This will automatically reload nginx whenever new certs are generated

@@ -1,4 +1,66 @@
 services:
+  postgres:
+    build:
+      context: ./postgres
+      dockerfile: Dockerfile
+    restart: always
+    networks:
+      - backend
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "pgadmin", "-d", "ddoaudit"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  redis:
+    build:
+      context: ./redis
+      dockerfile: Dockerfile
+    restart: always
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - redis_data:/data
+
+  sanic:
+    build:
+      context: ./sanic
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "8000:8000"
+    expose:
+      - 8000
+    networks:
+      - backend
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://api.localhost:8000/v1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   nginx:
     build:
       context: .
@@ -19,41 +81,6 @@ services:
       - ./client:/usr/share/nginx/html:ro
       - /etc/letsencrypt:/etc/letsencrypt
 
-  sanic:
-    build:
-      context: ./sanic
-      dockerfile: Dockerfile
-    restart: always
-    ports:
-      - "8000:8000"
-    expose:
-      - 8000
-    networks:
-      - backend
-    depends_on:
-      redis:
-        condition: service_healthy
-    env_file:
-      - .env
-
-  redis:
-    build:
-      context: ./redis
-      dockerfile: Dockerfile
-    restart: always
-    networks:
-      - backend
-    depends_on:
-      - postgres
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 2s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    volumes:
-      - redis_data:/data
-
   pgadmin:
     image: dpage/pgadmin4
     restart: always
@@ -64,24 +91,11 @@ services:
     env_file:
       - .env
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     volumes:
       - pgadmin_data:/var/lib/pgadmin
 
-  postgres:
-    build:
-      context: ./postgres
-      dockerfile: Dockerfile
-    restart: always
-    networks:
-      - backend
-    env_file:
-      - .env
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-  
 networks:
   backend:
     driver: bridge
