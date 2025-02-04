@@ -179,6 +179,11 @@ async def get_character_by_server_name_and_character_name(
     )
     if character:
         character.is_online = True
+        if character.is_anonymous:
+            # TODO: this will never happen because an online character who
+            # is anonymous will have no name, so the character will not be
+            # found in the cache.
+            return json({"message": "Character is anonymous"}, status=403)
     else:
         source = "database"
         character = postgres_client.get_character_by_name_and_server(
@@ -186,6 +191,8 @@ async def get_character_by_server_name_and_character_name(
         )
         if character:
             character.is_online = False
+            if character.is_anonymous:
+                return json({"message": "Character is anonymous"}, status=403)
 
     if not character:
         return json({"message": "Character not found"}, status=404)

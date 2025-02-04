@@ -10,7 +10,6 @@ from models.character import (
     Character,
     CharacterActivity,
     CharacterActivitySummary,
-    QuestTimer,
 )
 from models.game import PopulationDataPoint, PopulationPointInTime
 from models.redis import GameInfo
@@ -97,13 +96,26 @@ def add_or_update_characters(characters: list[Character]):
                         for field in character_dump.keys()
                         if field not in exclude_fields
                     ]
+                    update_list: list[str] = [
+                        f"{field} = EXCLUDED.{field}"
+                        for field in character_fields
+                        if field not in ["name", "gender"]
+                    ]
+
+                    # Note: name and gender are different because anonymous characters will
+                    # have no name or gender. So these are only updated if the character
+                    # is not anonymous.
+                    update_list.extend(
+                        [
+                            f"{field} = CASE WHEN EXCLUDED.is_anonymous = 'true' THEN characters.{field} ELSE EXCLUDED.{field} END"
+                            for field in ["name", "gender"]
+                        ]
+                    )
 
                     # Construct the query dynamically
                     columns = ", ".join(character_fields)
                     placeholders = ", ".join(["%s"] * len(character_fields))
-                    updates = ", ".join(
-                        [f"{field} = EXCLUDED.{field}" for field in character_fields]
-                    )
+                    updates = ", ".join(update_list)
 
                     query = f"""
                         INSERT INTO characters ({columns})
