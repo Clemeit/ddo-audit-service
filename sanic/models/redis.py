@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict
 
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.character import Character
@@ -29,6 +29,9 @@ class GameInfo(BaseModel):
     """
 
     servers: dict[str, ServerInfo] = {}
+
+
+ServerInfoDict = Dict[str, ServerInfo]
 
 
 class ServerCharactersData(BaseModel):

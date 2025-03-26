@@ -31,7 +31,7 @@ async def get_game_info(request):
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json({"data": game_info})
+    return json(game_info)
 
 
 @game_blueprint.get("/server-info/<server_name:str>")
@@ -52,7 +52,7 @@ async def get_server_info_by_server(request, server_name):
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json({"data": server_info})
+    return json(server_info)
 
 
 @game_blueprint.get("/population")
@@ -75,7 +75,7 @@ async def get_game_stats(request: Request):
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json({"data": data})
+    return json(data)
 
 
 # ===================================

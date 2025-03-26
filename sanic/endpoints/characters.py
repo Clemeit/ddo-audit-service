@@ -37,7 +37,7 @@ async def get_all_characters(request):
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json({"data": response})
+    return json(response)
 
 
 @character_blueprint.get("/summary")
@@ -62,7 +62,7 @@ async def get_online_character_summary(request):
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json({"data": response})
+    return json(response)
 
 
 @character_blueprint.get("/<server_name:str>")
@@ -84,7 +84,7 @@ async def get_characters_by_server(request, server_name):
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json({"data": server_characters})
+    return json(server_characters)
 
 
 @character_blueprint.get("/<character_id:int>")

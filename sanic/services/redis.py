@@ -13,6 +13,7 @@ from models.redis import (
     ServerCharactersData,
     ServerLFMsData,
     ServerInfo,
+    ServerInfoDict,
 )
 
 import redis
@@ -235,12 +236,15 @@ def delete_lfms_by_server_name_and_lfm_ids(server_name: str, lfm_ids: list[str])
             pipeline.execute()
 
 
-def get_all_server_info_as_class() -> GameInfo:
-    return GameInfo(**get_all_server_info_as_dict())
+def get_all_server_info_as_class() -> ServerInfoDict:
+    return {
+        server_name: ServerInfo(**server_info)
+        for server_name, server_info in get_all_server_info_as_dict().items()
+    }
 
 
 def get_all_server_info_as_dict() -> dict:
-    return get_redis_client().json().get("game_info")
+    return get_redis_client().json().get("game_info", "servers")
 
 
 def get_server_info_by_server_name_as_class(server_name: str) -> ServerInfo:

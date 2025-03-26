@@ -12,7 +12,7 @@ from models.character import (
     CharacterActivitySummary,
 )
 from models.game import PopulationDataPoint, PopulationPointInTime
-from models.redis import GameInfo
+from models.redis import GameInfo, ServerInfoDict
 from models.service import News, PageMessage
 from psycopg2 import pool  # type: ignore
 from constants.activity import (
@@ -343,17 +343,23 @@ def get_game_population(
             return population_points
 
 
-def add_game_info(game_info: GameInfo):
+def add_game_info(game_info: ServerInfoDict):
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             try:
+                serialized_data = {
+                    "servers": {
+                        server_name: server_info.model_dump()
+                        for server_name, server_info in game_info.items()
+                    }
+                }
                 insert_query = """
                     INSERT INTO game_info (data)
                     VALUES (%s)
                     """
                 cursor.execute(
                     insert_query,
-                    (game_info.model_dump_json(),),
+                    (json.dumps(serialized_data),),
                 )
                 conn.commit()
             except Exception as e:

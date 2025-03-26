@@ -35,7 +35,7 @@ async def get_all_lfms(request):
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json({"data": response})
+    return json(response)
 
 
 @lfm_blueprint.get("/summary")
@@ -57,7 +57,7 @@ async def get_online_characters(request):
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json({"data": response})
+    return json(response)
 
 
 @lfm_blueprint.get("/<server_name:str>")
@@ -77,7 +77,7 @@ async def get_lfms_by_server(request, server_name):
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json({"data": server_lfms})
+    return json(server_lfms)
 
 
 # ===================================
@@ -150,7 +150,7 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
     for lfm in request_body.lfms:
         server_name = lfm.server_name.lower()
         lfm.last_updated = all_server_lfms[server_name].last_update
-        all_server_lfms[server_name].lfms[lfm.id] = lfm
+        all_server_lfms[server_name].lfms[lfm.leader.id] = lfm
 
     for server_name, data in all_server_lfms.items():
         data: ServerLFMsData
