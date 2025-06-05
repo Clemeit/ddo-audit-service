@@ -19,17 +19,17 @@ class CharacterLocation(BaseModel):
 
 
 class Character(BaseModel):
-    id: str
+    id: int
     name: Optional[str] = None
     gender: Optional[str] = None
     race: Optional[str] = None
     total_level: Optional[int] = None
     classes: Optional[list[CharacterClass]] = None
-    location: Optional[CharacterLocation] = None
+    location_id: Optional[int] = None
     guild_name: Optional[str] = None
     server_name: Optional[str] = None
     home_server_name: Optional[str] = None
-    group_id: Optional[str] = None
+    group_id: Optional[int] = None
     is_online: Optional[bool] = True
     is_in_party: Optional[bool] = None
     is_anonymous: Optional[bool] = None
@@ -48,7 +48,7 @@ class CharacterActivity(BaseModel):
     This model will be used to store information about each character's activity in the postgres database.
     """
 
-    id: str
+    id: int
     activity_type: CharacterActivityType
     data: dict
 

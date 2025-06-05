@@ -15,6 +15,8 @@ from models.redis import (
     ServerInfo,
     ServerInfoDict,
 )
+from time import time
+from constants.redis import VALID_AREA_CACHE_LIFETIME, VALID_QUEST_CACHE_LIFETIME
 
 import redis
 
@@ -82,7 +84,6 @@ def get_character_count_by_server_name(server_name: str) -> int:
 
 
 def get_character_by_character_id(character_id: int) -> Character:
-    character_id = str(character_id)
     for server_name in SERVER_NAMES_LOWERCASE:
         server_characters = get_characters_by_server_name_as_class(server_name)
         if character_id in server_characters.characters:
@@ -124,7 +125,7 @@ def get_characters_by_character_ids(
 
 def get_characters_by_server_name_and_character_ids(
     server_name: str,
-    character_ids: list[str] | set[str],
+    character_ids: list[int] | set[int],
 ) -> list[Character]:
     characters: list[Character] = []
 
@@ -132,7 +133,8 @@ def get_characters_by_server_name_and_character_ids(
         server_character_keys = client.json().objkeys(
             f"{server_name}:characters", "characters"
         )
-        discovered_character_ids: set[str] = set()
+        server_character_keys = {int(key) for key in server_character_keys}
+        # discovered_character_ids: set[int] = set()
         for character_id in character_ids:
             if character_id not in server_character_keys:
                 continue
@@ -140,7 +142,7 @@ def get_characters_by_server_name_and_character_ids(
                 f"{server_name}:characters", f"characters.{character_id}"
             )
             characters.append(Character(**character))
-            discovered_character_ids.add(character_id)
+            # discovered_character_ids.add(character_id)
     return characters
 
 
@@ -287,3 +289,96 @@ def get_verification_challenge(character_id: str) -> str:
         get_redis_client().json().get("verification_challenges", character_id)
     )
     return cached_challenge_word
+
+
+def get_valid_area_ids() -> tuple[list[int], str]:
+    """
+    Get all area IDs from the cache. If the cache is expired, clear the cache.
+    """
+    try:
+        area_ids_entry: dict = get_redis_client().json().get("valid_area_ids")
+        if not area_ids_entry:
+            return ([], None)
+        area_ids = area_ids_entry.get("valid_area_ids", [])
+        timestamp = area_ids_entry.get("timestamp", 0)
+        if time() - timestamp > VALID_AREA_CACHE_LIFETIME:
+            # Cache is expired, clear it
+            area_ids = []
+            set_valid_area_ids(area_ids)
+            return ([], None)
+    except Exception:
+        return ([], None)
+    return (area_ids, timestamp)
+
+
+def set_valid_area_ids(area_ids: list[int]):
+    """
+    Set the valid area IDs in the cache. It also sets the timestamp for cache expiration.
+    """
+    valid_area_ids_entry = {
+        "valid_area_ids": area_ids,
+        "timestamp": time(),
+    }
+    get_redis_client().json().set("valid_area_ids", path="$", obj=valid_area_ids_entry)
+
+
+def get_all_areas() -> tuple[list[dict], str]:
+    """
+    Get all areas from the cache. If the cache is expired, clear the cache.
+    """
+    try:
+        areas_entry: dict = get_redis_client().json().get("areas")
+        if not areas_entry:
+            return ([], None)
+        areas: list[dict] = areas_entry.get("areas", [])
+        timestamp = areas_entry.get("timestamp", 0)
+        if time() - timestamp > VALID_AREA_CACHE_LIFETIME:
+            # Cache is expired, clear it
+            areas = []
+            set_all_areas(areas)
+            return ([], None)
+    except Exception:
+        return ([], None)
+    return (areas, timestamp)
+
+
+def set_all_areas(areas: list[dict]):
+    """
+    Set the areas in the cache. It also sets the timestamp for cache expiration.
+    """
+    areas_entry = {
+        "areas": areas,
+        "timestamp": time(),
+    }
+    get_redis_client().json().set("areas", path="$", obj=areas_entry)
+
+
+def get_all_quests() -> tuple[list[dict], str]:
+    """
+    Get all quests from the cache. If the cache is expired, clear the cache.
+    """
+    try:
+        quests_entry: dict = get_redis_client().json().get("quests")
+        if not quests_entry:
+            return ([], None)
+        quests: list[dict] = quests_entry.get("quests", [])
+        timestamp = quests_entry.get("timestamp", 0)
+        if time() - timestamp > VALID_QUEST_CACHE_LIFETIME:
+            # Cache is expired, clear it
+            quests = []
+            set_all_quests(quests)
+            return ([], None)
+    except Exception:
+        return ([], None)
+    return (quests, timestamp)
+
+
+def set_all_quests(quests: list[dict]):
+    """
+    Set the quests in the cache. It also sets the timestamp for cache expiration.
+    """
+    quests_entry = {
+        "quests": quests,
+        "timestamp": time(),
+    }
+    get_redis_client().json().set("quests", path="$", obj=quests_entry)

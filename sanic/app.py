@@ -61,9 +61,12 @@ async def check_api_key(request: Request):
     if is_route_open(request):
         return
 
-    api_key = request.headers.get("x-api-key")
+    api_key = request.headers.get("Authorization")
     if not api_key:
         return json({"error": "API key required"}, status=401)
+    if not api_key.startswith("Bearer "):
+        return json({"error": "Invalid API key format"}, status=401)
+    api_key = api_key[7:]
     if api_key != API_KEY:
         return json({"error": "Invalid API key"}, status=403)
 

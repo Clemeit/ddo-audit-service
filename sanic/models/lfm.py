@@ -52,9 +52,9 @@ class LfmActivity(BaseModel):
 
 
 class Lfm(BaseModel):
-    id: str
+    id: int
     comment: Optional[str] = None
-    quest: Optional[Quest] = None
+    quest_id: Optional[int] = None
     is_quest_guess: Optional[bool] = None
     difficulty: Optional[str] = None
     accepted_classes: Optional[list[str]] = None

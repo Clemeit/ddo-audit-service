@@ -7,10 +7,30 @@ import services.postgres as postgres_client
 from sanic import Blueprint
 from sanic.response import json
 from sanic.request import Request
+from utils.areas import get_areas
 
 from models.area import Area
 
 area_blueprint = Blueprint("areas", url_prefix="/areas", version=1)
+
+
+@area_blueprint.get("")
+async def get_all_areas(request: Request):
+    """
+    Method: GET
+
+    Route: /areas
+
+    Description: Get all areas.
+    """
+
+    try:
+        areas_list, source, timestamp = get_areas()
+        if not areas_list:
+            return json({"message": "no areas found"}, status=404)
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+    return json({"data": areas_list, "source": source, "timestamp": timestamp})
 
 
 @area_blueprint.get("/<area_name:str>")

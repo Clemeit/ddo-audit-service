@@ -78,10 +78,15 @@ def get_db_connection():
 
 
 def add_or_update_characters(characters: list[Character]):
+    valid_area_ids = get_all_area_ids()
+
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             try:
                 for character in characters:
+                    # Check if the character's location_id is valid
+                    if character.location_id not in valid_area_ids:
+                        character.location_id = 0  # Set to 0 if invalid
                     character_dump = character.model_dump()
                     exclude_fields = [
                         "public_comment",
@@ -139,7 +144,7 @@ def add_or_update_characters(characters: list[Character]):
                 raise e
 
 
-def get_character_by_id(character_id: str) -> Character | None:
+def get_character_by_id(character_id: int) -> Character | None:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -152,11 +157,11 @@ def get_character_by_id(character_id: str) -> Character | None:
             return build_character_from_row(character)
 
 
-def get_characters_by_ids(character_ids: list[str]) -> list[Character]:
+def get_characters_by_ids(character_ids: list[int]) -> list[Character]:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
-                "SELECT * FROM public.characters WHERE id = ANY(%s::bigint[])",
+                "SELECT * FROM public.characters WHERE id = ANY(%s)",
                 (character_ids,),
             )
             characters = cursor.fetchall()
@@ -448,7 +453,7 @@ def build_character_from_row(row: tuple) -> Character:
         race=row[3],
         total_level=row[4],
         classes=row[5],
-        location=row[6],
+        location_id=row[6],
         guild_name=row[7],
         server_name=row[8],
         home_server_name=row[9],
@@ -533,6 +538,28 @@ def get_all_quest_names() -> list[str]:
                 return []
 
             return [name for name, in quest_names]
+
+
+def get_all_quests() -> list[Quest]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM public.quests")
+            quests = cursor.fetchall()
+            if not quests:
+                return []
+
+            return [build_quest_from_row(quest) for quest in quests]
+
+
+def get_all_areas() -> list[Area]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM public.areas")
+            areas = cursor.fetchall()
+            if not areas:
+                return []
+
+            return [build_area_from_row(area) for area in areas]
 
 
 def get_quest_by_name(name: str) -> Quest | None:
@@ -658,8 +685,19 @@ def update_quests(quests: list[Quest]) -> None:
                 conn.commit()
             except Exception as e:
                 print(f"Failed to save quests to the database: {e}")
-                conn.rollback()
-                raise e
+                # conn.rollback()
+                # raise e
+
+
+def get_all_area_ids() -> list[int]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id FROM public.areas")
+            area_ids = cursor.fetchall()
+            if not area_ids:
+                return []
+
+            return [int(area_id) for (area_id,) in area_ids]
 
 
 def get_area_by_name(name: str) -> Area | None:

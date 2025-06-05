@@ -39,7 +39,7 @@ class ServerCharactersData(BaseModel):
     This model will be used to store information about each server's characters in the redis database using reJSON.
     """
 
-    characters: dict[str, Character] = {}
+    characters: dict[int, Character] = {}
     last_update: Optional[str] = None
 
 
@@ -48,7 +48,7 @@ class ServerLFMsData(BaseModel):
     This model will be used to store information about each server's LFMs in the redis database using reJSON.
     """
 
-    lfms: dict[str, Lfm] = {}
+    lfms: dict[int, Lfm] = {}
     last_update: Optional[str] = None
 
 

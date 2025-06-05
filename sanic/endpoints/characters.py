@@ -126,9 +126,9 @@ async def get_characters_by_ids(request, character_ids: str):
         return json({"message": "Invalid character IDs"}, status=400)
 
     try:
-        character_ids_list = character_ids.split(",")
+        character_ids_list = [int(id) for id in character_ids.split(",")]
         discovered_characters: list[Character] = []
-        cached_character_ids: set[str] = set()
+        cached_character_ids: set[int] = set()
 
         cached_characters = redis_client.get_characters_by_character_ids(
             character_ids_list
@@ -266,8 +266,7 @@ def handle_incoming_characters(
     all_servers_activity: dict[str, list[CharacterActivity]] = {}
 
     # update last_update timestamp for each server
-    for server_name, value in request_body.last_update_timestamps:
-        value: str
+    for server_name, value in request_body.last_update_timestamps.items():
         all_server_characters[server_name].last_update = value
 
     # organize characters by server
@@ -324,7 +323,7 @@ def handle_incoming_characters(
 
 
 def persist_deleted_characters_to_db_by_server_name_and_ids(
-    server_name: str, deleted_keys: set[str]
+    server_name: str, deleted_keys: set[int]
 ):
     """
     Characters that have just logged off are about to be deleted
@@ -339,14 +338,16 @@ def persist_deleted_characters_to_db_by_server_name_and_ids(
     )
     # add all of the characters that are about to be deleted to the database:
     postgres_client.add_or_update_characters(deleted_characters)
+    # print(deleted_keys)
+    # print(deleted_characters)
 
 
 def aggregate_character_activity_for_server(
-    previous_characters: dict[str, Character],
-    current_characters: dict[str, Character],
-    previous_character_ids: set[str],
-    current_character_ids: set[str],
-    deleted_character_ids: set[str],
+    previous_characters: dict[int, Character],
+    current_characters: dict[int, Character],
+    previous_character_ids: set[int],
+    current_character_ids: set[int],
+    deleted_character_ids: set[int],
 ) -> list[CharacterActivity]:
     """
     Handle character activity events for a single server at a time.
@@ -391,13 +392,13 @@ def aggregate_character_activity_for_server(
         try:
 
             def is_location_change(cur_char: Character, prev_char: Character) -> bool:
-                if cur_char.location is None:
+                if cur_char.location_id is None:
                     return False
 
                 previous_location_id: int = 0
-                if prev_char.location is not None:
-                    previous_location_id = prev_char.location.id
-                current_location_id = cur_char.location.id
+                if prev_char.location_id is not None:
+                    previous_location_id = prev_char.location_id
+                current_location_id = cur_char.location_id
 
                 if previous_location_id != current_location_id:
                     return True
@@ -410,7 +411,7 @@ def aggregate_character_activity_for_server(
                     CharacterActivity(
                         id=character_id,
                         activity_type=CharacterActivityType.location,
-                        data=current_characters[character_id].location.model_dump(),
+                        data=current_characters[character_id].location_id,
                     )
                 )
         except Exception:
@@ -475,7 +476,7 @@ def aggregate_character_activity_for_server(
 
 
 def persist_character_activity_to_db(
-    activity_events: dict[str, list[CharacterActivity]]
+    activity_events: dict[str, list[CharacterActivity]],
 ):
     """
     Persist character activity events from all servers to the database.

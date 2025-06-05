@@ -1,0 +1,5609 @@
+[
+  {
+    "id": 0,
+    "name": "No Area",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "No Region"
+  },
+  {
+    "id": 1879057422,
+    "name": "Outer Splinterskull Fortress",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879057725,
+    "name": "House Phiarlan Enclave",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879057730,
+    "name": "Stormreach",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879057731,
+    "name": "The Marketplace",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058138,
+    "name": "Tangleroot Gorge",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Tangleroot Gorge"
+  },
+  {
+    "id": 1879058304,
+    "name": "Inner Splinterskull Fortress",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058662,
+    "name": "The Path to Madness",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058666,
+    "name": "The Xorian Cipher",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879058679,
+    "name": "The Catacombs",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058702,
+    "name": "The Sanctuary",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058757,
+    "name": "Bonebite Hideout",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879058758,
+    "name": "The Waterworks",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879058759,
+    "name": "Clan Gnashtooth Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058760,
+    "name": "Clan Gnashtooth Prison",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058761,
+    "name": "Clan Tunnelworm Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058762,
+    "name": "Clan Tunnelworm Prison",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058763,
+    "name": "Library Archives",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058764,
+    "name": "Dryden Family Tomb",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058765,
+    "name": "Lower Cathedral",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058766,
+    "name": "The Patriarch's Crypt",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058767,
+    "name": "Dryden's Chamber",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058768,
+    "name": "The Wavecrest Tavern",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Korthos Island"
+  },
+  {
+    "id": 1879058780,
+    "name": "Gladewatch Outpost",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879058789,
+    "name": "Cannith Aqueduct",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Korthos Island"
+  },
+  {
+    "id": 1879058790,
+    "name": "Hazadill's Shipping Warehouse",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058797,
+    "name": "Archer Point",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879058798,
+    "name": "Parthilcar Tower Crypt",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879058802,
+    "name": "The Scavenger's Warren",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879058803,
+    "name": "Redfang's Nesting Grounds",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879058804,
+    "name": "The Foul Chambers",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879058805,
+    "name": "Smuggler's Warehouse",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879058826,
+    "name": "The Butcher's Path",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879058827,
+    "name": "Den of the Kobold Brothers",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879058828,
+    "name": "Cultists' Shrine",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879058829,
+    "name": "Troglodyte's Clutch",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879058835,
+    "name": "Irestone Inlet",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879058847,
+    "name": "Undead Attack!",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058850,
+    "name": "The Harbor",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879058861,
+    "name": "The Lightfoot Residence",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879058864,
+    "name": "The Sunken Sewer",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879058865,
+    "name": "Quickfoot Hideout",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879058866,
+    "name": "Vault of the Restless",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879059103,
+    "name": "The Kobolds' Blockade",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879059124,
+    "name": "Cloven-Jaw Stronghold",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Seal of Shan To Kor"
+  },
+  {
+    "id": 1879059200,
+    "name": "The Halls of Shan-To-Kor",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879059201,
+    "name": "Three-Barrel Cove",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879059202,
+    "name": "The Fire Caves",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Three Barrel Cove"
+  },
+  {
+    "id": 1879059203,
+    "name": "Garl's Tomb",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Three Barrel Cove"
+  },
+  {
+    "id": 1879059204,
+    "name": "Scoundrel's Run",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Three Barrel Cove"
+  },
+  {
+    "id": 1879059421,
+    "name": "Market Indoor",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879059422,
+    "name": "The Harbor - Indoors",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879059423,
+    "name": "House Phiarlan Enclave",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879059445,
+    "name": "Caverns of Shaagh",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879059470,
+    "name": "The Steam Tunnels",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879059474,
+    "name": "Arzag-Khor Sewer",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879059487,
+    "name": "Aboard the 'Sea Witch'",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Three Barrel Cove"
+  },
+  {
+    "id": 1879059799,
+    "name": "Invalid",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879059808,
+    "name": "Village Storehouse",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Korthos Island"
+  },
+  {
+    "id": 1879059852,
+    "name": "Heyton Family Crypt",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Korthos Island"
+  },
+  {
+    "id": 1879059853,
+    "name": "Cannith Manufactury",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Korthos Island"
+  },
+  {
+    "id": 1879059927,
+    "name": "Underground Complex",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Korthos Island"
+  },
+  {
+    "id": 1879059976,
+    "name": "Invalid Indoor",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879059997,
+    "name": "Caverns of Korromar",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Kundarak Enclave"
+  },
+  {
+    "id": 1879060009,
+    "name": "Redwillow's Ruins",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879060011,
+    "name": "Stormcleave Outpost",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Deneith Enclave"
+  },
+  {
+    "id": 1879060012,
+    "name": "Gwylan's Stand",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879061420,
+    "name": "The Depths of Despair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Deneith Enclave"
+  },
+  {
+    "id": 1879061421,
+    "name": "The Depths of Darkness",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Deneith Enclave"
+  },
+  {
+    "id": 1879061453,
+    "name": "The Giants' Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061454,
+    "name": "The Flame Lord's Haven",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061455,
+    "name": "The Brutes' Barracks",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061456,
+    "name": "The Nexus Chamber",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Threnal"
+  },
+  {
+    "id": 1879061457,
+    "name": "Gate of the Black Moon",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061458,
+    "name": "The Library of Threnal",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061459,
+    "name": "The Western Ruins",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061460,
+    "name": "The Southern Ruins",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061464,
+    "name": "Grey Moon's Den",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061465,
+    "name": "The Iron Mines",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061466,
+    "name": "Sorrowdusk Temple",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061467,
+    "name": "The Temple Outpost",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061473,
+    "name": "Fane of the Six",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061475,
+    "name": "The Ruins of Threnal",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061486,
+    "name": "Sorrowdusk Isle",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sorrowdusk Isle"
+  },
+  {
+    "id": 1879061697,
+    "name": "Haunted Library",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879061709,
+    "name": "Tempest's Spine",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879061789,
+    "name": "Delera's Antechamber",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061790,
+    "name": "Delera's Reliquary",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061791,
+    "name": "Valak's Mausoleum",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061807,
+    "name": "Eastern Catacombs",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061827,
+    "name": "House Deneith Enclave",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061835,
+    "name": "House Kundarak Enclave",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879061848,
+    "name": "House Jorasco Enclave",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062183,
+    "name": "Delera's Graveyard",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062184,
+    "name": "Necromancer's Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062185,
+    "name": "Delera's Tomb",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Delera's Graveyard"
+  },
+  {
+    "id": 1879062746,
+    "name": "Chamber of Insanity",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Kundarak Enclave"
+  },
+  {
+    "id": 1879062747,
+    "name": "Ruined Halls",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Kundarak Enclave"
+  },
+  {
+    "id": 1879062748,
+    "name": "Lair of Summoning",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Kundarak Enclave"
+  },
+  {
+    "id": 1879062749,
+    "name": "Forgotten Caverns",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Kundarak Enclave"
+  },
+  {
+    "id": 1879062762,
+    "name": "Lyrandar Outpost",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062763,
+    "name": "Movement Training Area",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062765,
+    "name": "Stealth Training Area",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062766,
+    "name": "Stealth Training Area",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062767,
+    "name": "Divine Magic Training Area",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062768,
+    "name": "Magical Training Area",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062830,
+    "name": "Newbie Outside",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062915,
+    "name": "The Dead Halls",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879062916,
+    "name": "The Scorched Caverns",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Kundarak Enclave"
+  },
+  {
+    "id": 1879062963,
+    "name": "Hidden Chapel",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879062974,
+    "name": "The Twelve",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062977,
+    "name": "Belly Up Tavern",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062978,
+    "name": "Phoenix Tavern",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062980,
+    "name": "Hammersmith's Inn",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062981,
+    "name": "Ever Full Flagon",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062982,
+    "name": "Blessed Rest Tavern",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062983,
+    "name": "Adept's Rest",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062984,
+    "name": "The Golden Wing Inn",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062985,
+    "name": "Anvilfire Inn",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062986,
+    "name": "Drowning Sorrows Tavern",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062987,
+    "name": "Open Palm Inn",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062993,
+    "name": "Harbormaster's House",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879062994,
+    "name": "Zoo",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063035,
+    "name": "The One-Eared Bugbear Tavern",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063063,
+    "name": "Tavern Silver Flame",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063292,
+    "name": "Tavern Cellar Test",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063293,
+    "name": "Tavern Lighting Tests",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063454,
+    "name": "Emerald Claw's Laboratory",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879063455,
+    "name": "The Depths of Doom",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Deneith Enclave"
+  },
+  {
+    "id": 1879063456,
+    "name": "The Depths of Discord",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Deneith Enclave"
+  },
+  {
+    "id": 1879063679,
+    "name": "Ian's Dungeon",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063702,
+    "name": "Jungle Clearing",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063703,
+    "name": "Tower of the Twelve",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063704,
+    "name": "The Pit",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Deneith Enclave"
+  },
+  {
+    "id": 1879063705,
+    "name": "Kryltheris",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063706,
+    "name": "Little Harpy",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063707,
+    "name": "Manor Basement",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063708,
+    "name": "Lordsmarch Bank",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879063709,
+    "name": "Rattrap",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063710,
+    "name": "Stage2 Dungeon",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063711,
+    "name": "Black Anvil Forest",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063712,
+    "name": "Rocky Island",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063713,
+    "name": "The Church Ward",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063714,
+    "name": "Test Jasons",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063715,
+    "name": "Test Stealth",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063717,
+    "name": "Default",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063718,
+    "name": "Test Split Dungeon",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063720,
+    "name": "Bank of Kundarak",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063721,
+    "name": "Sewers",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063722,
+    "name": "Test Art Light",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063723,
+    "name": "Lavacave Shell",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063724,
+    "name": "Natural Cave Shell",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063725,
+    "name": "Test Combat Test",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063726,
+    "name": "Test Pathing Test",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063727,
+    "name": "Test Swimming Test",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063728,
+    "name": "Test Dan T",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063729,
+    "name": "Test D3-2",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063733,
+    "name": "Tavern Jorasco",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063815,
+    "name": "Korthos Hall",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Korthos Island"
+  },
+  {
+    "id": 1879063818,
+    "name": "Miller Tarrigan's House",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879063819,
+    "name": "Decrepit Catacombs",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Korthos Island"
+  },
+  {
+    "id": 1879063820,
+    "name": "Osgood's Basement",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879063821,
+    "name": "Gamblers' Den",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879063822,
+    "name": "Fallowcrest Library",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879063823,
+    "name": "Eyegouger's Basement",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879063885,
+    "name": "Test Unknown",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063889,
+    "name": "Test Crypt1",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063890,
+    "name": "Test Crypt2",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063891,
+    "name": "Test Crypt3",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063892,
+    "name": "Test Crypt4",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063994,
+    "name": "The Wayward Lobster",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063995,
+    "name": "Stealth Training Area",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063996,
+    "name": "The Eye of Kol Korran",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063997,
+    "name": "The Salty Wench Tavern",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063998,
+    "name": "The Leaky Dinghy",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879063999,
+    "name": "The Rusty Nail",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064000,
+    "name": "Bogwater Tavern",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064001,
+    "name": "The Wavecrest Tavern",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": "Korthos Island"
+  },
+  {
+    "id": 1879064003,
+    "name": "Test Gear Sets",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064004,
+    "name": "Test Out Dated Dungeon",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064005,
+    "name": "Test Infinislide",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064006,
+    "name": "Lavacavern",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064022,
+    "name": "Test Crypt5",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064023,
+    "name": "Raxan Vault",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064024,
+    "name": "Test Cathedral",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064027,
+    "name": "Lava Room",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064028,
+    "name": "Jsiadek",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064029,
+    "name": "Erin1",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064052,
+    "name": "Cartamon's Shipping Warehouse",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064213,
+    "name": "The Pool of Reflection",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064221,
+    "name": "Lordsmarch Bank",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879064725,
+    "name": "Jorasco Foyer",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064726,
+    "name": "House Deneith - Foyer",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064727,
+    "name": "Phiarlan Foyer",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064728,
+    "name": "Tower of the Twelve - Foyer",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064895,
+    "name": "The Rook's Gambit",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879064897,
+    "name": "Euphonia's Challenge",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879065023,
+    "name": "Lordsmarch Bank",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879065481,
+    "name": "Delver's Canteen",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879065524,
+    "name": "Healing Magic Room",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879065525,
+    "name": "Combat Magic Training Area",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879066157,
+    "name": "Combat Training Area",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879066425,
+    "name": "Secret Room C",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879066429,
+    "name": "Secret Room E",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879066437,
+    "name": "Secret Room A",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879066454,
+    "name": "Secret Room D",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879066759,
+    "name": "Postern Gate Wilds",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879068240,
+    "name": "Ripplel's Tomb",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879069578,
+    "name": "Tharashk Arena",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Vault of Night"
+  },
+  {
+    "id": 1879069579,
+    "name": "The Haywire Foundry",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Vault of Night"
+  },
+  {
+    "id": 1879069580,
+    "name": "Temple of Vol",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879069724,
+    "name": "Blackheart Encampment",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879069762,
+    "name": "Jungles of Khyber",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Vault of Night"
+  },
+  {
+    "id": 1879069790,
+    "name": "Stromvauld's Mine",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Deneith Enclave"
+  },
+  {
+    "id": 1879069882,
+    "name": "Vault of Night",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Vault of Night"
+  },
+  {
+    "id": 1879069946,
+    "name": "Prison of the Mind",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Vault of Night"
+  },
+  {
+    "id": 1879070040,
+    "name": "Kobold Island",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879070059,
+    "name": "Knave's Hollow",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Deneith Enclave"
+  },
+  {
+    "id": 1879070323,
+    "name": "Mistress Orphne's Haven",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879070501,
+    "name": "The Waterworks",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879070502,
+    "name": "Plane of Night",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879070522,
+    "name": "The Western Ruins",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879070545,
+    "name": "Temple of the Sovereign Host",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879070566,
+    "name": "The Lea",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879070663,
+    "name": "The Hill",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879070677,
+    "name": "The Foothold",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879070678,
+    "name": "Restless Isles",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Restless Isles"
+  },
+  {
+    "id": 1879070819,
+    "name": "Sharpwood's Warehouse",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879070820,
+    "name": "Jorn Family Crypt",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879070821,
+    "name": "Scrag's Sewer",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879070994,
+    "name": "Black Anvil Mines",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Kundarak Enclave"
+  },
+  {
+    "id": 1879071129,
+    "name": "Cartamon's Shipping Warehouse",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879071284,
+    "name": "The Black Mausoleum",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071285,
+    "name": "The Bloody Crypt",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071286,
+    "name": "The Cursed Crypt",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071287,
+    "name": "The Shadow Crypt",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071288,
+    "name": "Tomb of the Burning Heart",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071289,
+    "name": "Tomb of the Crimson Heart",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071291,
+    "name": "Tomb of the Forbidden",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071292,
+    "name": "Tomb of the Immortal Heart",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071293,
+    "name": "Tomb of the Sanguine Heart",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071294,
+    "name": "Tomb of the Shadow Guard",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071295,
+    "name": "Tomb of the Shadow King",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071296,
+    "name": "Tomb of the Shadow Knight",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071297,
+    "name": "Tomb of the Shadow Lord",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071298,
+    "name": "Tomb of the Tormented",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071299,
+    "name": "Tomb of the Unhallowed",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071419,
+    "name": "The Necropolis",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879071694,
+    "name": "The Bloody Crypt",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879071711,
+    "name": "Twilight Forge Core",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879071847,
+    "name": "Keeper's Sanctuary",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Delera's Graveyard"
+  },
+  {
+    "id": 1879071902,
+    "name": "Ghola-Fan's Compound",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Restless Isles"
+  },
+  {
+    "id": 1879072236,
+    "name": "Marketplace Bazaar",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879072319,
+    "name": "The Shrieking Mines",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Restless Isles"
+  },
+  {
+    "id": 1879072482,
+    "name": "Twilight Forge",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Restless Isles"
+  },
+  {
+    "id": 1879072531,
+    "name": "Tomb of the Ancients",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879072810,
+    "name": "The Portable Hole",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": "Gatekeepers' Grove"
+  },
+  {
+    "id": 1879072956,
+    "name": "Volcano's Mouth",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879072980,
+    "name": "The Stash",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879073001,
+    "name": "Tomb of the Astrologer",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Menechtarun"
+  },
+  {
+    "id": 1879073002,
+    "name": "Sands of Menechtarun",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879073003,
+    "name": "The Fallen Shrine",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Menechtarun"
+  },
+  {
+    "id": 1879073004,
+    "name": "The Circle of Eternity",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Menechtarun"
+  },
+  {
+    "id": 1879073006,
+    "name": "Vulkoorim Creche",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879073009,
+    "name": "The Vulkoor Spiral",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Menechtarun"
+  },
+  {
+    "id": 1879073010,
+    "name": "Tomb of the Physician",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Menechtarun"
+  },
+  {
+    "id": 1879073011,
+    "name": "The Court of Lailat",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Menechtarun"
+  },
+  {
+    "id": 1879073012,
+    "name": "The Broken Highway",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879073013,
+    "name": "Zawabi's Refuge",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879073014,
+    "name": "Tomb of the Wizard-King",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Menechtarun"
+  },
+  {
+    "id": 1879073015,
+    "name": "The Burning City",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Menechtarun"
+  },
+  {
+    "id": 1879073030,
+    "name": "Firebrand Mines",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Menechtarun"
+  },
+  {
+    "id": 1879073063,
+    "name": "Gate of Nightmares",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879073064,
+    "name": "Haywire Grotto",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Kundarak Enclave"
+  },
+  {
+    "id": 1879073065,
+    "name": "Parthilcar Tower Crypt",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879073066,
+    "name": "Penitent's Rest",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Delera's Graveyard"
+  },
+  {
+    "id": 1879073067,
+    "name": "Spire of Validus",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Delera's Graveyard"
+  },
+  {
+    "id": 1879073141,
+    "name": "Lava Cave",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879073177,
+    "name": "Whisperdoom's Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879073438,
+    "name": "Quickfoot Arena",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879073901,
+    "name": "Karsmore Family Crypt",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879074299,
+    "name": "Death Chamber",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879074454,
+    "name": "Menechtarun",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879074977,
+    "name": "The Shrouded Vale",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879075765,
+    "name": "Masei Imports",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879075772,
+    "name": "Monster Test Area",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879075773,
+    "name": "Goodblade's House",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879075814,
+    "name": "Test Dojo",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879075828,
+    "name": "QA BVT DUNGEON",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879076528,
+    "name": "Ruins of Gianthold",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gianthold"
+  },
+  {
+    "id": 1879077044,
+    "name": "The Crucible",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gianthold"
+  },
+  {
+    "id": 1879077444,
+    "name": "Hobgoblin Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gianthold"
+  },
+  {
+    "id": 1879077458,
+    "name": "Orc Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gianthold"
+  },
+  {
+    "id": 1879077459,
+    "name": "Troll Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gianthold"
+  },
+  {
+    "id": 1879077460,
+    "name": "Rakshasa Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gianthold"
+  },
+  {
+    "id": 1879077462,
+    "name": "Minotaur Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gianthold"
+  },
+  {
+    "id": 1879077492,
+    "name": "Gianthold",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879077493,
+    "name": "Aurum Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gianthold"
+  },
+  {
+    "id": 1879077517,
+    "name": "Madstone Crater",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gianthold"
+  },
+  {
+    "id": 1879077940,
+    "name": "The Cerulean Hills",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879078642,
+    "name": "Prison of the Planes",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gianthold"
+  },
+  {
+    "id": 1879079056,
+    "name": "Stormreaver's Chambers",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gianthold"
+  },
+  {
+    "id": 1879079081,
+    "name": "Gianthold Tor",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gianthold"
+  },
+  {
+    "id": 1879079906,
+    "name": "Orchard of the Macabre",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879079939,
+    "name": "Tomb of the Blighted",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879079961,
+    "name": "Ataraxia's Haven",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Ataraxia's Haven"
+  },
+  {
+    "id": 1879080137,
+    "name": "Smuggler's Hollow",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879080138,
+    "name": "Mineshaft IV",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Ataraxia's Haven"
+  },
+  {
+    "id": 1879080527,
+    "name": "Hall of the Mark",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879080642,
+    "name": "Inferno of the Damned",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879080643,
+    "name": "Desecrated Temple of Vol",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879080644,
+    "name": "Hall of Ascension",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879080645,
+    "name": "Glacial Abyss",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879080646,
+    "name": "Flesh Maker's Laboratory",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879080835,
+    "name": "Searing Heights",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Searing Heights"
+  },
+  {
+    "id": 1879080854,
+    "name": "Vile Apothecary",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879082320,
+    "name": "Vale of Twilight",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Vale of Twilight"
+  },
+  {
+    "id": 1879082321,
+    "name": "Meridia",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": "Vale of Twilight"
+  },
+  {
+    "id": 1879082353,
+    "name": "The Shroud",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879083101,
+    "name": "Den of Obscurity",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Vale of Twilight"
+  },
+  {
+    "id": 1879083250,
+    "name": "Crimson Foot Hive",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Vale of Twilight"
+  },
+  {
+    "id": 1879083847,
+    "name": "Eladrin Stronghold",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Vale of Twilight"
+  },
+  {
+    "id": 1879083848,
+    "name": "The Fallen Temple",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Vale of Twilight"
+  },
+  {
+    "id": 1879083854,
+    "name": "Twilight Canyon",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Vale of Twilight"
+  },
+  {
+    "id": 1879086500,
+    "name": "The Subterrane - Central",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879086501,
+    "name": "The Subterrane - East",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879086502,
+    "name": "The Subterrane - North",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879086511,
+    "name": "The Crimson Cay",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Evertraid"
+  },
+  {
+    "id": 1879086512,
+    "name": "Fulgur Gulch",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Evertraid"
+  },
+  {
+    "id": 1879086513,
+    "name": "The West Wind's Mistress",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Evertraid"
+  },
+  {
+    "id": 1879086542,
+    "name": "Beneath The House Deneith Enclave",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Subterrane"
+  },
+  {
+    "id": 1879086543,
+    "name": "Beneath The House Jorasco Enclave",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Subterrane"
+  },
+  {
+    "id": 1879086544,
+    "name": "Beneath The House Kundarak Enclave",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879086545,
+    "name": "Beneath The House Phiarlan Enclave",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879086652,
+    "name": "Goldhorn's Repository",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Three Barrel Cove"
+  },
+  {
+    "id": 1879086825,
+    "name": "Market Barracks",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879087011,
+    "name": "The Wheeping Cove",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Three Barrel Cove"
+  },
+  {
+    "id": 1879088646,
+    "name": "The Azure Shoals",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Inspired Quarter"
+  },
+  {
+    "id": 1879089148,
+    "name": "Rackam's Trial",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Three Barrel Cove"
+  },
+  {
+    "id": 1879089400,
+    "name": "The Black Loch",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": "House Deneith Enclave"
+  },
+  {
+    "id": 1879094629,
+    "name": "Shipwreck Shore",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": "Korthos Island"
+  },
+  {
+    "id": 1879094630,
+    "name": "Misery's Peak",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Korthos Island"
+  },
+  {
+    "id": 1879094631,
+    "name": "The Grotto",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879094632,
+    "name": "Korthos Village",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879094633,
+    "name": "Korthos Island",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Korthos Island"
+  },
+  {
+    "id": 1879095910,
+    "name": "Drow Monastery",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Reaver's Refuge"
+  },
+  {
+    "id": 1879095924,
+    "name": "Volcanic Mine",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Reaver's Refuge"
+  },
+  {
+    "id": 1879095926,
+    "name": "Siber Atoll",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879095927,
+    "name": "Dragon Sanctuary",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Reaver's Refuge"
+  },
+  {
+    "id": 1879095928,
+    "name": "Sorjek's Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Reaver's Refuge"
+  },
+  {
+    "id": 1879095929,
+    "name": "Reaver's Refuge",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879096046,
+    "name": "Soami Gardens",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879097277,
+    "name": "Eerie Forest",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879097279,
+    "name": "Mount Reysalon",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879097281,
+    "name": "Aussircaex's Valley",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879097678,
+    "name": "Amrath",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879097682,
+    "name": "Devil Battlefield",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Shavarath - Devil"
+  },
+  {
+    "id": 1879097713,
+    "name": "Hall of the Third Legion",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Shavarath - Devil"
+  },
+  {
+    "id": 1879097731,
+    "name": "Ternathear's Inner Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Reaver's Refuge"
+  },
+  {
+    "id": 1879097853,
+    "name": "Genesis Point",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Shavarath - Devil"
+  },
+  {
+    "id": 1879097981,
+    "name": "The Tower of Despair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879098115,
+    "name": "The Iron Maw",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Shavarath - Devil"
+  },
+  {
+    "id": 1879098126,
+    "name": "Citadel on the Devils' Spine",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Shavarath - Devil"
+  },
+  {
+    "id": 1879098383,
+    "name": "The Blood Road",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Deneith Enclave"
+  },
+  {
+    "id": 1879100415,
+    "name": "Tower Cave",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879100601,
+    "name": "Amrath",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879100623,
+    "name": "Resort Spa",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879100768,
+    "name": "The Devil Pit",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879101665,
+    "name": "Nash Braza's Farmstead",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879101678,
+    "name": "Grul Tribe Outpost",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879101692,
+    "name": "Lordsmarch Bank",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879101719,
+    "name": "The Shiny Shilling",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879102008,
+    "name": "Goldstone Manor",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879102101,
+    "name": "Perdition Pass",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Shavarath - Devil"
+  },
+  {
+    "id": 1879102121,
+    "name": "Adventurer's Camp",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Shavarath - Devil"
+  },
+  {
+    "id": 1879102140,
+    "name": "The Dragontail Saloon",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879102274,
+    "name": "The Tenements",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879102335,
+    "name": "The Airship \"Heart of Wind\"",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879102352,
+    "name": "The Binder Home",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879102985,
+    "name": "The Inspired Quarter",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879102986,
+    "name": "Sunken Parish",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Inspired Quarter"
+  },
+  {
+    "id": 1879103029,
+    "name": "Aspect Mine",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Inspired Quarter"
+  },
+  {
+    "id": 1879103033,
+    "name": "Inspiration Center",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Inspired Quarter"
+  },
+  {
+    "id": 1879103037,
+    "name": "Jeets' Mind",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Inspired Quarter"
+  },
+  {
+    "id": 1879103038,
+    "name": "The Necropolis",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879103100,
+    "name": "Dar Qat Trade Mission",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Inspired Quarter"
+  },
+  {
+    "id": 1879103157,
+    "name": "Goodblade's Artifact",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Inspired Quarter"
+  },
+  {
+    "id": 1879103269,
+    "name": "Isle of Forgotten Dreams",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879103271,
+    "name": "The Giants' Vault",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Inspired Quarter"
+  },
+  {
+    "id": 1879103281,
+    "name": "Plane of Nightmares",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Inspired Quarter"
+  },
+  {
+    "id": 1879103301,
+    "name": "Forgotten Ruins",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Inspired Quarter"
+  },
+  {
+    "id": 1879103476,
+    "name": "Wylkes Manor",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879103910,
+    "name": "The Airship \"Heart of Wind\"",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879103911,
+    "name": "The Bridge Between",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879103914,
+    "name": "The Airship \"Heart of Wind\"",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879105660,
+    "name": "Sentinels Tower",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Deneith Enclave"
+  },
+  {
+    "id": 1879105665,
+    "name": "Mistral Island",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Deneith Enclave"
+  },
+  {
+    "id": 1879105667,
+    "name": "The Bargain Bazaar",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Deneith Enclave"
+  },
+  {
+    "id": 1879105668,
+    "name": "The Black Loch",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Deneith Enclave"
+  },
+  {
+    "id": 1879106410,
+    "name": "Acid-Scar Caverns",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879106412,
+    "name": "The Demon's Den",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Inspired Quarter"
+  },
+  {
+    "id": 1879106423,
+    "name": "The Sleeping Spell Inn",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879106425,
+    "name": "Driftwood Mire",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879108191,
+    "name": "Mammoth Valley",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879108199,
+    "name": "Golden Wing Side Entrance",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879108204,
+    "name": "The Traveling Troubadours",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879108208,
+    "name": "The House of Tomfoolery",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879108210,
+    "name": "Phiarlan Chapterhouse",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Phiarlan Enclave"
+  },
+  {
+    "id": 1879108403,
+    "name": "The Red Fens",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Red Fens"
+  },
+  {
+    "id": 1879108435,
+    "name": "Refuge of the Ancestors",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Red Fens"
+  },
+  {
+    "id": 1879108436,
+    "name": "Claw Canyon",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Red Fens"
+  },
+  {
+    "id": 1879108437,
+    "name": "Ancient Ziggurat",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Red Fens"
+  },
+  {
+    "id": 1879109019,
+    "name": "The Deeps",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Red Fens"
+  },
+  {
+    "id": 1879109893,
+    "name": "Windspyre Gryphon",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879110772,
+    "name": "Windspyre Falcon",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879110773,
+    "name": "Windspyre Sparrow",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879113837,
+    "name": "Stormglory Typhoon",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879113838,
+    "name": "Stormglory Bolt",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879113839,
+    "name": "Stormglory Tempest",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879114381,
+    "name": "Airship Showroom",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879115223,
+    "name": "Stormreach Harbor Blockade",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Lordsmarch Plaza"
+  },
+  {
+    "id": 1879115224,
+    "name": "Lordsmarch Plaza",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Lordsmarch Plaza"
+  },
+  {
+    "id": 1879115225,
+    "name": "Temple Ruins",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Lordsmarch Plaza"
+  },
+  {
+    "id": 1879115226,
+    "name": "Sapper Tunnel",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Lordsmarch Plaza"
+  },
+  {
+    "id": 1879115227,
+    "name": "Lordsmarch Palace",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879115228,
+    "name": "Summerfield District",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Lordsmarch Plaza"
+  },
+  {
+    "id": 1879115229,
+    "name": "Lordsmarch Plaza",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": "Lordsmarch Plaza"
+  },
+  {
+    "id": 1879115230,
+    "name": "The Skyfall Coast",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Lordsmarch Plaza"
+  },
+  {
+    "id": 1879115231,
+    "name": "Matador Village",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Lordsmarch Plaza"
+  },
+  {
+    "id": 1879115232,
+    "name": "The Chronoscope",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879118797,
+    "name": "Summoning Chamber D",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879119538,
+    "name": "Summoning Chamber A",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879119539,
+    "name": "Summoning Chamber B",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879119540,
+    "name": "Summoning Chamber C",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879120612,
+    "name": "Harborview Lofts",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879120613,
+    "name": "Blode's Curio Shop",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879120614,
+    "name": "The Saltire District",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879120615,
+    "name": "Creative Objects Storage",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879120616,
+    "name": "The Embers Asylum",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879120617,
+    "name": "The Lower Arcanum",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879120618,
+    "name": "The Sleeping Spell Inn",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879120619,
+    "name": "Deep Within Khyber",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879120773,
+    "name": "Crystal Cove",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879120774,
+    "name": "Smuggler's Rest",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879131352,
+    "name": "Crafting Hall",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": "Crafting"
+  },
+  {
+    "id": 1879131886,
+    "name": "The Tower of the Twelve",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879132415,
+    "name": "House Cannith Manufactury",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Cannith Enclave"
+  },
+  {
+    "id": 1879132471,
+    "name": "House Cannith Enclave",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879132472,
+    "name": "Armament Storage Facility",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Cannith Enclave"
+  },
+  {
+    "id": 1879132473,
+    "name": "Syrania Conduit Floor",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Cannith Enclave"
+  },
+  {
+    "id": 1879132474,
+    "name": "Cannith Power Works",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Cannith Enclave"
+  },
+  {
+    "id": 1879132475,
+    "name": "Toven's Workshop",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Cannith Enclave"
+  },
+  {
+    "id": 1879132476,
+    "name": "Eldritch Site Prime",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879132477,
+    "name": "Lava Caves",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879132478,
+    "name": "Extraplanar Palace",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879132480,
+    "name": "DNT Blades2 Challenge D",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Cannith Enclave"
+  },
+  {
+    "id": 1879132481,
+    "name": "Dr. Rushmore's Mansion",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879135624,
+    "name": "Artificer Workshops",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Cannith Enclave"
+  },
+  {
+    "id": 1879135796,
+    "name": "Research Facility",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Cannith Enclave"
+  },
+  {
+    "id": 1879136517,
+    "name": "House Cannith Crafting Hall",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879136795,
+    "name": "DNT Infinite Caverns Gauntlet",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879140588,
+    "name": "The Road to Tarath Marad",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879140589,
+    "name": "Cultist Base",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879140592,
+    "name": "The Spinner's Prison",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879146141,
+    "name": "The King's Forest",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879146142,
+    "name": "Eveningstar",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879146263,
+    "name": "Midler Farmhouse",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "King's Forest"
+  },
+  {
+    "id": 1879146406,
+    "name": "Deep Glen Graveyard",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "King's Forest"
+  },
+  {
+    "id": 1879146407,
+    "name": "Dank Cave",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879147302,
+    "name": "The Demonweb",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879147305,
+    "name": "The Demonweb",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879147306,
+    "name": "The Rift Between Worlds",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Spinner's Prison"
+  },
+  {
+    "id": 1879147307,
+    "name": "The Domain of Lord Grulemith",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Demonweb"
+  },
+  {
+    "id": 1879147308,
+    "name": "The Realm of Ruin",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Demonweb"
+  },
+  {
+    "id": 1879147309,
+    "name": "Eveningstar",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879147310,
+    "name": "Abandoned Temple",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "King's Forest"
+  },
+  {
+    "id": 1879147311,
+    "name": "Eveningstar War Hospital",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879147312,
+    "name": "Secret Caverns",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879147313,
+    "name": "Sschindylryn Ziggurat",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Underdark"
+  },
+  {
+    "id": 1879147314,
+    "name": "The Underdark",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Underdark"
+  },
+  {
+    "id": 1879147315,
+    "name": "The Underdark",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Underdark"
+  },
+  {
+    "id": 1879147316,
+    "name": "House Szind",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Underdark"
+  },
+  {
+    "id": 1879147317,
+    "name": "House Dun'Robar",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Underdark"
+  },
+  {
+    "id": 1879147318,
+    "name": "The Eveningstar Well",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879147319,
+    "name": "The Rift Between Worlds",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Spinner's Prison"
+  },
+  {
+    "id": 1879148121,
+    "name": "House Avithoul",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Underdark"
+  },
+  {
+    "id": 1879151969,
+    "name": "The Ruined Keep",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879151970,
+    "name": "The Underdark Arena",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879152194,
+    "name": "Unassigned",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879155672,
+    "name": "The Demonweb",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879155949,
+    "name": "Grove of the Great Tree",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879158255,
+    "name": "Sschindylryn",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879158708,
+    "name": "Eveningstar Cavern",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879159856,
+    "name": "The Spinner's Prison",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879162843,
+    "name": "Eveningstar War Hospital",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879162844,
+    "name": "The Blooded Wood",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The High Road"
+  },
+  {
+    "id": 1879162845,
+    "name": "D N T Not Used",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879162846,
+    "name": "Druid's Deep",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879162847,
+    "name": "Uthe Lodge",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879162848,
+    "name": "Thorn Hollow",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879162849,
+    "name": "Lost Souls' Swamp",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The High Road"
+  },
+  {
+    "id": 1879162850,
+    "name": "The Old Man's Face Inn",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The High Road"
+  },
+  {
+    "id": 1879162851,
+    "name": "Greenweald Lane",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The High Road"
+  },
+  {
+    "id": 1879162852,
+    "name": "Beckside Castle Ruins",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The High Road"
+  },
+  {
+    "id": 1879164789,
+    "name": "The High Road",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879166048,
+    "name": "Delera's Graveyard (A)",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879166049,
+    "name": "Delera's Graveyard (D)",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879166050,
+    "name": "Delera's Graveyard (E)",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879166051,
+    "name": "Delera's Graveyard (F)",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879166052,
+    "name": "Delera's Graveyard (B)",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879166053,
+    "name": "Delera's Graveyard (C)",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879173267,
+    "name": "Oldstone Hall",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Wheloon"
+  },
+  {
+    "id": 1879173276,
+    "name": "Warehouse District",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879173277,
+    "name": "Wheloon Prison",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879173278,
+    "name": "Drainage Culverts",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Wheloon"
+  },
+  {
+    "id": 1879173280,
+    "name": "Wheloon Food Dungeon Quest (Not Used)",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879173282,
+    "name": "Netherese Recruiting Center",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Wheloon"
+  },
+  {
+    "id": 1879174694,
+    "name": "Merchant's Townhouse",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Wheloon"
+  },
+  {
+    "id": 1879174696,
+    "name": "Wheloon Raid Dungeon Quest (Not Used)",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879174697,
+    "name": "Wheloon Preraid Dungeon Quest (Not Used)",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879175187,
+    "name": "Tumblerock Pass",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Storm Horns"
+  },
+  {
+    "id": 1879175189,
+    "name": "Netherese Central Camp",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Storm Horns"
+  },
+  {
+    "id": 1879175200,
+    "name": "Mountain Glacier",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Storm Horns"
+  },
+  {
+    "id": 1879175205,
+    "name": "DNT Dungeon Quest tango",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879175207,
+    "name": "Yarrow Glade",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Storm Horns"
+  },
+  {
+    "id": 1879175209,
+    "name": "Mountain Glacier",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Storm Horns"
+  },
+  {
+    "id": 1879175370,
+    "name": "The Storm Horns",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879180261,
+    "name": "Stormreaver's Chambers",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gianthold"
+  },
+  {
+    "id": 1879180549,
+    "name": "Wheloon Docks",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879182211,
+    "name": "The Creation Forge",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879183854,
+    "name": "Riverside Camp",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879183859,
+    "name": "Storm Horns Foothills",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879183863,
+    "name": "Magistrate's Office",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Wheloon"
+  },
+  {
+    "id": 1879184381,
+    "name": "Ball and Chain Garret",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879194365,
+    "name": "Hall of Heroes - Eberron",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879194366,
+    "name": "Hall of Heroes - Forgotten Realms",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879197069,
+    "name": "Delera's Graveyard (G)",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879197085,
+    "name": "The Haunted Halls of Eveningstar",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879197098,
+    "name": "Cannith Training Facility No. 14",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Cannith Enclave"
+  },
+  {
+    "id": 1879197110,
+    "name": "Sable Manor",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879197133,
+    "name": "It Came From the Desert",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Thunderholme"
+  },
+  {
+    "id": 1879197146,
+    "name": "The Ruins of Thunderholme",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879197149,
+    "name": "Aurgloroasa's Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Thunderholme"
+  },
+  {
+    "id": 1879197152,
+    "name": "Mountain Summit",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Thunderholme"
+  },
+  {
+    "id": 1879197196,
+    "name": "Summoning Chamber E",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879198048,
+    "name": "Stormglory Typhoon",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879198971,
+    "name": "Reincarnation Grove",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879199317,
+    "name": "The Thunder Peaks",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879200243,
+    "name": "Barrel's Bottom",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879203055,
+    "name": "The Thunder Sea",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Three Barrel Cove"
+  },
+  {
+    "id": 1879204667,
+    "name": "Volant Signet",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879204668,
+    "name": "Daedalean Kraken",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879204669,
+    "name": "Volant Manifest",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879204670,
+    "name": "Volant Alcazar",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879204671,
+    "name": "Daedalean Glaive",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879204672,
+    "name": "Daedalean Trefoil",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879205087,
+    "name": "Ascension Chamber",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Necropolis"
+  },
+  {
+    "id": 1879206210,
+    "name": "Tomb of Horrors",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Greyhawk"
+  },
+  {
+    "id": 1879207252,
+    "name": "Temple Depths",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879207254,
+    "name": "Lower Temple of Elemental Evil",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879207257,
+    "name": "Temple Grounds",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879207267,
+    "name": "Cult Safehouse",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879207270,
+    "name": "Zhentarim Stronghold",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879207280,
+    "name": "The Sleeping Spell Inn",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879207281,
+    "name": "Palace of Stone",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879207634,
+    "name": "Fashion Show Staging Area",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879208610,
+    "name": "DNT Dungeon Quest training_dungeon_3",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879208612,
+    "name": "DNT Dungeon Quest training_dungeon_2",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879208614,
+    "name": "DNT Dungeon Quest training_dungeon_1",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879212045,
+    "name": "The Adamant Spire",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Shavarath - Archons"
+  },
+  {
+    "id": 1879212051,
+    "name": "Amrath's Anchor",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Shavarath - Archons"
+  },
+  {
+    "id": 1879212052,
+    "name": "Citadel of the Dawn",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Shavarath - Archons"
+  },
+  {
+    "id": 1879212057,
+    "name": "Harrow Castle",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Shavarath - Archons"
+  },
+  {
+    "id": 1879213841,
+    "name": "The Night Revels",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879213842,
+    "name": "The Night Revels",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879213846,
+    "name": "The Night Revels",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879213847,
+    "name": "The Night Revels",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879213849,
+    "name": "The Night Revels",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879213850,
+    "name": "The Night Revels",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879213852,
+    "name": "The Night Revels",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879213853,
+    "name": "The Night Revels",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879213913,
+    "name": "Secure Storage Facility",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879213921,
+    "name": "The Portable Hole",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gatekeepers' Grove"
+  },
+  {
+    "id": 1879213924,
+    "name": "Magewright's Hall",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Cannith Enclave"
+  },
+  {
+    "id": 1879213926,
+    "name": "Theobald's Tower",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879213930,
+    "name": "Gatekeepers' Hostel",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879215388,
+    "name": "Sewer Ambuscade",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Vale of Twilight"
+  },
+  {
+    "id": 1879215389,
+    "name": "House Deneith Stronghold",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879215390,
+    "name": "The Snowpeaks Climb",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879226059,
+    "name": "The Anniversary Party",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879228633,
+    "name": "The Saltire District",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879228634,
+    "name": "Memoirs of an Illusory Larcener",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879228635,
+    "name": "Stonelands Crevasse",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Eveningstar"
+  },
+  {
+    "id": 1879229243,
+    "name": "Slave Lords' Redoubt",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879229245,
+    "name": "Slavers' Stockade",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879229256,
+    "name": "The Forsaken Temple",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879231388,
+    "name": "Harpers' Travelarium",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879231413,
+    "name": "Wayfinders' Travelarium",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879236266,
+    "name": "Dragonborn Settlement",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879236272,
+    "name": "The Chronoscope - again?",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879236277,
+    "name": "Giantish Ruins",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879236278,
+    "name": "Temple of the Storm",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Marketplace"
+  },
+  {
+    "id": 1879236289,
+    "name": "DNT - ",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Feywild"
+  },
+  {
+    "id": 1879236294,
+    "name": "DNT - Stonelands Four",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Misc"
+  },
+  {
+    "id": 1879236295,
+    "name": "Crawben Bix's Construction Site",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879236299,
+    "name": "DNT - Stonelands One",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Misc"
+  },
+  {
+    "id": 1879236312,
+    "name": "The House of Languor",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879238676,
+    "name": "Old Bonegrinder",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879238680,
+    "name": "Death House",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Barovia"
+  },
+  {
+    "id": 1879238693,
+    "name": "Old Svalich Road",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Barovia"
+  },
+  {
+    "id": 1879238696,
+    "name": "The Land of Barovia",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Barovia"
+  },
+  {
+    "id": 1879238702,
+    "name": "Castle Ravenloft",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Barovia"
+  },
+  {
+    "id": 1879238704,
+    "name": "The Amber Temple",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Barovia"
+  },
+  {
+    "id": 1879238705,
+    "name": "Argynvostholt",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Barovia"
+  },
+  {
+    "id": 1879238706,
+    "name": "Castle Ravenloft, Servant's Door",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879238707,
+    "name": "Wachterhaus",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879238722,
+    "name": "The Ruins of Berez",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Barovia"
+  },
+  {
+    "id": 1879238725,
+    "name": "The Crypts of Castle Ravenloft",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Barovia"
+  },
+  {
+    "id": 1879238734,
+    "name": "Baba Lysaga's Hut",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Barovia"
+  },
+  {
+    "id": 1879238736,
+    "name": "Yester Hill",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Barovia"
+  },
+  {
+    "id": 1879238740,
+    "name": "The Wizard of Wines",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879238744,
+    "name": "The Abbey of Saint Markovia",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Barovia"
+  },
+  {
+    "id": 1879238856,
+    "name": "Drow Camp",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Tethyamar Mining Outpost"
+  },
+  {
+    "id": 1879238861,
+    "name": "Tethyamar Mineshaft 214S",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Tethyamar Mining Outpost"
+  },
+  {
+    "id": 1879238865,
+    "name": "The Eastern Reaches",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Tethyamar Mining Outpost"
+  },
+  {
+    "id": 1879238866,
+    "name": "The Ruins of Ironvale Deep",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Tethyamar Mining Outpost"
+  },
+  {
+    "id": 1879238867,
+    "name": "Drow Stronghold",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Tethyamar Mining Outpost"
+  },
+  {
+    "id": 1879238873,
+    "name": "Tethyamar Mining Outpost",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879239905,
+    "name": "van Richten's Tower",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879239906,
+    "name": "Blue Water Inn",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879239907,
+    "name": "Blood on the Vine Tavern",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879242694,
+    "name": "The Night Revels",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879244584,
+    "name": "Dockside Cartwrights",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879244591,
+    "name": "Dannel's Pride",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879244596,
+    "name": "Vulkoori Drow Village",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879244599,
+    "name": "The Night Market",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879244604,
+    "name": "Outskirts of Stormreach",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "House Jorasco Enclave"
+  },
+  {
+    "id": 1879244861,
+    "name": "Spectral Dragon",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879244862,
+    "name": "The Night Revels",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879244863,
+    "name": "The Night Revels",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879244864,
+    "name": "Graveyard",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879245951,
+    "name": "SteelStar's Test Area",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879245952,
+    "name": "The Loot Pit",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879246052,
+    "name": "Mondo Valley",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879246058,
+    "name": "Beneath White Plume Mountain",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879246062,
+    "name": "The Memory Library",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879246065,
+    "name": "Stormreach Dump",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879246071,
+    "name": "Brimstone Boulder Prison",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Twelve"
+  },
+  {
+    "id": 1879248210,
+    "name": "Land of Lost Souls",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879248457,
+    "name": "Cogsgate",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879248460,
+    "name": "The Grandview Arms",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879248462,
+    "name": "Lower Dura",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879248466,
+    "name": "Club Clawfoot",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879248473,
+    "name": "Dava Gate",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879248478,
+    "name": "Beneath the Thunder Sea",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879248483,
+    "name": "Alcorin's Forge - Arcsteel Foundry",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879248484,
+    "name": "Belgrave's Emporium",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879248486,
+    "name": "Skyway Odeum",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879248498,
+    "name": "Callestan",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879248499,
+    "name": "The Temple of Kol Korran",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879248525,
+    "name": "The Cogs",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879248537,
+    "name": "DNT - ",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Feywild"
+  },
+  {
+    "id": 1879248538,
+    "name": "DNT - ",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Feywild"
+  },
+  {
+    "id": 1879248543,
+    "name": "Alcorin's Forge - Construct Maintenance",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - The Cogs"
+  },
+  {
+    "id": 1879248544,
+    "name": "Sewer Access Point",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - The Cogs"
+  },
+  {
+    "id": 1879248545,
+    "name": "Northshore Wharves",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Harbor"
+  },
+  {
+    "id": 1879248546,
+    "name": "Cogs Fighting Arena",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - The Cogs"
+  },
+  {
+    "id": 1879248548,
+    "name": "Abandoned Vaunt Office",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - The Cogs"
+  },
+  {
+    "id": 1879248550,
+    "name": "The Depths - Temple Excavation",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - The Cogs"
+  },
+  {
+    "id": 1879248554,
+    "name": "Malfunctioning Lava Forge",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - The Cogs"
+  },
+  {
+    "id": 1879248558,
+    "name": "Boromar Smugglers' Safehouse",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - The Cogs"
+  },
+  {
+    "id": 1879248561,
+    "name": "Wraithcallers' Temple",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - The Cogs"
+  },
+  {
+    "id": 1879248563,
+    "name": "DNT - ",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Feywild"
+  },
+  {
+    "id": 1879248572,
+    "name": "Night Revels Crypt",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879248920,
+    "name": "Sharn City Watch Station",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879250057,
+    "name": "Hazardous Prototype Repository",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - The Cogs"
+  },
+  {
+    "id": 1879251736,
+    "name": "Sharn - Clifftop Tower District",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879251737,
+    "name": "Sharn - Cliffside Docks District",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879253348,
+    "name": "Alcorin's Forge - Staging Area",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879255029,
+    "name": "Davyd Shelby Meeting",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879255034,
+    "name": "Underlane Neighborhood, Investigation Area",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879255041,
+    "name": "Finding Dorris",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879255043,
+    "name": "Lyrandar Warship",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879255046,
+    "name": "Underlane Neighborhood, Rally Area",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879255049,
+    "name": "Cloudwrights' Club",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Sharn - Clifftop Tower District"
+  },
+  {
+    "id": 1879255383,
+    "name": "Sharn - Clifftop Tower District",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879256685,
+    "name": "Orc Caves",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Keep on the Borderlands"
+  },
+  {
+    "id": 1879256686,
+    "name": "Gnoll Caves",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Keep on the Borderlands"
+  },
+  {
+    "id": 1879256687,
+    "name": "Hobgoblin Caves",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Keep on the Borderlands"
+  },
+  {
+    "id": 1879256691,
+    "name": "Shunned Cavern",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Keep on the Borderlands"
+  },
+  {
+    "id": 1879256698,
+    "name": "The Snowpeaks",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879256699,
+    "name": "Bugbear Caves",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Keep on the Borderlands"
+  },
+  {
+    "id": 1879256704,
+    "name": "The Treasury",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Keep on the Borderlands"
+  },
+  {
+    "id": 1879256710,
+    "name": "Kobold Caves",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Keep on the Borderlands"
+  },
+  {
+    "id": 1879256712,
+    "name": "Temple of Evil Chaos",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Keep on the Borderlands"
+  },
+  {
+    "id": 1879256742,
+    "name": "The Borderlands",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879256800,
+    "name": "The Keep on the Borderlands",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": "Keep on the Borderlands"
+  },
+  {
+    "id": 1879259095,
+    "name": "Sepulchre of the Ancients",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gatekeepers' Grove"
+  },
+  {
+    "id": 1879259101,
+    "name": "Derelict Temple of Arawei",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gatekeepers' Grove"
+  },
+  {
+    "id": 1879259104,
+    "name": "Hargrove Family Farm",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gatekeepers' Grove"
+  },
+  {
+    "id": 1879259109,
+    "name": "The Hut from Beyond",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gatekeepers' Grove"
+  },
+  {
+    "id": 1879259113,
+    "name": "Abandoned Mine Shaft",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Gatekeepers' Grove"
+  },
+  {
+    "id": 1879259348,
+    "name": "The Gatekeepers' Grove",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260008,
+    "name": "The Reliquary of Flame",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "(Invalid String Table reference)"
+  },
+  {
+    "id": 1879260012,
+    "name": "Canyon of the Eternal Sun",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260014,
+    "name": "Ancient Sulatar Shrine",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260038,
+    "name": "Wynwood Hall",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260047,
+    "name": "Cascading Springs Cottage",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Feywild"
+  },
+  {
+    "id": 1879260052,
+    "name": "Viscount Xavier's Tower",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260054,
+    "name": "Fallmire Woods",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260056,
+    "name": "Bitterspine Palace",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260071,
+    "name": "Duskfall Overlook",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260079,
+    "name": "The Thornwright's Workshop",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260088,
+    "name": "Icemount Lodge",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260093,
+    "name": "Bitterspine Palace",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260097,
+    "name": "The Treasure Grove",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260105,
+    "name": "The Feywild",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "The Feywild"
+  },
+  {
+    "id": 1879260113,
+    "name": "Hunt Tournament Grounds",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260127,
+    "name": "Valley of the Door",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260129,
+    "name": "Saffron Hill",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260130,
+    "name": "DNT Dungeon Quest mini3",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260131,
+    "name": "DNT Dungeon Quest mini4",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879260137,
+    "name": "Kelpie Lord's Grotto",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879261806,
+    "name": "Roots of the Blessed Tree",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879261811,
+    "name": "Tulgey Wood",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879261812,
+    "name": "Hunters Hollow",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879261814,
+    "name": "DNT - Dungeon quest for mini8",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879264159,
+    "name": "Wynwood Hall",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879264160,
+    "name": "Court of the Wild Hut",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879265609,
+    "name": "The Hut from Beyond",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879267183,
+    "name": "The Haunted House",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879267187,
+    "name": "On the Trail of the Smugglers",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879267190,
+    "name": "Lizardfolk Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879267192,
+    "name": "Sahuagin Fortress",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879267197,
+    "name": "Ruined Tower Basement",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879267201,
+    "name": "Thousand Teeth's Lair",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879267237,
+    "name": "Saltmarsh",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879267243,
+    "name": "The Snapping Line Inn",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879269032,
+    "name": "Crabbers' Cove",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879269040,
+    "name": "Hole in the Ground",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879269055,
+    "name": "Wilderness Campsite",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879269058,
+    "name": "Marsh Shipwreck",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879271361,
+    "name": "Junction of the Spheres",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879272923,
+    "name": "Forbidden Kopru Temple",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879272937,
+    "name": "Bullywug Bastion",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879272939,
+    "name": "Crab Island",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879272941,
+    "name": "Pirates' Point",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879272948,
+    "name": "Rampage Site",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879272949,
+    "name": "The Canyon Ruins",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879272955,
+    "name": "Maurauder Cavern",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879272968,
+    "name": "Bamboo Grove",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879272994,
+    "name": "Ettercap Tree",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879273004,
+    "name": "Journey to the Isle of Dread",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879273006,
+    "name": "Tar Ogre Tribe Cavern",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879273009,
+    "name": "Crumbling Kopru Base",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879273025,
+    "name": "The Firemouth",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879273030,
+    "name": "Isle of Dread",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879273070,
+    "name": "Isle of Dread - Village of Tanaroa",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": "Isle of Dread"
+  },
+  {
+    "id": 1879282183,
+    "name": "Repository of the Eye of Shavarath",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879282185,
+    "name": "Overgrown Farmland",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879282186,
+    "name": "Brelish Border",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879282195,
+    "name": "Hidden Hand Headquarters",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879282200,
+    "name": "Barington Worthridge's Apartment",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879282549,
+    "name": "Lower Temple of Elemental Evil, Node of Water",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879282550,
+    "name": "Lower Temple of Elemental Evil, Node of Earth",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879282551,
+    "name": "Lower Temple of Elemental Evil, Node of Air",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879282553,
+    "name": "Temple Depths",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879282554,
+    "name": "Lower Temple of Elemental Evil",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879282556,
+    "name": "Lower Temple of Elemental Evil, Node of Fire",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879282560,
+    "name": "Temple of Elemental Evil",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879282993,
+    "name": "Morgrave University - Lower Quad",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879283265,
+    "name": "Sharn Docks",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879283267,
+    "name": "Morgrave University Dormitories",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879283275,
+    "name": "Hall of the Arcane Arts",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879283283,
+    "name": "Perpetual Bond Student Loan Office",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879283291,
+    "name": "Morgrave Upper Commons",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879283306,
+    "name": "Lower City Bank Alleys",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879283308,
+    "name": "Mournlands Training Camp",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879283324,
+    "name": "The Traveler's Astral Fortress",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879285324,
+    "name": "Morgrave University - Upper Commons",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879287708,
+    "name": "On the Trail of the Master Thief",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879287712,
+    "name": "Darstil's Tower",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879287717,
+    "name": "Temple of Shar",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879287718,
+    "name": "Darstil's Tower",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879287814,
+    "name": "Pilgrims' Temple",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879288423,
+    "name": "The Chronoscope",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879289577,
+    "name": "The Speculum",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879289579,
+    "name": "Ildrannath's Tower",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879289584,
+    "name": "The House of Song",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879289590,
+    "name": "Tyrintar's Hall",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879289594,
+    "name": "The Temple to Labelas Enoreth",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879289597,
+    "name": "The Burial Glen",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879289601,
+    "name": "Castle Cormanthor",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879289606,
+    "name": "The Irithlium",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879289612,
+    "name": "The Onaglym",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879289618,
+    "name": "Spiderhaunt Woods",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879289619,
+    "name": "Burning Library",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879289628,
+    "name": "On the Trail of Drow Kidnappers",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879289637,
+    "name": "Former Cult of the Dragon Base",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": "Myth Drannor"
+  },
+  {
+    "id": 1879289655,
+    "name": "Ruins of Myth Drannor",
+    "is_public": false,
+    "is_wilderness": false,
+    "region": ""
+  },
+  {
+    "id": 1879289673,
+    "name": "Outskirts of Myth Drannor",
+    "is_public": true,
+    "is_wilderness": false,
+    "region": ""
+  }
+]

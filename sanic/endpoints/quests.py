@@ -7,6 +7,8 @@ import services.postgres as postgres_client
 from sanic import Blueprint
 from sanic.response import json
 from sanic.request import Request
+from utils.areas import get_valid_area_ids
+from utils.quests import get_quests
 
 from models.quest import Quest
 
@@ -79,20 +81,22 @@ async def get_quest_by_id(request: Request, quest_id: int):
 
 
 @quest_blueprint.get("")
-async def get_quests(request: Request):
+async def get_quests_endpoint(request: Request):
     """
     Method: GET
 
     Route: /quests
 
-    Description: Get all quest names.
+    Description: Get all quests.
     """
 
     try:
-        quest_list = postgres_client.get_all_quest_names()
+        quest_list, source, timestamp = get_quests()
+        if not quest_list:
+            return json({"message": "no quests found"}, status=404)
     except Exception as e:
         return json({"message": str(e)}, status=500)
-    return json({"data": quest_list})
+    return json({"data": quest_list, "source": source, "timestamp": timestamp})
 
 
 @quest_blueprint.post("")
@@ -105,6 +109,8 @@ async def update_quests(request: Request):
     Description: Update quests.
     """
 
+    all_area_ids: list[int] = get_valid_area_ids()
+
     try:
         raw_quest_list = request.json
         if not raw_quest_list:
@@ -115,6 +121,8 @@ async def update_quests(request: Request):
             if "DNT" in quest["Name"]:
                 continue
             quest_area: dict = quest.get("QuestArea")
+            if int(quest_area["Id"], 16) not in all_area_ids:
+                continue
             xp_object = {
                 "heroic_casual": quest.get("HeroicCasualXp"),
                 "heroic_normal": quest.get("HeroicNormalXp"),

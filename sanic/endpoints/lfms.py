@@ -142,7 +142,7 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
         )
 
     # update last_update timestamp for each server
-    for server_name, value in request_body.last_update_timestamps:
+    for server_name, value in request_body.last_update_timestamps.items():
         value: str
         all_server_lfms[server_name].last_update = value
 
@@ -172,11 +172,11 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
 
 
 def add_activity_to_lfms_for_server(
-    previous_lfms: dict[str, Lfm], current_lfms: dict[str, Lfm]
+    previous_lfms: dict[int, Lfm], current_lfms: dict[int, Lfm]
 ) -> dict[str, Lfm]:
     previous_lfm_ids = set(previous_lfms.keys())
     current_lfm_ids = set(current_lfms.keys())
-    current_lfms_with_activity: dict[str, Lfm] = {}
+    current_lfms_with_activity: dict[int, Lfm] = {}
     for lfm_id in current_lfm_ids:
 
         previous_lfm = previous_lfms[lfm_id] if lfm_id in previous_lfms else None
@@ -200,15 +200,15 @@ def add_activity_to_lfms_for_server(
                 old_lfm_activity = previous_lfms[lfm_id].activity
 
             # quest updated:
-            old_quest_name = ""
-            new_quest_name = ""
-            if previous_lfm.quest:
-                old_quest_name = previous_lfm.quest.name
-            if current_lfm.quest:
-                new_quest_name = current_lfm.quest.name
-            if old_quest_name != new_quest_name:
+            old_quest_id = ""
+            new_quest_id = ""
+            if previous_lfm.quest_id:
+                old_quest_id = previous_lfm.quest_id
+            if current_lfm.quest_id:
+                new_quest_id = current_lfm.quest_id
+            if old_quest_id != new_quest_id:
                 new_activity_events_list.append(
-                    LfmActivityEvent(tag=LfmActivityType.quest, data=new_quest_name)
+                    LfmActivityEvent(tag=LfmActivityType.quest, data=new_quest_id)
                 )
 
             # comment updated:

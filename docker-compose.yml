@@ -17,7 +17,7 @@ services:
       interval: 10s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 60s
 
   redis:
     build:
@@ -34,7 +34,7 @@ services:
       interval: 2s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 60s
     volumes:
       - redis_data:/data
 
@@ -59,7 +59,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 60s
 
   nginx:
     build:
@@ -95,7 +95,7 @@ services:
         condition: service_healthy
     volumes:
       - pgadmin_data:/var/lib/pgadmin
-  
+
 networks:
   backend:
     driver: bridge
