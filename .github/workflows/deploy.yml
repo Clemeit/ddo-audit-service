@@ -60,7 +60,7 @@ jobs:
         script: |
           cd /var/www/ddoaudit-stage.com/app
           docker pull ${{ secrets.DOCKER_USERNAME }}/ddoaudit:latest
-          docker-compose up -d
+          docker compose up -d
 
   deploy-to-prod:
     needs: build-and-deploy-stage
