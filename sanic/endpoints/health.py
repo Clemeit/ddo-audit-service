@@ -17,4 +17,4 @@ async def health_check(request):
  
     Description: Health check endpoint.
     """
-    return json({"health": "ok"})
+    return json({"health": "ok!"})
