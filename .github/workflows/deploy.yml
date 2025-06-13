@@ -37,10 +37,10 @@ jobs:
         EOF
 
     - name: Build Docker image with Compose
-      run: docker compose build -t ${{ secrets.DOCKER_USERNAME }}/ddoaudit:latest .
+      run: docker compose build
     
     - name: Push Docker image with Compose
-      run: docker compose push ${{ secrets.DOCKER_USERNAME }}/ddoaudit:latest
+      run: docker compose push
 
     - name: Copy docker-compose.yml to server
       uses: appleboy/scp-action@master

@@ -3,6 +3,8 @@ services:
     build:
       context: ./postgres
       dockerfile: Dockerfile
+    image: ddoaudit/postgres:latest
+    container_name: ddoaudit_postgres
     restart: always
     networks:
       - backend
@@ -23,6 +25,8 @@ services:
     build:
       context: ./redis
       dockerfile: Dockerfile
+    image: ddoaudit/redis:latest
+    container_name: ddoaudit_redis
     restart: always
     networks:
       - backend
@@ -42,6 +46,8 @@ services:
     build:
       context: ./sanic
       dockerfile: Dockerfile
+    image: ddoaudit/sanic:latest
+    container_name: ddoaudit_sanic
     restart: always
     ports:
       - "8000:8000"
@@ -65,6 +71,8 @@ services:
     build:
       context: .
       dockerfile: ./nginx/Dockerfile
+    image: ddoaudit/nginx:latest
+    container_name: ddoaudit_nginx
     restart: always
     ports:
       - "80:80" # support http redirect
