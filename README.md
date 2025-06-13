@@ -19,3 +19,4 @@ This repository serves as the backend service for DDO Audit.
 - Set certbot to auto renew
 - Open etc/letsencrypt/renewal/me.com.conf and under [renewalparams] add: renew_hook = docker exec -it html-nginx-1 nginx reload
   - This will automatically reload nginx whenever new certs are generated
+- Install docker and docker-compose with snap

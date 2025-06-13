@@ -1,0 +1,52 @@
+name: CI/CD with Stage and Production
+
+on:
+  push:
+    branches: [master] 
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy-stage:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Log in to Docker Hub
+      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+    - name: Build and Push Docker Image
+      run: |
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/ddoaudit:latest .
+        docker push ${{ secrets.DOCKER_USERNAME }}/ddoaudit:latest
+
+    - name: Deploy to Stage
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SSH_STAGE_HOST }}
+        username: ${{ secrets.SSH_STAGE_USER }}
+        key: ${{ secrets.SSH_STAGE_KEY }}
+        script: |
+          cd /var/www/ddoaudit-stage.com/app
+          docker pull ${{ secrets.DOCKER_USERNAME }}/ddoaudit:latest
+          docker-compose up -d
+
+  deploy-to-prod:
+    needs: build-and-deploy-stage
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Deploy to Production
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SSH_PROD_HOST }}
+        username: ${{ secrets.SSH_PROD_USER }}
+        key: ${{ secrets.SSH_PROD_KEY }}
+        script: |
+          cd /var/www/ddoaudit.com/app
+          docker pull ${{ secrets.DOCKER_USERNAME }}/ddoaudit:latest
+          docker-compose up -d
