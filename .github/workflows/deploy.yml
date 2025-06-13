@@ -42,6 +42,15 @@ jobs:
     - name: Push Docker image with Compose
       run: docker compose push
 
+    - name: Ensure target directory exists
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY }}
+        script: |
+          mkdir -p /var/www/ddoaudit-stage.com/app/
+
     - name: Copy docker-compose.yml to server
       uses: appleboy/scp-action@master
       with:
@@ -49,7 +58,7 @@ jobs:
         username: ${{ secrets.SSH_USER }}
         key: ${{ secrets.SSH_KEY }}
         source: "./docker-compose.yml"
-        target: "/var/www/ddoaudit-stage.com/app/docker-compose.yml"
+        target: "/var/www/ddoaudit-stage.com/app/"
     
     - name: Copy .env to server
       uses: appleboy/scp-action@master
@@ -58,7 +67,7 @@ jobs:
         username: ${{ secrets.SSH_USER }}
         key: ${{ secrets.SSH_KEY }}
         source: "./.env"
-        target: "/var/www/ddoaudit-stage.com/app/.env"
+        target: "/var/www/ddoaudit-stage.com/app/"
 
     - name: Deploy to Stage
       uses: appleboy/ssh-action@master
