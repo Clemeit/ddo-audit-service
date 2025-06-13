@@ -82,7 +82,7 @@ services:
     depends_on:
       - sanic
     volumes:
-      - ../html/client:/usr/share/nginx/html:ro
+      - /var/www/ddoaudit-stage.com/html/client:/usr/share/nginx/html:ro
       - /etc/letsencrypt:/etc/letsencrypt
 
   pgadmin:
