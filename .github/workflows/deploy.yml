@@ -16,6 +16,27 @@ jobs:
 
     - name: Log in to Docker Hub
       run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+    
+    - name: Create .env file
+      run: |
+        cat > .env <<EOF
+        POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+        POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}
+        POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
+        POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+        POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_MIN_CONN=${{ secrets.POSTGRES_MIN_CONN }}
+        POSTGRES_MAX_CONN=${{ secrets.POSTGRES_MAX_CONN }}
+        PGADMIN_DEFAULT_EMAIL=${{ secrets.PGADMIN_DEFAULT_EMAIL }}
+        PGADMIN_DEFAULT_PASSWORD=${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
+        API_KEY=${{ secrets.API_KEY }}
+        APP_HOST=${{ secrets.APP_HOST }}
+        APP_PORT=${{ secrets.APP_PORT }}
+        APP_WORKERS=${{ secrets.APP_WORKERS }}
+        CRYPTO_PASS=${{ secrets.CRYPTO_PASS }}
+        REDIS_HOST=${{ secrets.REDIS_HOST }}
+        REDIS_PORT=${{ secrets.REDIS_PORT }}
+        EOF
 
     - name: Build and Push Docker Images
       run: |
@@ -30,24 +51,6 @@ jobs:
         key: ${{ secrets.SSH_KEY }}
         script: |
           cd /var/www/ddoaudit-stage.com/app
-          cat > .env <<EOF
-          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
-          POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}
-          POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
-          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_MIN_CONN=${{ secrets.POSTGRES_MIN_CONN }}
-          POSTGRES_MAX_CONN=${{ secrets.POSTGRES_MAX_CONN }}
-          PGADMIN_DEFAULT_EMAIL=${{ secrets.PGADMIN_DEFAULT_EMAIL }}
-          PGADMIN_DEFAULT_PASSWORD=${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
-          API_KEY=${{ secrets.API_KEY }}
-          APP_HOST=${{ secrets.APP_HOST }}
-          APP_PORT=${{ secrets.APP_PORT }}
-          APP_WORKERS=${{ secrets.APP_WORKERS }}
-          CRYPTO_PASS=${{ secrets.CRYPTO_PASS }}
-          REDIS_HOST=${{ secrets.REDIS_HOST }}
-          REDIS_PORT=${{ secrets.REDIS_PORT }}
-          EOF
           docker pull ${{ secrets.DOCKER_USERNAME }}/ddoaudit:latest
           docker-compose up -d
 
