@@ -82,7 +82,7 @@ services:
     depends_on:
       - sanic
     volumes:
-      - ./client:/usr/share/nginx/html:ro
+      - ../html/client:/usr/share/nginx/html:ro
       - /etc/letsencrypt:/etc/letsencrypt
 
   pgadmin:
