@@ -25,9 +25,9 @@ jobs:
     - name: Deploy to Stage
       uses: appleboy/ssh-action@master
       with:
-        host: ${{ secrets.SSH_STAGE_HOST }}
-        username: ${{ secrets.SSH_STAGE_USER }}
-        key: ${{ secrets.SSH_STAGE_KEY }}
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY }}
         script: |
           cd /var/www/ddoaudit-stage.com/app
           docker pull ${{ secrets.DOCKER_USERNAME }}/ddoaudit:latest
@@ -43,9 +43,9 @@ jobs:
     - name: Deploy to Production
       uses: appleboy/ssh-action@master
       with:
-        host: ${{ secrets.SSH_PROD_HOST }}
-        username: ${{ secrets.SSH_PROD_USER }}
-        key: ${{ secrets.SSH_PROD_KEY }}
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY }}
         script: |
           cd /var/www/ddoaudit.com/app
           docker pull ${{ secrets.DOCKER_USERNAME }}/ddoaudit:latest
