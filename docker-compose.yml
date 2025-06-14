@@ -8,8 +8,6 @@ services:
     restart: always
     networks:
       - backend
-    env_file:
-      - .env
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
@@ -58,8 +56,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    env_file:
-      - .env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://api.localhost:8000/v1/health"]
       interval: 5s
@@ -92,8 +88,6 @@ services:
       - "${PGADMIN_PORT}:443"
     networks:
       - backend
-    env_file:
-      - .env
     depends_on:
       postgres:
         condition: service_healthy
