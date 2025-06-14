@@ -5,6 +5,10 @@ services:
       dockerfile: Dockerfile
     image: clemeit/ddoaudit-postgres:latest
     restart: always
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     networks:
       - backend
     ports:
@@ -44,6 +48,19 @@ services:
       dockerfile: Dockerfile
     image: clemeit/ddoaudit-sanic:latest
     restart: always
+    environment:
+      - API_KEY=${API_KEY}
+      - APP_HOST=${APP_HOST}
+      - APP_PORT=${APP_PORT}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_MIN_CONN=${POSTGRES_MIN_CONN}
+      - POSTGRES_MAX_CONN=${POSTGRES_MAX_CONN}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
     ports:
       - "${APP_PORT}:8000"
     expose:
@@ -80,6 +97,10 @@ services:
   pgadmin:
     image: dpage/pgadmin4
     restart: always
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
+      - PGADMIN_PORT=${PGADMIN_PORT}
     ports:
       - "${PGADMIN_PORT}:443"
     networks:
