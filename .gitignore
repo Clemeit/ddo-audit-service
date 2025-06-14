@@ -1,6 +1,6 @@
 # Environments
 .venv
-.env
+*.env
 
 # VSCode
 .vscode
