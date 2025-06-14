@@ -13,3 +13,4 @@ COPY ./nginx/www.conf /etc/nginx/conf.d/www.conf
 COPY ./nginx/pgadmin.conf /etc/nginx/conf.d/pgadmin.conf
 
 RUN mkdir -p /etc/nginx/ssl
+RUN mkdir -p /usr/share/nginx/html/.well-known/acme-challenge
