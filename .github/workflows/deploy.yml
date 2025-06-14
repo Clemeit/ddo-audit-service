@@ -42,7 +42,6 @@ jobs:
         POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
         POSTGRES_MIN_CONN=${{ vars.POSTGRES_MIN_CONN }}
         POSTGRES_MAX_CONN=${{ vars.POSTGRES_MAX_CONN }}
-        PGADMIN_PORT=${{ vars.PGADMIN_PORT }}
         API_KEY=${{ secrets.API_KEY }}
         APP_HOST=${{ vars.APP_HOST }}
         APP_PORT=${{ vars.APP_PORT }}
@@ -52,6 +51,7 @@ jobs:
         REDIS_PORT=${{ vars.REDIS_PORT }}
         PGADMIN_DEFAULT_PASSWORD=${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
         PGADMIN_DEFAULT_EMAIL=${{ vars.PGADMIN_DEFAULT_EMAIL }}
+        PGADMIN_PORT=${{ vars.PGADMIN_PORT }}
         EOF
 
     - name: Ensure target directory exists
@@ -121,7 +121,6 @@ jobs:
         POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
         POSTGRES_MIN_CONN=${{ vars.POSTGRES_MIN_CONN }}
         POSTGRES_MAX_CONN=${{ vars.POSTGRES_MAX_CONN }}
-        PGADMIN_PORT=${{ vars.PGADMIN_PORT }}
         API_KEY=${{ secrets.API_KEY }}
         APP_HOST=${{ vars.APP_HOST }}
         APP_PORT=${{ vars.APP_PORT }}
@@ -131,6 +130,7 @@ jobs:
         REDIS_PORT=${{ vars.REDIS_PORT }}
         PGADMIN_DEFAULT_PASSWORD=${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
         PGADMIN_DEFAULT_EMAIL=${{ vars.PGADMIN_DEFAULT_EMAIL }}
+        PGADMIN_PORT=${{ vars.PGADMIN_PORT }}
         EOF
 
     - name: Ensure target directory exists
