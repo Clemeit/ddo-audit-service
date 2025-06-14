@@ -52,6 +52,8 @@ jobs:
         PGADMIN_DEFAULT_PASSWORD=${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
         PGADMIN_DEFAULT_EMAIL=${{ vars.PGADMIN_DEFAULT_EMAIL }}
         PGADMIN_PORT=${{ vars.PGADMIN_PORT }}
+        NGINX_HTTP_PORT=${{ vars.NGINX_HTTP_PORT }}
+        NGINX_HTTPS_PORT=${{ vars.NGINX_HTTPS_PORT }}
         EOF
 
     - name: Ensure target directory exists
@@ -131,6 +133,8 @@ jobs:
         PGADMIN_DEFAULT_PASSWORD=${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
         PGADMIN_DEFAULT_EMAIL=${{ vars.PGADMIN_DEFAULT_EMAIL }}
         PGADMIN_PORT=${{ vars.PGADMIN_PORT }}
+        NGINX_HTTP_PORT=${{ vars.NGINX_HTTP_PORT }}
+        NGINX_HTTPS_PORT=${{ vars.NGINX_HTTPS_PORT }}
         EOF
 
     - name: Ensure target directory exists
