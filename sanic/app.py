@@ -72,4 +72,4 @@ async def check_api_key(request: Request):
 
 
 if __name__ == "__main__":
-    app.run(host=APP_HOST, port=APP_PORT)
+    app.run(host=APP_HOST, port=8000)
