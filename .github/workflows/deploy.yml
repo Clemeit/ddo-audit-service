@@ -57,6 +57,9 @@ jobs:
         key: ${{ secrets.SSH_KEY }}
         script: |
           mkdir -p /var/www/ddoaudit-stage.com/app/
+    
+    - name: List files in workspace
+      run: ls -l
 
     - name: Copy docker-compose.yml to server
       uses: appleboy/scp-action@master
