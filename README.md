@@ -15,7 +15,6 @@ This repository serves as the backend service for DDO Audit.
 
 ### Setup
 - Add certbot
-- Run certbot certonly --webroot -w /var/www/ddoaudit-stage.com/acme-challenge --cert-name hcnxsryjficudzazjxty.com -d stage.hcnxsryjficudzazjxty.com,api.stage.hcnxsryjficudzazjxty.com,pgadmin.stage.hcnxsryjficudzazjxty.com
 - Run certbot certonly --webroot -w /var/www/ddoaudit.com/acme-challenge --cert-name hcnxsryjficudzazjxty.com -d hcnxsryjficudzazjxty.com,www.hcnxsryjficudzazjxty.com,api.hcnxsryjficudzazjxty.com,pgadmin.hcnxsryjficudzazjxty.com
 - Set certbot to auto renew
 - Open etc/letsencrypt/renewal/me.com.conf and under [renewalparams] add: renew_hook = docker exec -it html-nginx-1 nginx reload
