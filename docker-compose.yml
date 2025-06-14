@@ -11,8 +11,6 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     networks:
       - backend
-    # ports:
-    #   - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -41,8 +39,6 @@ services:
       start_period: 60s
     volumes:
       - redis_data:/data
-    # ports:
-    #   - "${REDIS_PORT}:6379"
 
   sanic:
     build:
@@ -56,15 +52,13 @@ services:
       - APP_PORT=${APP_PORT}
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=5432
+      - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_MIN_CONN=${POSTGRES_MIN_CONN}
       - POSTGRES_MAX_CONN=${POSTGRES_MAX_CONN}
       - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=6379
-    # ports:
-    #   - "${APP_PORT}:8000"
+      - REDIS_PORT=${REDIS_PORT}
     expose:
       - 8000
     networks:
@@ -103,9 +97,7 @@ services:
     environment:
       - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
       - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
-      - PGADMIN_PORT=${PGADMIN_PORT}
-    # ports:
-    #   - "${PGADMIN_PORT}:443"
+      # - PGADMIN_PORT=${PGADMIN_PORT}
     networks:
       - backend
     depends_on:
