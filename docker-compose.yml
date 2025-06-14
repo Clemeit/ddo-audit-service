@@ -41,6 +41,8 @@ services:
       start_period: 60s
     volumes:
       - redis_data:/data
+    ports:
+      - "${REDIS_PORT}:6379"
 
   sanic:
     build:
@@ -60,7 +62,7 @@ services:
       - POSTGRES_MIN_CONN=${POSTGRES_MIN_CONN}
       - POSTGRES_MAX_CONN=${POSTGRES_MAX_CONN}
       - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PORT=6379
     ports:
       - "${APP_PORT}:8000"
     expose:
