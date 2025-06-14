@@ -97,7 +97,6 @@ services:
     environment:
       - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
       - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
-      # - PGADMIN_PORT=${PGADMIN_PORT}
     networks:
       - backend
     depends_on:
