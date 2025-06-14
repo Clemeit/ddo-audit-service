@@ -29,6 +29,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
     - name: Create .env file
       run: |
         cat > .env <<EOF
@@ -57,9 +60,6 @@ jobs:
         key: ${{ secrets.SSH_KEY }}
         script: |
           mkdir -p /var/www/ddoaudit-stage.com/app/
-    
-    - name: List files in workspace
-      run: ls -l
 
     - name: Copy docker-compose.yml to server
       uses: appleboy/scp-action@master
@@ -106,6 +106,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
     - name: Create .env file
       run: |
         cat > .env <<EOF
