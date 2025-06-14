@@ -50,6 +50,8 @@ jobs:
         CRYPTO_PASS=${{ secrets.CRYPTO_PASS }}
         REDIS_HOST=${{ vars.REDIS_HOST }}
         REDIS_PORT=${{ vars.REDIS_PORT }}
+        PGADMIN_DEFAULT_PASSWORD=${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
+        PGADMIN_DEFAULT_EMAIL=${{ vars.PGADMIN_DEFAULT_EMAIL }}
         EOF
 
     - name: Ensure target directory exists
@@ -127,6 +129,8 @@ jobs:
         CRYPTO_PASS=${{ secrets.CRYPTO_PASS }}
         REDIS_HOST=${{ vars.REDIS_HOST }}
         REDIS_PORT=${{ vars.REDIS_PORT }}
+        PGADMIN_DEFAULT_PASSWORD=${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
+        PGADMIN_DEFAULT_EMAIL=${{ vars.PGADMIN_DEFAULT_EMAIL }}
         EOF
 
     - name: Ensure target directory exists

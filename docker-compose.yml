@@ -84,7 +84,7 @@ services:
     image: clemeit/ddoaudit-nginx:latest
     restart: always
     ports:
-      - "80:80" # support http redirect
+      - "${NGINX_HTTP_PORT}:80" # support http redirect
       - "${NGINX_HTTPS_PORT}:443"
     networks:
       - backend
