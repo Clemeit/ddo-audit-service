@@ -93,6 +93,7 @@ services:
     volumes:
       - /var/www/ddoaudit-stage.com/html/client:/usr/share/nginx/html:ro
       - /etc/letsencrypt:/etc/letsencrypt
+      - ./acme-challenge:/acme-challenge
 
   pgadmin:
     image: dpage/pgadmin4

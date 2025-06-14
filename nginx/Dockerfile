@@ -13,5 +13,6 @@ COPY ./nginx/www.conf /etc/nginx/conf.d/www.conf
 COPY ./nginx/pgadmin.conf /etc/nginx/conf.d/pgadmin.conf
 
 RUN mkdir -p /etc/nginx/ssl
+
+# Create the challenge directory
 RUN mkdir -p /usr/share/nginx/html/.well-known/acme-challenge
-RUN mkdir -p /var/www/ddoaudit-stage.com/html/client/.well-known/acme-challenge
