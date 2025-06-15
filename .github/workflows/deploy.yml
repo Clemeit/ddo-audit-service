@@ -54,6 +54,7 @@ jobs:
         NGINX_HTTP_PORT=${{ vars.NGINX_HTTP_PORT }}
         NGINX_HTTPS_PORT=${{ vars.NGINX_HTTPS_PORT }}
         STATIC_FILES_PATH=${{ vars.STATIC_FILES_PATH }}
+        BETTERSTACK_SERVER_STATUS_KEY=${{ secrets.BETTERSTACK_SERVER_STATUS_KEY }}
         EOF
 
     - name: Ensure target directory exists
@@ -135,6 +136,7 @@ jobs:
         NGINX_HTTP_PORT=${{ vars.NGINX_HTTP_PORT }}
         NGINX_HTTPS_PORT=${{ vars.NGINX_HTTPS_PORT }}
         STATIC_FILES_PATH=${{ vars.STATIC_FILES_PATH }}
+        BETTERSTACK_SERVER_STATUS_KEY=${{ secrets.BETTERSTACK_SERVER_STATUS_KEY }}
         EOF
 
     - name: Ensure target directory exists

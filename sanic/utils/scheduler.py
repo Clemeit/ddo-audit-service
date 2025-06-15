@@ -16,7 +16,7 @@ def run_batch_on_schedule(*args) -> tuple[callable, callable]:
     for arg in args:
         event, interval = arg
 
-        # Schedule the task to run every 5 seconds
+        # Schedule the task to run at the specified interval
         schedule.every(interval).seconds.do(event)
 
         # Create an event to control the scheduler thread

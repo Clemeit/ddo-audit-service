@@ -9,6 +9,7 @@ from models.redis import GameInfo, ServerInfo
 from requests import HTTPError
 from utils.scheduler import run_batch_on_schedule
 from constants.server import SERVER_NAMES_LOWERCASE
+from services.betterstack import server_status_heartbeat
 
 
 class ServerStatusUpdater:
@@ -112,7 +113,7 @@ class ServerStatusUpdater:
             game_info = self.update_worlds(worlds)
 
             redis_client.set_game_info(game_info)
-
+            server_status_heartbeat()
         except Exception as e:
             print(f"Failed to update server status: {e}")
 

@@ -14,7 +14,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "pgadmin", "-d", "ddoaudit"]
+      test: [ "CMD", "pg_isready", "-U", "pgadmin", "-d", "ddoaudit" ]
       interval: 10s
       timeout: 10s
       retries: 3
@@ -32,7 +32,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 2s
       timeout: 5s
       retries: 3
@@ -59,6 +59,7 @@ services:
       - POSTGRES_MAX_CONN=${POSTGRES_MAX_CONN}
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
+      - BETTERSTACK_SERVER_STATUS_KEY=${BETTERSTACK_SERVER_STATUS_KEY}
     expose:
       - 8000
     networks:
@@ -67,7 +68,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://api.localhost:8000/v1/health"]
+      test: [ "CMD", "curl", "-f", "http://api.localhost:8000/v1/health" ]
       interval: 5s
       timeout: 5s
       retries: 5
