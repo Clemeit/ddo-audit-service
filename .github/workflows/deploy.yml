@@ -53,6 +53,7 @@ jobs:
         PGADMIN_DEFAULT_EMAIL=${{ vars.PGADMIN_DEFAULT_EMAIL }}
         NGINX_HTTP_PORT=${{ vars.NGINX_HTTP_PORT }}
         NGINX_HTTPS_PORT=${{ vars.NGINX_HTTPS_PORT }}
+        STATIC_FILES_PATH=${{ vars.STATIC_FILES_PATH }}
         EOF
 
     - name: Ensure target directory exists
@@ -133,6 +134,7 @@ jobs:
         PGADMIN_DEFAULT_EMAIL=${{ vars.PGADMIN_DEFAULT_EMAIL }}
         NGINX_HTTP_PORT=${{ vars.NGINX_HTTP_PORT }}
         NGINX_HTTPS_PORT=${{ vars.NGINX_HTTPS_PORT }}
+        STATIC_FILES_PATH=${{ vars.STATIC_FILES_PATH }}
         EOF
 
     - name: Ensure target directory exists
