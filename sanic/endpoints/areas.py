@@ -84,7 +84,7 @@ async def update_areas(request: Request):
     """
 
     try:
-        raw_areas_list = request.json.get("areas")
+        raw_areas_list = request.json
         if not raw_areas_list:
             return json({"message": "no areas provided"}, status=400)
         areas_list: list[Area] = [Area(**area) for area in raw_areas_list]

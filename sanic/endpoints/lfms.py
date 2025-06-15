@@ -149,7 +149,7 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
     # organize lfms by server
     for lfm in request_body.lfms:
         server_name = lfm.server_name.lower()
-        lfm.last_updated = all_server_lfms[server_name].last_update
+        lfm.last_update = all_server_lfms[server_name].last_update
         all_server_lfms[server_name].lfms[lfm.leader.id] = lfm
 
     for server_name, data in all_server_lfms.items():
@@ -255,7 +255,7 @@ def add_activity_to_lfms_for_server(
 
         # comine the old and new activity
         new_lfm_activity = LfmActivity(
-            timestamp=current_lfm.last_updated, events=new_activity_events_list
+            timestamp=current_lfm.last_update, events=new_activity_events_list
         )
         aggregate_activity = old_lfm_activity + (
             [new_lfm_activity] if new_activity_events_list else []

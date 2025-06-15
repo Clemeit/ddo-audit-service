@@ -275,13 +275,12 @@ def handle_incoming_characters(
 
         # the last time the player was seen was the last time data was
         # pulled from the game client
-        character.last_updated = all_server_characters[server_name].last_update
+        character.last_update = all_server_characters[server_name].last_update
 
         all_server_characters[server_name].characters[character.id] = character
 
     # process each server's characters
     for server_name, data in all_server_characters.items():
-        data: ServerCharactersData
         current_characters = data.characters
         current_character_ids = set(current_characters.keys())
 
@@ -292,6 +291,8 @@ def handle_incoming_characters(
         previous_characters = previous_characters_data.characters
         previous_character_ids = set(previous_characters.keys())
 
+        # a set of character IDs from the incoming request that were
+        # also present in the previous characters (i.e. valid)
         deleted_ids_on_server = deleted_ids.intersection(previous_character_ids)
 
         # get all of the character activity for this server
@@ -306,9 +307,14 @@ def handle_incoming_characters(
 
         # TODO: probably better to use pipelining here instead of making these
         # calls for each server
-        persist_deleted_characters_to_db_by_server_name_and_ids(
-            server_name, deleted_ids_on_server
-        )
+        try:
+            persist_deleted_characters_to_db_by_server_name_and_ids(
+                server_name, deleted_ids_on_server
+            )
+        except Exception as e:
+            print(
+                f"Error persisting deleted characters for server {server_name}: {e}"
+            )
         if type == CharacterRequestType.set:
             redis_client.set_characters_by_server_name(server_name, data)
         elif type == CharacterRequestType.update:

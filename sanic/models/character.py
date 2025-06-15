@@ -35,10 +35,10 @@ class Character(BaseModel):
     is_anonymous: Optional[bool] = None
     is_recruiting: Optional[bool] = None
     public_comment: Optional[str] = None
-    last_updated: Optional[str] = (
+    last_update: Optional[str] = (
         None  # the last time the character was updated from Collections
     )
-    last_saved: Optional[str] = (
+    last_save: Optional[str] = (
         None  # the last time the character was persisted in the database
     )
 

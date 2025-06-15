@@ -55,8 +55,8 @@ CREATE TABLE IF NOT EXISTS public."characters"
     server_name character varying(25) COLLATE pg_catalog."default" NOT NULL,
     home_server_name character varying(25) COLLATE pg_catalog."default",
     is_anonymous boolean NOT NULL,
-    last_updated timestamp with time zone NOT NULL,
-    last_saved timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    last_update timestamp with time zone NOT NULL,
+    last_save timestamp with time zone NOT NULL DEFAULT current_timestamp,
     CONSTRAINT character_pkey PRIMARY KEY (id)
 )
 

@@ -9,6 +9,9 @@ SERVER_NAMES: list[str] = [
     "Wayfinder",
     "Hardcore",
     "Cormyr",
+    "Oerik",
+    "Thrane",
+    "Moonsea"
 ]
 
 SERVER_NAMES_LOWERCASE: list[str] = [

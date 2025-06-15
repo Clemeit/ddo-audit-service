@@ -127,6 +127,10 @@ def get_characters_by_server_name_and_character_ids(
     server_name: str,
     character_ids: list[int] | set[int],
 ) -> list[Character]:
+    """
+    Given a server name and a list of character IDs, return a list of Characters that
+    exist in the cache for that server. If a character ID does not exist, it is skipped.
+    """
     characters: list[Character] = []
 
     with get_redis_client() as client:
@@ -174,24 +178,24 @@ def set_characters_by_server_name(
     server_name: str, server_characters: ServerCharactersData
 ):
     server_name = server_name.lower()
-    client = get_redis_client()
 
-    client.json().set(
-        f"{server_name}:characters", path="$", obj=server_characters.model_dump()
-    )
+    with get_redis_client() as client:
+        client.json().set(
+            f"{server_name}:characters", path="$", obj=server_characters.model_dump()
+        )
 
 
 def update_characters_by_server_name(
     server_name: str, server_characters: ServerCharactersData
 ):
     server_name = server_name.lower()
-    client = get_redis_client()
-
-    client.json().merge(
-        name=f"{server_name}:characters",
-        path="$",
-        obj=server_characters.model_dump(exclude_unset=True),
-    )
+    
+    with get_redis_client() as client:
+        client.json().merge(
+            name=f"{server_name}:characters",
+            path="$",
+            obj=server_characters.model_dump(exclude_unset=True),
+        )
 
 
 def delete_characters_by_server_name_and_character_ids(

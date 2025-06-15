@@ -23,6 +23,8 @@ from constants.activity import (
 from models.quest import Quest
 from models.area import Area
 
+from utils.areas import get_valid_area_ids
+
 # Load environment variables
 DB_CONFIG = {
     "dbname": os.getenv("POSTGRES_DB"),
@@ -78,7 +80,7 @@ def get_db_connection():
 
 
 def add_or_update_characters(characters: list[Character]):
-    valid_area_ids = get_all_area_ids()
+    (valid_area_ids, _, _) = get_valid_area_ids()
 
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
@@ -94,7 +96,7 @@ def add_or_update_characters(characters: list[Character]):
                         "is_in_party",
                         "is_recruiting",
                         "is_online",
-                        "last_saved",
+                        "last_save",
                     ]
                     character_fields = [
                         field
@@ -126,7 +128,7 @@ def add_or_update_characters(characters: list[Character]):
                         INSERT INTO characters ({columns})
                         VALUES ({placeholders})
                         ON CONFLICT (id) DO UPDATE SET
-                        {updates}, last_saved = NOW()
+                        {updates}, last_save = NOW()
                     """
 
                     # Get the values of the Character model
@@ -458,8 +460,8 @@ def build_character_from_row(row: tuple) -> Character:
         server_name=row[8],
         home_server_name=row[9],
         is_anonymous=row[10],
-        last_updated=row[11].isoformat() if isinstance(row[11], datetime) else "",
-        last_saved=row[12].isoformat() if isinstance(row[12], datetime) else "",
+        last_update=row[11].isoformat() if isinstance(row[11], datetime) else "",
+        last_save=row[12].isoformat() if isinstance(row[12], datetime) else "",
     )
 
 
