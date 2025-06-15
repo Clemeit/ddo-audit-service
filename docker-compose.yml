@@ -87,7 +87,7 @@ services:
     depends_on:
       - sanic
     volumes:
-      - ${STATIC_FILES_PATH}:/usr/share/nginx/html:ro
+      - ${STATIC_FILES_PATH:-.}:/usr/share/nginx/html:ro
       - /var/www/ddoaudit.com/acme-challenge:/acme-challenge
       - /etc/letsencrypt:/etc/letsencrypt
 
