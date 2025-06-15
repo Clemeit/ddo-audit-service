@@ -417,10 +417,11 @@ def aggregate_character_activity_for_server(
                     CharacterActivity(
                         id=character_id,
                         activity_type=CharacterActivityType.location,
-                        data=current_characters[character_id].location_id,
+                        data={"value": current_characters[character_id].location_id},
                     )
                 )
-        except Exception:
+        except Exception as e:
+            print(f"Error processing location change for character {character_id}: {e}")
             pass
 
         # guild change
