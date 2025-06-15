@@ -87,9 +87,9 @@ services:
     depends_on:
       - sanic
     volumes:
-      - /var/www/ddoaudit-stage.com/html/client:/usr/share/nginx/html:ro
+      - /var/www/ddoaudit.com/html/client/build:/usr/share/nginx/html:ro
+      - /var/www/ddoaudit.com/acme-challenge:/acme-challenge
       - /etc/letsencrypt:/etc/letsencrypt
-      - /var/www/ddoaudit-stage.com/acme-challenge:/acme-challenge
 
   pgadmin:
     image: dpage/pgadmin4

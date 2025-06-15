@@ -1,7 +1,7 @@
 from typing import Optional
 
 from constants.activity import CharacterActivityType
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 
 from models.quest import Quest
 
@@ -41,6 +41,10 @@ class Character(BaseModel):
     last_save: Optional[str] = (
         None  # the last time the character was persisted in the database
     )
+
+    @field_serializer("id")
+    def serialize_id(self, id: int, _info):
+        return str(id)
 
 
 class CharacterActivity(BaseModel):
