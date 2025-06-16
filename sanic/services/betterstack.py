@@ -13,6 +13,7 @@ def server_status_heartbeat():
     This function is used to send a heartbeat signal to the BetterStack service.
     It is called periodically to indicate that the server status check is running.
     """
+    # TODO: this should only be called on production environment
     global last_server_status_heartbeat
     current_time = int(datetime.now().timestamp())
     if current_time - last_server_status_heartbeat < SERVER_STATUS_HEARTBEAT_INTERVAL:

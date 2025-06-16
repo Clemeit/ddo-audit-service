@@ -70,6 +70,7 @@ def close_redis():
 
 
 def get_characters_by_server_name_as_class(server_name: str) -> ServerCharactersData:
+    server_name = server_name.lower()
     return ServerCharactersData(**get_characters_by_server_name_as_dict(server_name))
 
 
@@ -91,13 +92,8 @@ def get_character_by_character_id(character_id: int) -> Character:
 
 
 def get_characters_by_character_ids(
-    character_ids: list[str] | set[str],
+    character_ids: list[int],
 ) -> list[Character]:
-    # performance difference per 1000 characters with 50 logging off:
-    # Old code: 8-10 seconds
-    # New code: 35-50 milliseconds
-    # A 200x improvement
-
     characters: list[Character] = []
     remaining_character_ids = set(character_ids)
 
@@ -106,9 +102,9 @@ def get_characters_by_character_ids(
             server_character_keys = client.json().objkeys(
                 f"{server_name}:characters", "characters"
             )
-            discovered_character_ids: set[str] = set()
+            discovered_character_ids: set[int] = set()
             for character_id in remaining_character_ids:
-                if character_id not in server_character_keys:
+                if str(character_id) not in server_character_keys:
                     continue
                 character = client.json().get(
                     f"{server_name}:characters", f"characters.{character_id}"
