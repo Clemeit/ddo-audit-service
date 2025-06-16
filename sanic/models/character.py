@@ -42,10 +42,6 @@ class Character(BaseModel):
         None  # the last time the character was persisted in the database
     )
 
-    @field_serializer("id")
-    def serialize_id(self, id: int, _info):
-        return str(id)
-
 
 class CharacterActivity(BaseModel):
     """
