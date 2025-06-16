@@ -36,9 +36,7 @@ app.blueprint(
 )
 
 # Set up all of the updaters
-start_game_info_polling, stop_game_info_polling = get_game_info_scheduler(
-    query_game_info_interval=5, save_game_info_interval=10
-)
+start_game_info_polling, stop_game_info_polling = get_game_info_scheduler()
 
 
 @app.listener("before_server_start")
