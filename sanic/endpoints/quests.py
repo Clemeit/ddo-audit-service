@@ -109,7 +109,7 @@ async def update_quests(request: Request):
     Description: Update quests.
     """
 
-    all_area_ids: list[int] = get_valid_area_ids()
+    (all_area_ids, _, _) = get_valid_area_ids()
 
     try:
         raw_quest_list = request.json
@@ -118,35 +118,38 @@ async def update_quests(request: Request):
         quest_list: list[Quest] = []
         for quest in raw_quest_list:
             quest: dict
-            if "DNT" in quest["Name"]:
+            if "DNT" in quest.get("name", ""):
                 continue
-            quest_area: dict = quest.get("QuestArea")
-            if int(quest_area["Id"], 16) not in all_area_ids:
+            if int(quest.get("area")) not in all_area_ids:
+                print("Skipping quest with invalid area ID:", int(quest.get("area")))
                 continue
             xp_object = {
-                "heroic_casual": quest.get("HeroicCasualXp"),
-                "heroic_normal": quest.get("HeroicNormalXp"),
-                "heroic_hard": quest.get("HeroicHardXp"),
-                "heroic_elite": quest.get("HeroicEliteXp"),
-                "epic_casual": quest.get("EpicCasualXp"),
-                "epic_normal": quest.get("EpicNormalXp"),
-                "epic_hard": quest.get("EpicHardXp"),
-                "epic_elite": quest.get("EpicEliteXp"),
+                "heroic_casual": quest.get("heroiccasualxp"),
+                "heroic_normal": quest.get("heroicnormalxp"),
+                "heroic_hard": quest.get("heroichardxp"),
+                "heroic_elite": quest.get("heroicelitexp"),
+                "epic_casual": quest.get("epiccasualxp"),
+                "epic_normal": quest.get("epicnormalxp"),
+                "epic_hard": quest.get("epichardxp"),
+                "epic_elite": quest.get("epicelitexp"),
             }
             quest_list.append(
                 Quest(
-                    id=int(quest["Id"], 16),
-                    area_id=int(quest_area["Id"], 16) if quest_area else None,
-                    name=quest["Name"],
-                    heroic_normal_cr=quest.get("ChallengeRatingNormal"),
-                    epic_normal_cr=quest.get("ChallengeRatingEpic"),
-                    required_adventure_pack=quest.get("RequiredAdventurePack"),
-                    adventure_area=quest_area.get("AreaName") if quest_area else None,
-                    quest_journal_area=quest.get("QuestJournalArea"),
-                    group_size=quest.get("GroupSize"),
-                    patron=quest.get("Patron"),
+                    id=int(quest.get("questid") if quest.get("questid") else 0),
+                    alt_id=int(quest.get("altid") if quest.get("altid") else 0),
+                    area_id=int(quest.get("area") if quest.get("area") else 0),
+                    name=quest.get("name", ""),
+                    heroic_normal_cr=quest.get("heroicnormalcr"),
+                    epic_normal_cr=quest.get("epicnormalcr"),
+                    required_adventure_pack=quest.get("requiredadventurepack"),
+                    adventure_area=quest.get("adventurearea") if quest.get("adventurearea") else None,
+                    quest_journal_area=quest.get("questjournalgroup"),
+                    group_size=quest.get("groupsize"),
+                    patron=quest.get("patron"),
                     xp=xp_object,
-                    length=quest.get("QuestLength"),
+                    length=int(quest.get("length") if quest.get("length") else 0),
+                    tip=quest.get("tip"),
+                    is_free_to_vip=True if quest.get("isfreetovip") == "1" else False,
                 )
             )
 

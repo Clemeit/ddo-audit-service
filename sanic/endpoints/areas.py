@@ -87,7 +87,17 @@ async def update_areas(request: Request):
         raw_areas_list = request.json
         if not raw_areas_list:
             return json({"message": "no areas provided"}, status=400)
-        areas_list: list[Area] = [Area(**area) for area in raw_areas_list]
+        areas_list: list[Area] = []
+        for area in raw_areas_list:
+            area: dict
+            areas_list.append(Area(
+                id=int(area.get("areaid", 0)),
+                name=area.get("name", ""),
+                is_public=True if area.get("ispublicspace") == "1" else False,
+                region=area.get("region", ""),
+                is_wilderness=False
+            ))
+
         postgres_client.update_areas(areas_list)
     except Exception as e:
         return json({"message": str(e)}, status=500)
