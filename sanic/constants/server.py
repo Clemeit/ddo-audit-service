@@ -9,7 +9,7 @@ SERVER_NAMES: list[str] = [
     "Wayfinder",
     "Hardcore",
     "Cormyr",
-    "Oerik",
+    "Shadowdale",
     "Thrane",
     "Moonsea"
 ]
