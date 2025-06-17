@@ -103,6 +103,7 @@ async def set_lfms(request: Request):
     try:
         handle_incoming_lfms(request_body, LfmRequestType.set)
     except Exception as e:
+        print(f"Error handling incoming LFMs: {e}")
         return json({"message": str(e)}, status=500)
 
     return json({"message": "success"})
@@ -127,6 +128,7 @@ async def update_lfms(request: Request):
     try:
         handle_incoming_lfms(request_body, LfmRequestType.update)
     except Exception as e:
+        print(f"Error handling incoming LFMs: {e}")
         return json({"message": str(e)}, status=500)
 
     return json({"message": "success"})

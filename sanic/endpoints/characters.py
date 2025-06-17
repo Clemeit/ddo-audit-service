@@ -223,6 +223,7 @@ async def set_characters(request: Request):
     try:
         handle_incoming_characters(request_body, CharacterRequestType.set)
     except Exception as e:
+        print(f"Error handling incoming characters: {e}")
         return json({"message": str(e)}, status=500)
 
     return json({"message": "success"})
@@ -246,6 +247,7 @@ async def update_characters(request: Request):
     try:
         handle_incoming_characters(request_body, CharacterRequestType.update)
     except Exception as e:
+        print(f"Error handling incoming characters: {e}")
         return json({"message": str(e)}, status=500)
 
     return json({"message": "success"})
