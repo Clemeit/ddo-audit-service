@@ -24,9 +24,9 @@ class QuestXP(BaseModel):
 
 
 class Quest(BaseModel):
-    id: str
-    alt_id: Optional[str] = None
-    area_id: Optional[str] = None
+    id: int
+    alt_id: Optional[int] = None
+    area_id: Optional[int] = None
     name: Optional[str] = None
     level: Optional[QuestLevel] = None
     xp: Optional[QuestXP] = None

@@ -178,91 +178,94 @@ def add_activity_to_lfms_for_server(
     current_lfm_ids = set(current_lfms.keys())
     current_lfms_with_activity: dict[int, Lfm] = {}
     for lfm_id in current_lfm_ids:
+        try:
+            previous_lfm = previous_lfms[lfm_id] if lfm_id in previous_lfms else None
+            current_lfm = current_lfms[lfm_id]
 
-        previous_lfm = previous_lfms[lfm_id] if lfm_id in previous_lfms else None
-        current_lfm = current_lfms[lfm_id]
+            old_lfm_activity: list[LfmActivity] = []
+            new_activity_events_list: list[LfmActivityEvent] = []
 
-        old_lfm_activity: list[LfmActivity] = []
-        new_activity_events_list: list[LfmActivityEvent] = []
+            is_lfm_new = False
 
-        is_lfm_new = False
+            # lfms that were just posted:
+            if lfm_id not in previous_lfm_ids:
+                new_activity_events_list.append(
+                    LfmActivityEvent(tag=LfmActivityType.posted)
+                )
+                is_lfm_new = True  # no need to check for other updates
 
-        # lfms that were just posted:
-        if lfm_id not in previous_lfm_ids:
-            new_activity_events_list.append(
-                LfmActivityEvent(tag=LfmActivityType.posted)
+            if not is_lfm_new:
+                # carry over activity from previous lfms data
+                if previous_lfms[lfm_id].activity:
+                    old_lfm_activity = previous_lfms[lfm_id].activity
+
+                # quest updated:
+                # old_quest_id = previous_lfm.quest_id
+                # new_quest_id = 0
+                # if previous_lfm.quest_id != None:
+                #     old_quest_id = previous_lfm.quest_id
+                # if current_lfm.quest_id != None:
+                #     new_quest_id = current_lfm.quest_id
+                if previous_lfm.quest_id != current_lfm.quest_id:
+                    new_activity_events_list.append(
+                        LfmActivityEvent(tag=LfmActivityType.quest, data=str(current_lfm.quest_id or 0))
+                    )
+
+                # comment updated:
+                if previous_lfm.comment != current_lfm.comment:
+                    new_activity_events_list.append(
+                        LfmActivityEvent(
+                            tag=LfmActivityType.comment, data=current_lfm.comment
+                        )
+                    )
+
+                # members left or joined:
+                old_member_ids = set([member.id for member in previous_lfm.members])
+                new_member_ids = set([member.id for member in current_lfm.members])
+                members_left = old_member_ids - new_member_ids
+                members_joined = new_member_ids - old_member_ids
+                # TODO: nested loops, should be optimized
+                for member_id in members_left:
+                    # get the name of the member that left
+                    member_name = "Unknown"
+                    for member in previous_lfm.members:
+                        if member.id == member_id:
+                            member_name = member.name
+                            break
+                    new_activity_events_list.append(
+                        LfmActivityEvent(
+                            tag=LfmActivityType.member_left,
+                            data=member_name,
+                        )
+                    )
+                # TODO: nested loops, should be optimized
+                for member_id in members_joined:
+                    # get the name of the member that left
+                    member_name = "Unknown"
+                    for member in current_lfm.members:
+                        if member.id == member_id:
+                            member_name = member.name
+                            break
+                    new_activity_events_list.append(
+                        LfmActivityEvent(
+                            tag=LfmActivityType.member_joined,
+                            data=member_name,
+                        )
+                    )
+
+            # comine the old and new activity
+            new_lfm_activity = LfmActivity(
+                timestamp=current_lfm.last_update, events=new_activity_events_list
             )
-            is_lfm_new = True  # no need to check for other updates
-
-        if not is_lfm_new:
-            # carry over activity from previous lfms data
-            if previous_lfms[lfm_id].activity:
-                old_lfm_activity = previous_lfms[lfm_id].activity
-
-            # quest updated:
-            old_quest_id = ""
-            new_quest_id = ""
-            if previous_lfm.quest_id:
-                old_quest_id = previous_lfm.quest_id
-            if current_lfm.quest_id:
-                new_quest_id = current_lfm.quest_id
-            if old_quest_id != new_quest_id:
-                new_activity_events_list.append(
-                    LfmActivityEvent(tag=LfmActivityType.quest, data=new_quest_id)
-                )
-
-            # comment updated:
-            if previous_lfm.comment != current_lfm.comment:
-                new_activity_events_list.append(
-                    LfmActivityEvent(
-                        tag=LfmActivityType.comment, data=current_lfm.comment
-                    )
-                )
-
-            # members left or joined:
-            old_member_ids = set([member.id for member in previous_lfm.members])
-            new_member_ids = set([member.id for member in current_lfm.members])
-            members_left = old_member_ids - new_member_ids
-            members_joined = new_member_ids - old_member_ids
-            # TODO: nested loops, should be optimized
-            for member_id in members_left:
-                # get the name of the member that left
-                member_name = "Unknown"
-                for member in previous_lfm.members:
-                    if member.id == member_id:
-                        member_name = member.name
-                        break
-                new_activity_events_list.append(
-                    LfmActivityEvent(
-                        tag=LfmActivityType.member_left,
-                        data=member_name,
-                    )
-                )
-            # TODO: nested loops, should be optimized
-            for member_id in members_joined:
-                # get the name of the member that left
-                member_name = "Unknown"
-                for member in current_lfm.members:
-                    if member.id == member_id:
-                        member_name = member.name
-                        break
-                new_activity_events_list.append(
-                    LfmActivityEvent(
-                        tag=LfmActivityType.member_joined,
-                        data=member_name,
-                    )
-                )
-
-        # comine the old and new activity
-        new_lfm_activity = LfmActivity(
-            timestamp=current_lfm.last_update, events=new_activity_events_list
-        )
-        aggregate_activity = old_lfm_activity + (
-            [new_lfm_activity] if new_activity_events_list else []
-        )
-        current_lfms_with_activity[lfm_id] = Lfm(
-            **current_lfm.model_dump(exclude={"activity"}), activity=aggregate_activity
-        )
+            aggregate_activity = old_lfm_activity + (
+                [new_lfm_activity] if new_activity_events_list else []
+            )
+            current_lfms_with_activity[lfm_id] = Lfm(
+                **current_lfm.model_dump(exclude={"activity"}), activity=aggregate_activity
+            )
+        except Exception as e:
+            print(f"Error processing LFM ID {lfm_id} (skipping): {e}")
+            pass
 
     return current_lfms_with_activity
 
