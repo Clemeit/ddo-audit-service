@@ -91,6 +91,18 @@ def get_character_by_character_id(character_id: int) -> Character:
             return server_characters.characters.get(character_id)
 
 
+def get_online_character_ids_by_server_name(server_name: str) -> list[int]:
+    """
+    Get a list of online character IDs for a given server name.
+    """
+    server_name = server_name.lower()
+    with get_redis_client() as client:
+        server_character_keys = client.json().objkeys(
+            f"{server_name}:characters", "characters"
+        )
+        return [int(key) for key in server_character_keys if key.isdigit()]
+
+
 def get_characters_by_character_ids(
     character_ids: list[int],
 ) -> list[Character]:

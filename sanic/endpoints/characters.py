@@ -65,6 +65,31 @@ async def get_online_character_summary(request):
     return json(response)
 
 
+@character_blueprint.get("/ids")
+async def get_online_character_ids(request):
+    """
+    Method: GET
+
+    Route: /characters/ids
+
+    Description: Gets a list of all online character IDs from the Redis cache.
+    This is used to quickly check if a character is online.
+    """
+    try:
+        response = {}
+        for server_name in SERVER_NAMES_LOWERCASE:
+            online_character_ids = redis_client.get_online_character_ids_by_server_name(
+                server_name
+            )
+            response[server_name] = {
+                "online_character_ids": online_character_ids,
+            }
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json(response)
+
+
 @character_blueprint.get("/<server_name:str>")
 async def get_characters_by_server(request, server_name):
     """
