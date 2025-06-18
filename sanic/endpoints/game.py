@@ -100,7 +100,7 @@ async def patch_game_info(request: Request):
 
     # update in redis cache
     try:
-        redis_client.set_game_info(body)
+        redis_client.merge_game_info(body)
     except Exception as e:
         return json({"message": str(e)}, status=500)
 

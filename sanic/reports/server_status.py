@@ -112,7 +112,7 @@ class ServerStatusUpdater:
             worlds = self.query_worlds()
             game_info = self.update_worlds(worlds)
 
-            redis_client.set_game_info(game_info)
+            redis_client.merge_game_info(game_info)
             server_status_heartbeat()
         except Exception as e:
             print(f"Failed to update server status: {e}")

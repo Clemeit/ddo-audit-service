@@ -314,9 +314,7 @@ def handle_incoming_characters(
                 server_name, deleted_ids_on_server
             )
         except Exception as e:
-            print(
-                f"Error persisting deleted characters for server {server_name}: {e}"
-            )
+            print(f"Error persisting deleted characters for server {server_name}: {e}")
         if type == CharacterRequestType.set:
             redis_client.set_characters_by_server_name(server_name, data)
         elif type == CharacterRequestType.update:
@@ -328,6 +326,26 @@ def handle_incoming_characters(
     # persist all of the character activity events to the database for
     # all servers at the same time using pipelining
     persist_character_activity_to_db(all_servers_activity)
+
+    # update the game info in the cache
+    # TODO: I don't love having this here because the LFM endpoints also contain
+    # last update timestamps.
+    try:
+        game_info = redis_client.get_game_info_as_class()
+        print(game_info)
+        if not game_info:
+            print("Game info not found in cache")
+            return
+        for (
+            server_name,
+            last_update_timestamp,
+        ) in request_body.last_update_timestamps.items():
+            game_info.servers[server_name].last_data_fetch = last_update_timestamp
+        print(game_info)
+        redis_client.merge_game_info(game_info)
+    except Exception as e:
+        print(f"Error updating game info in cache: {e}")
+        raise e
 
 
 def persist_deleted_characters_to_db_by_server_name_and_ids(

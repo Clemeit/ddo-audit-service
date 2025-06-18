@@ -185,7 +185,7 @@ def update_characters_by_server_name(
     server_name: str, server_characters: ServerCharactersData
 ):
     server_name = server_name.lower()
-    
+
     with get_redis_client() as client:
         client.json().merge(
             name=f"{server_name}:characters",
@@ -257,7 +257,31 @@ def get_server_info_by_server_name_as_dict(server_name: str) -> dict:
     return get_redis_client().json().get("game_info", f"servers.{server_name}")
 
 
-def set_game_info(game_info: GameInfo):
+def get_game_info_as_class() -> GameInfo:
+    """
+    Get the game info from the Redis cache as a GameInfo class instance.
+    """
+    game_info_dict = get_game_info_as_dict()
+    if not game_info_dict:
+        return GameInfo(servers={})
+    return GameInfo(**game_info_dict)
+
+
+def get_game_info_as_dict() -> dict:
+    """
+    Get the game info from the Redis cache as a dictionary.
+    """
+    game_info_dict = get_redis_client().json().get("game_info")
+    if not game_info_dict:
+        return {}
+    return game_info_dict
+
+
+def merge_game_info(game_info: GameInfo):
+    """
+    Merge the game info into the Redis cache. This will update the existing game info
+    or create it if it doesn't exist.
+    """
     get_redis_client().json().merge(
         "game_info", path="$", obj=game_info.model_dump(exclude_unset=True)
     )
