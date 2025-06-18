@@ -120,13 +120,6 @@ class ServerStatusUpdater:
     def save_game_info(self):
         try:
             game_info = redis_client.get_all_server_info_as_class()
-            for server_name in SERVER_NAMES_LOWERCASE:
-                character_count = redis_client.get_character_count_by_server_name(
-                    server_name
-                )
-                lfm_count = redis_client.get_lfm_count_by_server_name(server_name)
-                game_info[server_name].character_count = character_count
-                game_info[server_name].lfm_count = lfm_count
             postgres_client.add_game_info(game_info)
         except Exception as e:
             print(f"Failed to save game info: {e}")

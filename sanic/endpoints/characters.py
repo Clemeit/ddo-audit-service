@@ -8,7 +8,7 @@ from constants.activity import CharacterActivityType
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.api import CharacterRequestApiModel, CharacterRequestType
 from models.character import Character, CharacterActivity
-from models.redis import ServerCharactersData
+from models.redis import ServerCharactersData, GameInfo, ServerInfo
 from utils.validation import is_server_name_valid, is_character_name_valid
 
 from sanic import Blueprint
@@ -326,26 +326,6 @@ def handle_incoming_characters(
     # persist all of the character activity events to the database for
     # all servers at the same time using pipelining
     persist_character_activity_to_db(all_servers_activity)
-
-    # update the game info in the cache
-    # TODO: I don't love having this here because the LFM endpoints also contain
-    # last update timestamps.
-    try:
-        game_info = redis_client.get_game_info_as_class()
-        print(game_info)
-        if not game_info:
-            print("Game info not found in cache")
-            return
-        for (
-            server_name,
-            last_update_timestamp,
-        ) in request_body.last_update_timestamps.items():
-            game_info.servers[server_name].last_data_fetch = last_update_timestamp
-        print(game_info)
-        redis_client.merge_game_info(game_info)
-    except Exception as e:
-        print(f"Error updating game info in cache: {e}")
-        raise e
 
 
 def persist_deleted_characters_to_db_by_server_name_and_ids(

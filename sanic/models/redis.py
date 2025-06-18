@@ -14,7 +14,8 @@ class ServerInfo(BaseModel):
     index: Optional[int] = None
     created: Optional[str] = None
     last_status_check: Optional[str] = None
-    last_data_fetch: Optional[str] = None
+    last_character_data_fetch: Optional[str] = None
+    last_lfm_data_fetch: Optional[str] = None
     creation_timestamp: Optional[str] = None
     is_online: Optional[bool] = None
     character_count: Optional[int] = None
