@@ -4,6 +4,8 @@ from constants.server import SERVER_NAMES_LOWERCASE
 from models.character import Character
 from models.lfm import Lfm
 from pydantic import BaseModel
+from models.area import Area
+from enum import Enum
 
 
 class ServerInfo(BaseModel):
@@ -39,7 +41,6 @@ class ServerCharactersData(BaseModel):
     """
 
     characters: dict[int, Character] = {}
-    last_update: Optional[str] = None
 
 
 class ServerLFMsData(BaseModel):
@@ -48,15 +49,53 @@ class ServerLFMsData(BaseModel):
     """
 
     lfms: dict[int, Lfm] = {}
-    last_update: Optional[str] = None
 
 
-CACHE_MODEL = {
-    "game_info": GameInfo(),
+# CACHE_MODEL = {
+#     "game_info": GameInfo(),
+#     **{
+#         f"{server}:characters": ServerCharactersData()
+#         for server in SERVER_NAMES_LOWERCASE
+#     },
+#     **{f"{server}:lfms": ServerLFMsData() for server in SERVER_NAMES_LOWERCASE},
+#     "verification_challenges": {},
+# }
+
+
+class ValidAreaIdsModel(BaseModel):
+    valid_area_ids: Optional[list[int]] = None
+    timestamp: Optional[float] = None
+
+
+class ValidAreasModel(BaseModel):
+    valid_areas: Optional[list[Area]] = None
+    timestamp: Optional[float] = None
+
+
+class RedisKeys(Enum):
+    GAME_INFO = "game_info"
+    VERIFICATION_CHALLENGES = "verification_challenges"
+    VALID_AREA_IDS = "valid_area_ids"
+    VALID_AREAS = "valid_areas"
+    CHARACTERS = "{server}:characters"
+    LFMS = "{server}:lfms"
+
+
+class VerificationChallengesModel(BaseModel):
+    challenges: Optional[Dict[int, str]] = None
+
+
+REDIS_KEY_TYPE_MAPPING: Dict[RedisKeys, type] = {
+    RedisKeys.GAME_INFO: GameInfo,
+    RedisKeys.VERIFICATION_CHALLENGES: VerificationChallengesModel,
+    RedisKeys.VALID_AREA_IDS: ValidAreaIdsModel,
+    RedisKeys.VALID_AREAS: ValidAreasModel,
     **{
-        f"{server}:characters": ServerCharactersData()
+        RedisKeys.CHARACTERS.value.format(server=server): ServerCharactersData
         for server in SERVER_NAMES_LOWERCASE
     },
-    **{f"{server}:lfms": ServerLFMsData() for server in SERVER_NAMES_LOWERCASE},
-    "verification_challenges": {},
+    **{
+        RedisKeys.LFMS.value.format(server=server): ServerLFMsData
+        for server in SERVER_NAMES_LOWERCASE
+    },
 }

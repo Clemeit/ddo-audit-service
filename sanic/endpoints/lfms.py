@@ -13,6 +13,8 @@ from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
 
+from time import time
+
 lfm_blueprint = Blueprint("lfm", url_prefix="/lfms", version=1)
 
 
@@ -143,15 +145,10 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
             lfms={},
         )
 
-    # update last_update timestamp for each server
-    for server_name, value in request_body.last_update_timestamps.items():
-        value: str
-        all_server_lfms[server_name].last_update = value
-
     # organize lfms by server
     for lfm in request_body.lfms:
         server_name = lfm.server_name.lower()
-        lfm.last_update = all_server_lfms[server_name].last_update
+        lfm.last_update = time()
         all_server_lfms[server_name].lfms[lfm.leader.id] = lfm
 
     for server_name, data in all_server_lfms.items():
@@ -210,7 +207,10 @@ def add_activity_to_lfms_for_server(
                 #     new_quest_id = current_lfm.quest_id
                 if previous_lfm.quest_id != current_lfm.quest_id:
                     new_activity_events_list.append(
-                        LfmActivityEvent(tag=LfmActivityType.quest, data=str(current_lfm.quest_id or 0))
+                        LfmActivityEvent(
+                            tag=LfmActivityType.quest,
+                            data=str(current_lfm.quest_id or 0),
+                        )
                     )
 
                 # comment updated:
@@ -263,7 +263,8 @@ def add_activity_to_lfms_for_server(
                 [new_lfm_activity] if new_activity_events_list else []
             )
             current_lfms_with_activity[lfm_id] = Lfm(
-                **current_lfm.model_dump(exclude={"activity"}), activity=aggregate_activity
+                **current_lfm.model_dump(exclude={"activity"}),
+                activity=aggregate_activity,
             )
         except Exception as e:
             print(f"Error processing LFM ID {lfm_id} (skipping): {e}")

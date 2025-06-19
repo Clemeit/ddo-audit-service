@@ -1,6 +1,7 @@
 import services.postgres as postgres_client
 import services.redis as redis_client
 
+area_cache_lifetime = 60 * 60 * 24 * 7  # 7 days in seconds
 
 def get_valid_area_ids() -> tuple[list[int], str, str]:
     """

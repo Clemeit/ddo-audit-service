@@ -8,15 +8,24 @@ import random
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.character import Character
 from models.redis import (
-    CACHE_MODEL,
     GameInfo,
     ServerCharactersData,
     ServerLFMsData,
     ServerInfo,
+    ValidAreaIdsModel,
     ServerInfoDict,
+    ValidAreasModel,
+    RedisKeys,
+    REDIS_KEY_TYPE_MAPPING,
 )
 from time import time
 from constants.redis import VALID_AREA_CACHE_LIFETIME, VALID_QUEST_CACHE_LIFETIME
+from models.area import Area
+
+import json
+from typing import Optional
+
+from pydantic import BaseModel
 
 import redis
 
@@ -40,15 +49,100 @@ class RedisSingleton:
         self.client.flushall()
 
         # we want to initialize the cache with keys
-        for key, value in CACHE_MODEL.items():
+        for key, value in REDIS_KEY_TYPE_MAPPING.items():
+            key = key.value if isinstance(key, RedisKeys) else key
+
+            # value is a class type, so we need to instantiate it if it's a BaseModel
+            if isinstance(value, type) and issubclass(value, BaseModel):
+                value = value()
+
             # model_dump if inherits from BaseModel, else just value
             if hasattr(value, "model_dump"):
                 self.client.json().set(key, path="$", obj=value.model_dump())
+            elif isinstance(value, dict):
+                self.client.json().set(key, path="$", obj=json.dumps(value))
             else:
                 self.client.json().set(key, path="$", obj=value)
 
     def close(self):
         self.client.close()
+
+    def get_as_class(self, key: RedisKeys, server: Optional[str] = None):
+        """
+        Retrieve and deserialize data from Redis based on the expected type.
+
+        Args:
+            key: The Redis key (as an Enum).
+            server: Optional server name for server-specific keys.
+
+        Returns:
+            The deserialized data in the expected type, or None if the key doesn't exist.
+        """
+        try:
+            # Handle server-specific keys
+            if server and key in {RedisKeys.CHARACTERS, RedisKeys.LFMS}:
+                key = key.value.format(server=server)
+
+            # Get the expected type for the key
+            expected_type = REDIS_KEY_TYPE_MAPPING.get(key)
+            if not expected_type:
+                raise ValueError(f"Key '{key}' is not in the Redis key type mapping.")
+
+            # Retrieve the raw data from Redis
+            raw_data = self.client.json().get(key)
+            if raw_data is None:
+                return None
+
+            # Deserialize the data based on the expected type
+            if issubclass(expected_type, BaseModel):
+                return expected_type.model_validate(raw_data)  # TODO: test
+            elif expected_type == dict:
+                return json.loads(raw_data)
+            else:
+                return raw_data
+        except Exception as e:
+            print(
+                f"Error retrieving data from Redis. key: {key}, expected_type: {expected_type}, message: {e}"
+            )
+            return None
+
+    def get_as_dict(self, key: RedisKeys, server: Optional[str] = None):
+        """
+        Retrieve and deserialize data from Redis as a dictionary.
+
+        Args:
+            key: The Redis key (as an Enum).
+            server: Optional server name for server-specific keys.
+
+        Returns:
+            The deserialized data as a dictionary, or None if the key doesn't exist.
+        """
+        try:
+            # Handle server-specific keys
+            if server and key in {RedisKeys.CHARACTERS, RedisKeys.LFMS}:
+                key = key.value.format(server=server)
+
+            # Retrieve the raw data from Redis
+            raw_data = self.client.json().get(key)
+
+            # Validate and serialize as needed
+            if raw_data is None:
+                return None
+            if isinstance(raw_data, dict):
+                return raw_data
+            try:
+                return json.loads(raw_data)
+            except json.JSONDecodeError:
+                return raw_data
+        except Exception as e:
+            print(f"Error retrieving data from Redis. key: {key}, message: {e}")
+            return None
+
+    def get_obj_len(self, key: RedisKeys, path: str):
+        obj_dict = self.get_as_dict(key)
+        if obj_dict is None:
+            return 0
+        return len(obj_dict.get(path, {}))
 
     def get_client(self):
         return self.client
@@ -59,6 +153,10 @@ redis_singleton = RedisSingleton()
 
 def get_redis_client():
     return redis_singleton.get_client()
+
+
+def get_redis_client_NEW():
+    return redis_singleton
 
 
 def initialize_redis():
@@ -76,12 +174,12 @@ def get_characters_by_server_name_as_class(server_name: str) -> ServerCharacters
 
 def get_characters_by_server_name_as_dict(server_name: str) -> dict:
     server_name = server_name.lower()
-    return get_redis_client().json().get(f"{server_name.lower()}:characters")
+    return get_redis_client_NEW().get_as_dict(RedisKeys.CHARACTERS, server_name)
 
 
 def get_character_count_by_server_name(server_name: str) -> int:
     server_name = server_name.lower()
-    return get_redis_client().json().objlen(f"{server_name}:characters", "characters")
+    return get_redis_client_NEW().get_obj_len(f"{server_name}:characters", "characters")
 
 
 def get_character_by_character_id(character_id: int) -> Character:
@@ -294,6 +392,7 @@ def merge_game_info(game_info: GameInfo):
     Merge the game info into the Redis cache. This will update the existing game info
     or create it if it doesn't exist.
     """
+    get_redis_client().get
     get_redis_client().json().merge(
         "game_info", path="$", obj=game_info.model_dump(exclude_unset=True)
     )
@@ -332,11 +431,13 @@ def get_valid_area_ids() -> tuple[list[int], str]:
     Get all area IDs from the cache. If the cache is expired, clear the cache.
     """
     try:
-        area_ids_entry: dict = get_redis_client().json().get("valid_area_ids")
+        area_ids_entry = ValidAreaIdsModel.model_validate(
+            get_redis_client().json().get("known_area_ids")
+        )
         if not area_ids_entry:
             return ([], None)
-        area_ids = area_ids_entry.get("valid_area_ids", [])
-        timestamp = area_ids_entry.get("timestamp", 0)
+        area_ids = area_ids_entry.valid_area_ids or []
+        timestamp = area_ids_entry.timestamp or 0
         if time() - timestamp > VALID_AREA_CACHE_LIFETIME:
             # Cache is expired, clear it
             area_ids = []
@@ -351,23 +452,27 @@ def set_valid_area_ids(area_ids: list[int]):
     """
     Set the valid area IDs in the cache. It also sets the timestamp for cache expiration.
     """
-    valid_area_ids_entry = {
-        "valid_area_ids": area_ids,
-        "timestamp": time(),
-    }
-    get_redis_client().json().set("valid_area_ids", path="$", obj=valid_area_ids_entry)
+    valid_area_ids_entry = ValidAreaIdsModel(
+        valid_area_ids=area_ids,
+        timestamp=time(),
+    )
+    get_redis_client().json().set(
+        "known_area_ids", path="$", obj=valid_area_ids_entry.model_dump()
+    )
 
 
-def get_all_areas() -> tuple[list[dict], str]:
+def get_all_areas() -> tuple[list[Area], str]:
     """
     Get all areas from the cache. If the cache is expired, clear the cache.
     """
     try:
-        areas_entry: dict = get_redis_client().json().get("areas")
+        areas_entry = ValidAreasModel.model_validate(
+            get_redis_client().json().get("known_areas")
+        )
         if not areas_entry:
             return ([], None)
-        areas: list[dict] = areas_entry.get("areas", [])
-        timestamp = areas_entry.get("timestamp", 0)
+        areas: list[Area] = areas_entry.valid_areas or []
+        timestamp = areas_entry.timestamp or 0
         if time() - timestamp > VALID_AREA_CACHE_LIFETIME:
             # Cache is expired, clear it
             areas = []
@@ -378,15 +483,15 @@ def get_all_areas() -> tuple[list[dict], str]:
     return (areas, timestamp)
 
 
-def set_all_areas(areas: list[dict]):
+def set_all_areas(areas: list[Area]):
     """
     Set the areas in the cache. It also sets the timestamp for cache expiration.
     """
-    areas_entry = {
-        "areas": areas,
-        "timestamp": time(),
-    }
-    get_redis_client().json().set("areas", path="$", obj=areas_entry)
+    areas_entry = ValidAreasModel(
+        valid_areas=areas,
+        timestamp=time(),
+    )
+    get_redis_client().json().set("known_areas", path="$", obj=areas_entry.model_dump())
 
 
 def get_all_quests() -> tuple[list[dict], str]:

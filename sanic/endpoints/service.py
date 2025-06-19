@@ -3,6 +3,7 @@ Service endpoints.
 """
 
 import services.postgres as postgres_client
+import services.redis as redis_client
 
 from sanic import Blueprint
 from sanic.response import json
@@ -67,8 +68,20 @@ async def get_page_message_by_page(request, page_name: str):
     return json({"data": [page_message.model_dump() for page_message in page_messages]})
 
 
+@service_blueprint.get("/test")
+async def test(request):
+    try:
+        response = redis_client.get_character_count_by_server_name("thelanis")
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json(response)
+
+
 # ===================================
-# ===== Client-facing endpoints =====
+
+
+# ======= Internal endpoints ========
 @service_blueprint.post("/news")
 async def post_news(request: Request):
     """

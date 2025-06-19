@@ -15,6 +15,8 @@ from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
 
+from time import time
+
 character_blueprint = Blueprint("character", url_prefix="/characters", version=1)
 
 
@@ -292,17 +294,13 @@ def handle_incoming_characters(
         )
     all_servers_activity: dict[str, list[CharacterActivity]] = {}
 
-    # update last_update timestamp for each server
-    for server_name, value in request_body.last_update_timestamps.items():
-        all_server_characters[server_name].last_update = value
-
     # organize characters by server
     for character in request_body.characters:
         server_name = character.server_name.lower()
 
         # the last time the player was seen was the last time data was
         # pulled from the game client
-        character.last_update = all_server_characters[server_name].last_update
+        character.last_update = time()
 
         all_server_characters[server_name].characters[character.id] = character
 
