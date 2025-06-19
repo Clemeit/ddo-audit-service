@@ -466,7 +466,7 @@ def build_character_from_row(row: tuple) -> Character:
 
 
 def build_news_from_row(row: tuple) -> News:
-    return News(id=row[0], message=row[1])
+    return News(id=row[0], date=row[1], message=row[2])
 
 
 def build_page_message_from_row(row: tuple) -> PageMessage:

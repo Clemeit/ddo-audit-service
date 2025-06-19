@@ -101,6 +101,7 @@ ALTER TABLE IF EXISTS public."character_activity"
 CREATE TABLE IF NOT EXISTS public."news"
 (
     id serial NOT NULL,
+    date timestamp with time zone NOT NULL,
     message text NOT NULL,
     PRIMARY KEY (id)
 )

@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 class News(BaseModel):
     id: int
+    date: str
     message: str
 
 
