@@ -1,15 +1,16 @@
 from pydantic import BaseModel
+from typing import Optional
 
 
 class News(BaseModel):
-    id: int
-    date: str
+    id: Optional[int] = None
+    date: Optional[str] = None
     message: str
 
 
 class PageMessage(BaseModel):
-    id: int
+    id: Optional[int] = None
     message: str
-    affected_pages: list[str]
-    start_date: str
-    end_date: str
+    affected_pages: Optional[list[str]] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None

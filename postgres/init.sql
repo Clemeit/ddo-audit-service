@@ -101,7 +101,7 @@ ALTER TABLE IF EXISTS public."character_activity"
 CREATE TABLE IF NOT EXISTS public."news"
 (
     id serial NOT NULL,
-    date timestamp with time zone NOT NULL,
+    date timestamp with time zone NOT NULL DEFAULT current_timestamp,
     message text NOT NULL,
     PRIMARY KEY (id)
 )
@@ -116,8 +116,8 @@ CREATE TABLE IF NOT EXISTS public."page_messages"
     id serial NOT NULL,
     message text NOT NULL,
     affected_pages jsonb NOT NULL,
-    start_date timestamp with time zone NOT NULL,
-    end_date timestamp with time zone NOT NULL,
+    start_date timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    end_date timestamp with time zone NOT NULL DEFAULT current_timestamp + INTERVAL '1 day',
     PRIMARY KEY (id)
 )
 

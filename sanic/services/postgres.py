@@ -417,14 +417,54 @@ def get_news() -> list[News]:
             return [build_news_from_row(news_item) for news_item in news]
 
 
+def add_news(news: News) -> News:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                if news.date is None:
+                    cursor.execute(
+                        """
+                        INSERT INTO public.news (message)
+                        VALUES (%s)
+                        RETURNING id, date
+                        """,
+                        (news.message,),
+                    )
+                    result = cursor.fetchone()
+                    news_id = result[0]
+                    news_date = (
+                        result[1].isoformat()
+                        if isinstance(result[1], datetime)
+                        else result[1]
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        INSERT INTO public.news (date, message)
+                        VALUES (%s, %s)
+                        RETURNING id
+                        """,
+                        (news.date, news.message),
+                    )
+                    news_id = cursor.fetchone()[0]
+                    news_date = news.date
+                conn.commit()
+                return News(id=news_id, date=news_date, message=news.message)
+            except Exception as e:
+                print(f"Failed to add news to the database: {e}")
+                conn.rollback()
+                raise e
+
+
 def get_page_messages(page_name: Optional[str] = None) -> list[PageMessage]:
+    # TODO: Add support for page_name because right now it doesn't work
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             if page_name:
                 cursor.execute(
                     """
                     SELECT * FROM public.page_messages
-                    WHERE page_name = ANY(%s)
+                    WHERE affected_pages = ANY(%s)
                     """,
                     page_name,
                 )
@@ -440,11 +480,68 @@ def get_page_messages(page_name: Optional[str] = None) -> list[PageMessage]:
             filtered_messages = [
                 message
                 for message in messages
-                if message.start_date.timestamp()
+                if datetime.fromisoformat(message.start_date).timestamp()
                 < time()
-                < message.end_date.timestamp()
+                < datetime.fromisoformat(message.end_date).timestamp()
             ]
             return filtered_messages
+
+
+def add_page_message(page_message: PageMessage) -> PageMessage:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                # Build dynamic query based on which fields are None
+                fields = ["message", "affected_pages"]
+                values = [page_message.message, json.dumps(page_message.affected_pages)]
+                placeholders = ["%s", "%s"]
+
+                if page_message.start_date is not None:
+                    fields.append("start_date")
+                    values.append(page_message.start_date)
+                    placeholders.append("%s")
+
+                if page_message.end_date is not None:
+                    fields.append("end_date")
+                    values.append(page_message.end_date)
+                    placeholders.append("%s")
+
+                fields_str = ", ".join(fields)
+                placeholders_str = ", ".join(placeholders)
+
+                cursor.execute(
+                    f"""
+                    INSERT INTO public.page_messages ({fields_str})
+                    VALUES ({placeholders_str})
+                    RETURNING id, start_date, end_date
+                    """,
+                    values,
+                )
+                result = cursor.fetchone()
+                message_id = result[0]
+                returned_start_date = (
+                    result[1].isoformat()
+                    if isinstance(result[1], datetime)
+                    else result[1]
+                )
+                returned_end_date = (
+                    result[2].isoformat()
+                    if isinstance(result[2], datetime)
+                    else result[2]
+                )
+
+                conn.commit()
+                return PageMessage(
+                    id=message_id,
+                    message=page_message.message,
+                    affected_pages=page_message.affected_pages,
+                    start_date=returned_start_date,
+                    end_date=returned_end_date,
+                )
+            except Exception as e:
+                print(f"Failed to add page message to the database: {e}")
+                conn.rollback()
+                raise e
 
 
 def build_character_from_row(row: tuple) -> Character:
@@ -466,7 +563,11 @@ def build_character_from_row(row: tuple) -> Character:
 
 
 def build_news_from_row(row: tuple) -> News:
-    return News(id=row[0], date=row[1], message=row[2])
+    return News(
+        id=row[0],
+        date=row[1].isoformat() if isinstance(row[1], datetime) else "",
+        message=row[2],
+    )
 
 
 def build_page_message_from_row(row: tuple) -> PageMessage:
