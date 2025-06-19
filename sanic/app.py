@@ -36,19 +36,20 @@ app.blueprint(
 )
 
 # Set up all of the updaters
-start_game_info_polling, stop_game_info_polling = get_game_info_scheduler()
+# This is now handled by Collections
+# start_game_info_polling, stop_game_info_polling = get_game_info_scheduler()
 
 
 @app.listener("before_server_start")
 async def set_up_connections(app, loop):
     initialize_redis()
-    start_game_info_polling()
+    # start_game_info_polling()
 
 
 @app.listener("after_server_stop")
 async def close_connections(app, loop):
     close_redis()
-    stop_game_info_polling()
+    # stop_game_info_polling()
 
 
 # Middleware to check API key for protected endpoints
