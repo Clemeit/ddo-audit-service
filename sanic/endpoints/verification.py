@@ -9,6 +9,9 @@ import uuid
 from sanic import Blueprint
 from sanic.response import json
 
+from models.verification import VerificationChallengeApiResponse
+from business.verification import get_challenge_word_for_character_by_character_id
+
 verification_blueprint = Blueprint(
     "verification", url_prefix="/verification", version=1
 )
@@ -30,8 +33,8 @@ async def get_verification_challenge(request, character_id: int):
         challenge_passed = False
         access_token = ""
 
-        challenge_word = redis_client.get_verification_challenge(str(character_id))
-        character = redis_client.get_character_by_character_id(character_id)
+        challenge_word = get_challenge_word_for_character_by_character_id(character_id)
+        character = redis_client.get_character_by_id(character_id)
         if character:
             is_online = character.is_online
             is_anonymous = character.is_anonymous
@@ -50,15 +53,12 @@ async def get_verification_challenge(request, character_id: int):
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json(
-        {
-            "data": {
-                "challenge_word": challenge_word,
-                "is_online": is_online,
-                "is_anonymous": is_anonymous,
-                "challenge_word_match": challenge_word_match,
-                "challenge_passed": challenge_passed,
-                "access_token": access_token,
-            }
-        }
+    response = VerificationChallengeApiResponse(
+        challenge_word=challenge_word,
+        is_online=is_online,
+        is_anonymous=is_anonymous,
+        challenge_word_match=challenge_word_match,
+        challenge_passed=challenge_passed,
+        access_token=access_token,
     )
+    return json({"data": response.model_dump()})

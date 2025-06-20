@@ -31,15 +31,9 @@ async def get_all_characters(request):
     Description: Get all characters from all servers from the Redis cache.
     """
     try:
-        response = {}
-        for server_name in SERVER_NAMES_LOWERCASE:
-            response[server_name] = redis_client.get_characters_by_server_name_as_class(
-                server_name
-            ).model_dump()
+        return json({"data": redis_client.get_all_characters_as_dict()})
     except Exception as e:
         return json({"message": str(e)}, status=500)
-
-    return json(response)
 
 
 @character_blueprint.get("/summary")
@@ -53,18 +47,9 @@ async def get_online_character_summary(request):
     """
     # TODO: test this method
     try:
-        response = {}
-        for server_name in SERVER_NAMES_LOWERCASE:
-            character_count = redis_client.get_character_count_by_server_name(
-                server_name
-            )
-            response[server_name] = {
-                "character_count": character_count,
-            }
+        return json({"data": redis_client.get_all_character_counts()})
     except Exception as e:
         return json({"message": str(e)}, status=500)
-
-    return json(response)
 
 
 @character_blueprint.get("/ids")
@@ -78,22 +63,13 @@ async def get_online_character_ids(request):
     This is used to quickly check if a character is online.
     """
     try:
-        response = {}
-        for server_name in SERVER_NAMES_LOWERCASE:
-            online_character_ids = redis_client.get_online_character_ids_by_server_name(
-                server_name
-            )
-            response[server_name] = {
-                "online_character_ids": online_character_ids,
-            }
+        return json({"data": redis_client.get_all_character_ids()})
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json(response)
-
 
 @character_blueprint.get("/<server_name:str>")
-async def get_characters_by_server(request, server_name):
+async def get_characters_by_server(request, server_name: str):
     """
     Method: GET
 
@@ -105,18 +81,15 @@ async def get_characters_by_server(request, server_name):
         return json({"message": "Invalid server name"}, status=400)
 
     try:
-        server_characters = redis_client.get_characters_by_server_name_as_dict(
-            server_name
+        return json(
+            {"data": redis_client.get_characters_by_server_name_as_dict(server_name)}
         )
-        print("OUT HERE", server_characters)
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json(server_characters)
-
 
 @character_blueprint.get("/<character_id:int>")
-async def get_character_by_id(request, character_id):
+async def get_character_by_id(request, character_id: int):
     """
     Method: GET
 
@@ -125,19 +98,20 @@ async def get_character_by_id(request, character_id):
     Description: Get a specific character from either the Redis cache or the database.
     """
     source = "cache"
-    character = redis_client.get_character_by_character_id(character_id)
+    character = redis_client.get_character_by_id_as_dict(character_id)
     if character:
-        character.is_online = True
+        character["is_online"] = True
     else:
         source = "database"
-        character = postgres_client.get_character_by_id(character_id)
-        if character:
-            character.is_online = False
+        character_from_db = postgres_client.get_character_by_id(character_id)
+        if character_from_db:
+            character_from_db.is_online = False
+            character = character_from_db.model_dump()
 
     if not character:
         return json({"message": "Character not found"}, status=404)
 
-    return json({"data": character.model_dump(), "source": source})
+    return json({"data": character, "source": source})
 
 
 @character_blueprint.get("/ids/<character_ids:str>")
@@ -155,16 +129,16 @@ async def get_characters_by_ids(request, character_ids: str):
 
     try:
         character_ids_list = [int(id) for id in character_ids.split(",")]
-        discovered_characters: list[Character] = []
+        discovered_characters: dict[int, dict] = {}
         cached_character_ids: set[int] = set()
 
-        cached_characters = redis_client.get_characters_by_character_ids(
+        cached_characters = redis_client.get_characters_by_ids_as_dict(
             character_ids_list
         )
-        for character in cached_characters:
-            character.is_online = True
-            discovered_characters.append(character)
-            cached_character_ids.add(character.id)
+        for character_id, character in cached_characters.items():
+            character["is_online"] = True
+            discovered_characters[character_id] = character
+            cached_character_ids.add(character_id)
 
         if len(discovered_characters) < len(character_ids_list):
             remaining_ids = set(character_ids_list) - cached_character_ids

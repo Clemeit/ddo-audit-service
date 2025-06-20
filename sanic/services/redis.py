@@ -388,6 +388,25 @@ def get_character_by_id(character_id: int) -> Character | None:
     return None
 
 
+def get_characters_by_ids_as_dict(character_ids: int) -> dict[int, dict]:
+    """Get a dict of character id to character dict"""
+    characters: dict[int, dict] = {}
+    for server_name in SERVER_NAMES_LOWERCASE:
+        server_characters = get_characters_by_server_name_as_dict(server_name)
+        for character_id in character_ids:
+            if character_id in server_characters.keys():
+                characters[character_id] = server_characters[character_id]
+    return characters
+
+
+def get_characters_by_ids(character_id: int) -> dict[int, Character]:
+    """Get a dict of character id to character object"""
+    characters: dict[int, Character] = {}
+    for character_id, character in get_characters_by_ids_as_dict():
+        characters[character_id] = Character(**character)
+    return characters
+
+
 def get_characters_by_name_as_dict(character_name: str) -> dict[int, dict]:
     """Get all character dicts matching a character name"""
     character_name_lower = character_name.lower()
@@ -634,6 +653,24 @@ def set_page_messages(page_messages: list[PageMessage]):
 
 # ======== Page messages =========
 
+
+# === Verification challenges ====
+def get_challenge_for_character_by_character_id(character_id: int) -> str:
+    return (
+        get_redis_client().json().get(RedisKeys.VERIFICATION_CHALLENGES, character_id)
+    )
+
+
+def set_challenge_for_character_by_character_id(character_id: int, challenge_word: str):
+    get_redis_client().json().set(
+        RedisKeys.VERIFICATION_CHALLENGES,
+        path=character_id,
+        obj=challenge_word,
+        nx=True,
+    )
+
+
+# === Verification challenges ====
 
 ### verification challenge
 ## get
