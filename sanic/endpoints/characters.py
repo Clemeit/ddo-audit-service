@@ -131,7 +131,10 @@ async def get_characters_by_ids(request, character_ids: str):
         character_ids_list = [int(id) for id in character_ids.split(",")]
         discovered_characters: dict[int, dict] = {}
         cached_character_ids: set[int] = set()
-
+        # TODO: I left off here
+        # TODO: I left off here
+        # TODO: I left off here
+        # TODO: I left off here
         cached_characters = redis_client.get_characters_by_ids_as_dict(
             character_ids_list
         )
