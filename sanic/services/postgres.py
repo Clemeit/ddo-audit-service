@@ -12,7 +12,7 @@ from models.character import (
     CharacterActivitySummary,
 )
 from models.game import PopulationDataPoint, PopulationPointInTime
-from models.redis import GameInfo, ServerInfoDict
+from models.redis import ServerInfo, ServerInfoDict
 from models.service import News, PageMessage
 from psycopg2 import pool  # type: ignore
 from constants.activity import (
@@ -324,7 +324,7 @@ def get_game_population(
             for game_info in game_info_list:
                 try:
                     timestamp = game_info[0]
-                    data = GameInfo(**game_info[1])
+                    data = ServerInfo(**game_info[1])
                     population_data_points: list[dict[str, PopulationDataPoint]] = []
                     for server_name, server_info in data.servers.items():
                         character_count = 0

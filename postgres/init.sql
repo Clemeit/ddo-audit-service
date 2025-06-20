@@ -66,7 +66,7 @@ ALTER TABLE IF EXISTS public."characters"
     OWNER to pgadmin;
     CREATE INDEX idx_name_server_name ON public."characters" (LOWER(name), LOWER(server_name));
 
-CREATE TABLE IF NOT EXISTS public."game_info"
+CREATE TABLE IF NOT EXISTS public."server_info"
 (
     id serial NOT NULL,
     "timestamp" timestamp with time zone NOT NULL DEFAULT current_timestamp,
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS public."game_info"
 
 TABLESPACE pg_default;
 
-ALTER TABLE IF EXISTS public."game_info"
+ALTER TABLE IF EXISTS public."server_info"
     OWNER to pgadmin;
 
 CREATE TABLE IF NOT EXISTS public."character_activity"

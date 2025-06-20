@@ -5,7 +5,7 @@ import requests
 import services.postgres as postgres_client
 import services.redis as redis_client
 from models.game import GameWorld
-from models.redis import GameInfo, ServerInfo
+from models.redis import ServerInfo, ServerSpecificInfo
 from requests import HTTPError
 from utils.scheduler import run_batch_on_schedule
 from constants.server import SERVER_NAMES_LOWERCASE
@@ -58,9 +58,9 @@ class ServerStatusUpdater:
                 )
         return worlds
 
-    def update_worlds(self, worlds: list[GameWorld]) -> GameInfo:
+    def update_worlds(self, worlds: list[GameWorld]) -> ServerInfo:
         """Query the status server for each world and update the server status."""
-        server_status: dict[str, ServerInfo] = {}
+        server_status: dict[str, ServerSpecificInfo] = {}
         for world in worlds:
             try:
                 is_online = False
@@ -86,7 +86,7 @@ class ServerStatusUpdater:
                     is_vip_only_element is not None
                     and is_vip_only_element.text == "True"
                 )
-                server_info = ServerInfo(
+                server_info = ServerSpecificInfo(
                     index=world.order,
                     last_status_check=datetime.now().isoformat(),
                     is_online=is_online,
@@ -95,16 +95,16 @@ class ServerStatusUpdater:
                 )
                 server_status[world.name.lower()] = server_info
             except Exception:
-                server_status[world.name.lower()] = ServerInfo(
+                server_status[world.name.lower()] = ServerSpecificInfo(
                     last_status_check=datetime.now().isoformat(), is_online=False
                 )
         # for any server that is missing in server_status, add it with is_online=False
         for server_name in SERVER_NAMES_LOWERCASE:
             if server_name not in server_status:
-                server_status[server_name] = ServerInfo(
+                server_status[server_name] = ServerSpecificInfo(
                     last_status_check=datetime.now().isoformat(), is_online=False
                 )
-        game_info = GameInfo(servers=server_status)
+        game_info = ServerInfo(servers=server_status)
         return game_info
 
     def update_game_info(self):

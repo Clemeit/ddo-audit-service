@@ -4,7 +4,7 @@ Game endpoints.
 
 import services.postgres as postgres_client
 import services.redis as redis_client
-from models.redis import GameInfo
+from models.redis import ServerInfo
 
 from sanic import Blueprint
 from sanic.request import Request
@@ -94,7 +94,7 @@ async def patch_game_info(request: Request):
     """
     # validate request body
     try:
-        body = GameInfo(**request.json)
+        body = ServerInfo(**request.json)
     except Exception:
         return json({"message": "Invalid request body"}, status=400)
 

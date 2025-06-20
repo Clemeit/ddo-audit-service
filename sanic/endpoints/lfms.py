@@ -6,7 +6,7 @@ import services.redis as redis_client
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.api import LfmRequestApiModel, LfmRequestType
 from models.lfm import Lfm, LfmActivity, LfmActivityEvent, LfmActivityType
-from models.redis import ServerLFMsData
+from models.redis import ServerLfmData
 from utils.validation import is_server_name_valid
 
 from sanic import Blueprint
@@ -139,9 +139,9 @@ async def update_lfms(request: Request):
 def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType):
     deleted_ids = set(request_body.deleted_ids)
 
-    all_server_lfms: dict[str, ServerLFMsData] = {}
+    all_server_lfms: dict[str, ServerLfmData] = {}
     for server_name in SERVER_NAMES_LOWERCASE:
-        all_server_lfms[server_name] = ServerLFMsData(
+        all_server_lfms[server_name] = ServerLfmData(
             lfms={},
         )
 
@@ -152,7 +152,7 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
         all_server_lfms[server_name].lfms[lfm.leader.id] = lfm
 
     for server_name, data in all_server_lfms.items():
-        data: ServerLFMsData
+        data: ServerLfmData
 
         previous_lfms_data = redis_client.get_lfms_by_server_name_as_class(server_name)
 

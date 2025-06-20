@@ -6,9 +6,10 @@ from models.lfm import Lfm
 from pydantic import BaseModel
 from models.area import Area
 from enum import Enum
+from models.service import News, PageMessage
 
 
-class ServerInfo(BaseModel):
+class ServerSpecificInfo(BaseModel):
     """
     This model will be used to store information about each server in the redis database using reJSON.
     """
@@ -24,18 +25,18 @@ class ServerInfo(BaseModel):
     is_vip_only: Optional[bool] = None
 
 
-class GameInfo(BaseModel):
+class ServerInfo(BaseModel):
     """
     This model will be used to store information about the game in the redis database using reJSON.
     """
 
-    servers: dict[str, ServerInfo] = {}
+    servers: dict[str, ServerSpecificInfo] = {}
 
 
-ServerInfoDict = Dict[str, ServerInfo]
+ServerInfoDict = Dict[str, ServerSpecificInfo]
 
 
-class ServerCharactersData(BaseModel):
+class ServerCharacterData(BaseModel):
     """
     This model will be used to store information about each server's characters in the redis database using reJSON.
     """
@@ -43,7 +44,7 @@ class ServerCharactersData(BaseModel):
     characters: dict[int, Character] = {}
 
 
-class ServerLFMsData(BaseModel):
+class ServerLfmData(BaseModel):
     """
     This model will be used to store information about each server's LFMs in the redis database using reJSON.
     """
@@ -73,12 +74,14 @@ class ValidAreasModel(BaseModel):
 
 
 class RedisKeys(Enum):
-    GAME_INFO = "game_info"
+    SERVER_INFO = "server_info"
     VERIFICATION_CHALLENGES = "verification_challenges"
     VALID_AREA_IDS = "valid_area_ids"
     VALID_AREAS = "valid_areas"
     CHARACTERS = "{server}:characters"
     LFMS = "{server}:lfms"
+    NEWS = "news"
+    PAGE_MESSAGES = "page_messages"
 
 
 class VerificationChallengesModel(BaseModel):
@@ -86,16 +89,18 @@ class VerificationChallengesModel(BaseModel):
 
 
 REDIS_KEY_TYPE_MAPPING: Dict[RedisKeys, type] = {
-    RedisKeys.GAME_INFO: GameInfo,
+    RedisKeys.SERVER_INFO: ServerInfo,
     RedisKeys.VERIFICATION_CHALLENGES: VerificationChallengesModel,
     RedisKeys.VALID_AREA_IDS: ValidAreaIdsModel,
     RedisKeys.VALID_AREAS: ValidAreasModel,
+    RedisKeys.NEWS: list[News],
+    RedisKeys.PAGE_MESSAGES: list[PageMessage],
     **{
-        RedisKeys.CHARACTERS.value.format(server=server): ServerCharactersData
+        RedisKeys.CHARACTERS.value.format(server=server): ServerCharacterData
         for server in SERVER_NAMES_LOWERCASE
     },
     **{
-        RedisKeys.LFMS.value.format(server=server): ServerLFMsData
+        RedisKeys.LFMS.value.format(server=server): ServerLfmData
         for server in SERVER_NAMES_LOWERCASE
     },
 }
