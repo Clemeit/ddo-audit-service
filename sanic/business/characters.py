@@ -40,9 +40,14 @@ def handle_incoming_characters(
     # go through each server...
     for server_name, server_character_data in characters_by_server_name.items():
         # useful stuff
-        incoming_characters = server_character_data.characters
+        incoming_characters: dict[int, dict] = {
+            character_id: character.model_dump()
+            for character_id, character in server_character_data.characters.items()
+        }
         incoming_character_ids = set(incoming_characters.keys())
-        previous_characters = redis_client.get_characters_by_server_name(server_name)
+        previous_characters = redis_client.get_characters_by_server_name_as_dict(
+            server_name
+        )
         previous_character_ids = set(previous_characters.keys())
 
         # handle characters that logged out
@@ -53,21 +58,22 @@ def handle_incoming_characters(
         characters_to_persist_to_db.extend(
             [
                 character
-                for character in previous_characters.values()
-                if character.id in character_ids_we_can_save
+                for character_id, character in previous_characters.items()
+                if character_id in character_ids_we_can_save
             ]
         )
 
         # handle character activity
         # all character activity will be persisted to the database at the end
         deleted_ids_on_server = deleted_ids.intersection(incoming_character_ids)
-        character_activity_on_this_server = aggregate_character_activity_for_server(
-            previous_characters,
-            incoming_characters,
-            previous_character_ids,
-            incoming_character_ids,
-            deleted_character_ids=deleted_ids_on_server,
-        )
+        character_activity_on_this_server: list[CharacterActivity] = []
+        # aggregate_character_activity_for_server(
+        #     previous_characters,
+        #     incoming_characters,
+        #     previous_character_ids,
+        #     incoming_character_ids,
+        #     deleted_character_ids=deleted_ids_on_server,
+        # )
         character_activity_by_server_name[server_name] = (
             character_activity_on_this_server
         )
@@ -91,68 +97,6 @@ def handle_incoming_characters(
     # persist character activity
     persist_character_activity_to_db(character_activity_by_server_name)
 
-    # # deleted and updated keys (for characters that logged off or had avtivity)
-    # deleted_ids = set(request_body.deleted_ids)
-
-    # all_server_characters: dict[str, ServerCharactersData] = {}
-    # for server_name in SERVER_NAMES_LOWERCASE:
-    #     all_server_characters[server_name] = ServerCharactersData(
-    #         characters={},
-    #     )
-    # all_servers_activity: dict[str, list[CharacterActivity]] = {}
-
-    # # organize characters by server
-    # for character in request_body.characters:
-    #     server_name = character.server_name.lower()
-    #     character.last_update = datetime.datetime.now().isoformat()
-    #     all_server_characters[server_name].characters[character.id] = character
-
-    # # process each server's characters
-    # for server_name, server_data in all_server_characters.items():
-    #     current_characters = server_data.characters
-    #     current_character_ids = set(current_characters.keys())
-
-    #     # previous character data, characters, and character ID for this server
-    #     previous_characters = redis_client.get_characters_by_server_name(server_name)
-    #     print("previous_characters", previous_characters)
-    #     previous_character_ids = {character.id for character in previous_characters}
-
-    #     # a set of character IDs from the incoming request that were
-    #     # also present in the previous characters (i.e. valid)
-    #     deleted_ids_on_server = deleted_ids.intersection(previous_character_ids)
-
-    #     # get all of the character activity for this server
-    #     character_activity = aggregate_character_activity_for_server(
-    #         previous_characters,
-    #         current_characters,
-    #         previous_character_ids,
-    #         current_character_ids,
-    #         deleted_character_ids=deleted_ids_on_server,
-    #     )
-    #     all_servers_activity[server_name] = character_activity
-
-    #     # TODO: probably better to use pipelining here instead of making these
-    #     # calls for each server
-    #     try:
-    #         persist_deleted_characters_to_db_by_server_name_and_ids(
-    #             server_name, deleted_ids_on_server
-    #         )
-    #     except Exception as e:
-    #         print(f"Error persisting deleted characters for server {server_name}: {e}")
-    #     if type == CharacterRequestType.set:
-    #         redis_client.set_characters_by_server_name(current_characters, server_name)
-    #     elif type == CharacterRequestType.update:
-    #         redis_client.update_characters_by_server_name(
-    #             server_name, server_data.characters
-    #         )
-    #         # redis_client.delete_characters_by_server_name_and_character_ids(
-    #         #     server_name, deleted_ids
-    #         # )
-
-    # # persist all of the character activity events to the database for
-    # # all servers at the same time using pipelining
-    # persist_character_activity_to_db(all_servers_activity)
-
 
 def persist_deleted_characters_to_db(characters: list[Character]):
     """
@@ -168,8 +112,8 @@ def persist_deleted_characters_to_db(characters: list[Character]):
 
 
 def aggregate_character_activity_for_server(
-    previous_characters: dict[int, Character],
-    current_characters: dict[int, Character],
+    previous_characters: dict[int, dict],
+    current_characters: dict[int, dict],
     previous_character_ids: set[int],
     current_character_ids: set[int],
     deleted_character_ids: set[int],

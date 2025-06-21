@@ -73,6 +73,16 @@ class ValidAreasModel(BaseModel):
     timestamp: Optional[float] = None
 
 
+class NewsModel(BaseModel):
+    news: Optional[list[News]] = None
+    timestamp: Optional[float] = None
+
+
+class PageMessagesModel(BaseModel):
+    page_messages: Optional[list[PageMessage]] = None
+    timestamp: Optional[float] = None
+
+
 class RedisKeys(Enum):
     SERVER_INFO = "server_info"
     VERIFICATION_CHALLENGES = "verification_challenges"
@@ -93,8 +103,8 @@ REDIS_KEY_TYPE_MAPPING: Dict[RedisKeys, type] = {
     RedisKeys.VERIFICATION_CHALLENGES: VerificationChallengesModel,
     RedisKeys.VALID_AREA_IDS: ValidAreaIdsModel,
     RedisKeys.VALID_AREAS: ValidAreasModel,
-    RedisKeys.NEWS: list[News],
-    RedisKeys.PAGE_MESSAGES: list[PageMessage],
+    RedisKeys.NEWS: NewsModel,
+    RedisKeys.PAGE_MESSAGES: PageMessagesModel,
     **{
         RedisKeys.CHARACTERS.value.format(server=server): ServerCharacterData
         for server in SERVER_NAMES_LOWERCASE

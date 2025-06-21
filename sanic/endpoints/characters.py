@@ -131,10 +131,6 @@ async def get_characters_by_ids(request, character_ids: str):
         character_ids_list = [int(id) for id in character_ids.split(",")]
         discovered_characters: dict[int, dict] = {}
         cached_character_ids: set[int] = set()
-        # TODO: I left off here
-        # TODO: I left off here
-        # TODO: I left off here
-        # TODO: I left off here
         cached_characters = redis_client.get_characters_by_ids_as_dict(
             character_ids_list
         )
@@ -150,15 +146,12 @@ async def get_characters_by_ids(request, character_ids: str):
             )
             for character in persisted_characters:
                 character.is_online = False
-                discovered_characters.append(character)
+                discovered_characters[character.id] = character.model_dump()
 
-        dumped_characters = [
-            character.model_dump() for character in discovered_characters
-        ]
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json({"data": dumped_characters})
+    return json({"data": discovered_characters})
 
 
 @character_blueprint.get("/<server_name:str>/<character_name:str>")
@@ -170,8 +163,11 @@ async def get_character_by_server_name_and_character_name(
 
     Route: /characters/<server_name:str>/<character_name:str>
 
-    Description: Get a specific character from a specific server from the Redis cache.
+    Description: Get a specific character from a specific server.
     """
+    if server_name == "any":
+        return await get_characters_by_character_name(character_name)
+
     if not is_server_name_valid(server_name):
         return json({"message": "Invalid server name"}, status=400)
     if not is_character_name_valid(character_name):
@@ -179,30 +175,53 @@ async def get_character_by_server_name_and_character_name(
 
     character_name = character_name.lower().strip()
     source = "cache"
-    character = redis_client.get_character_by_name_and_server_name(
+    found_character = redis_client.get_character_by_name_and_server_name_as_dict(
         character_name, server_name
     )
-    if character:
-        character.is_online = True
-        if character.is_anonymous:
-            # TODO: this will never happen because an online character who
-            # is anonymous will have no name, so the character will not be
-            # found in the cache.
-            return json({"message": "Character is anonymous"}, status=403)
+    if found_character:
+        found_character["is_online"] = True
     else:
         source = "database"
-        character = postgres_client.get_character_by_name_and_server(
+        database_character = postgres_client.get_character_by_name_and_server(
             character_name, server_name
         )
-        if character:
-            character.is_online = False
-            if character.is_anonymous:
+        if database_character:
+            database_character.is_online = False
+            if database_character.is_anonymous:
                 return json({"message": "Character is anonymous"}, status=403)
+            found_character = database_character.model_dump()
 
-    if not character:
+    if not found_character:
         return json({"message": "Character not found"}, status=404)
 
-    return json({"data": character.model_dump(), "source": source})
+    return json({"data": found_character, "source": source})
+
+
+async def get_characters_by_character_name(character_name: str):
+    """
+    Description: Get and characters that match the specified name. Checks both the cache and the database.
+    """
+    if not is_character_name_valid(character_name):
+        return json({"message": "Invalid character name"}, status=400)
+
+    found_characters: dict[int, dict] = {}
+    character_name = character_name.lower().strip()
+    cached_characters = redis_client.get_characters_by_name_as_dict(character_name)
+    if cached_characters and len(cached_characters.keys()):
+        for character_id, character in cached_characters.items():
+            character["is_online"] = True
+            found_characters[character_id] = character
+
+    database_characters = postgres_client.get_characters_by_name(character_name)
+    if database_characters:
+        for character in database_characters:
+            character.is_online = False
+            found_characters[character.id] = character.model_dump()
+
+    if not found_characters:
+        return json({"message": "Character not found"}, status=404)
+
+    return json({"data": found_characters})
 
 
 # ===================================

@@ -189,6 +189,25 @@ def get_character_by_name_and_server(
             return build_character_from_row(character)
 
 
+def get_characters_by_name(character_name: str) -> list[Character]:
+    """
+    Gets all characters (the most recent 10) from the database that match the given name.
+
+    THIS IS EXPENSIVE! Don't use this unless there's a good reason to.
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM public.characters WHERE LOWER(name) = %s ORDER BY last_save DESC LIMIT 10",
+                (character_name.lower(),),
+            )
+            characters = cursor.fetchall()
+            if not characters:
+                return []
+
+            return [build_character_from_row(character) for character in characters]
+
+
 def get_character_activity_summary_by_character_id(
     character_id: str,
 ) -> CharacterActivitySummary:

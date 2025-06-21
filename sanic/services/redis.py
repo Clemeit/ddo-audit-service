@@ -323,9 +323,7 @@ def get_character_count_by_server_name(server_name: str) -> int:
     return (
         get_redis_client()
         .json()
-        .objlen(
-            RedisKeys.CHARACTERS.value.format(server=server_name.lower()), "characters"
-        )
+        .objlen(RedisKeys.CHARACTERS.value.format(server=server_name.lower()))
     )
 
 
@@ -353,8 +351,8 @@ def get_character_by_name_and_server_name_as_dict(
     """Get a character dict by name and server name"""
     character_name = character_name.lower()
     server_characters = get_characters_by_server_name_as_dict(server_name)
-    for character in server_characters:
-        if character.get("name").lower() == character_name:
+    for character_id, character in server_characters.items():
+        if character and character.get("name").lower() == character_name:
             return character
     return None
 
@@ -374,9 +372,22 @@ def get_character_by_name_and_server_name(
 def get_character_by_id_as_dict(character_id: int) -> dict | None:
     """Get a character dict by character ID"""
     for server_name in SERVER_NAMES_LOWERCASE:
-        server_characters = get_characters_by_server_name_as_dict(server_name)
-        if character_id in server_characters.keys():
-            return server_characters[character_id]
+        server_character_ids = get_character_ids_by_server_name(server_name)
+        if character_id in server_character_ids:
+            try:
+                # this get() will throw an error if the key character_id doesn't exist,
+                # which could theoretically happen if the character logged out between
+                # the id lookup and this get()
+                return (
+                    get_redis_client()
+                    .json()
+                    .get(
+                        RedisKeys.CHARACTERS.value.format(server=server_name),
+                        character_id,
+                    )
+                )
+            except Exception:
+                return None
     return None
 
 
@@ -416,7 +427,7 @@ def get_characters_by_name_as_dict(character_name: str) -> dict[int, dict]:
         matching_characters = [
             character
             for character in server_characters.values()
-            if character.get("name").lower() == character_name_lower
+            if character and character.get("name").lower() == character_name_lower
         ]
         for matching_character in matching_characters:
             characters[matching_character.get("id")] = matching_character
@@ -432,27 +443,27 @@ def get_characters_by_name(character_name: str) -> dict[int, Character]:
     }
 
 
-def set_characters_by_server_name(
-    server_characters: ServerCharacterData, server_name: str
-):
+def set_characters_by_server_name(server_characters: dict[int, dict], server_name: str):
     """Set all character objects by server name"""
+    print("set server_characters", server_characters)
     with get_redis_client() as client:
         client.json().set(
-            RedisKeys.CHARACTERS.value.format(server=server_name.lower()),
+            name=RedisKeys.CHARACTERS.value.format(server=server_name.lower()),
             path="$",
-            obj=server_characters.model_dump(),
+            obj=server_characters,
         )
 
 
 def update_characters_by_server_name(
-    server_characters: ServerCharacterData, server_name: str
+    server_characters: dict[int, dict], server_name: str
 ):
     """Update all character objects by server name"""
+    print("update server_characters", server_characters)
     with get_redis_client() as client:
         client.json().merge(
             name=RedisKeys.CHARACTERS.value.format(server=server_name.lower()),
             path="$",
-            obj=server_characters.model_dump(exclude_unset=True),
+            obj=server_characters,
         )
 
 
@@ -467,7 +478,7 @@ def delete_characters_by_id_and_server_name(character_ids: list[int], server_nam
             for character_id in character_ids:
                 pipeline.json().delete(
                     key=RedisKeys.CHARACTERS.value.format(server=server_name.lower()),
-                    path=f"characters.{character_id}",
+                    path=character_id,
                 )
             pipeline.execute()
 
@@ -528,7 +539,7 @@ def get_lfm_count_by_server_name(server_name: str) -> int:
     return (
         get_redis_client()
         .json()
-        .objlen(RedisKeys.LFMS.value.format(server=server_name.lower()), "lfms")
+        .objlen(RedisKeys.LFMS.value.format(server=server_name.lower()))
     )
 
 
@@ -563,7 +574,7 @@ def delete_lfms_by_id_and_server_name(lfm_ids: list[int], server_name: str):
             for lfm_id in lfm_ids:
                 pipeline.json().delete(
                     key=RedisKeys.LFMS.value.format(server=server_name.lower()),
-                    path=f"lfms.{lfm_id}",
+                    path=lfm_id,
                 )
             pipeline.execute()
 
