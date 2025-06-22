@@ -21,10 +21,8 @@ def handle_incoming_characters(
         server_name: ServerCharacterData(characters={})
         for server_name in SERVER_NAMES_LOWERCASE
     }
-    character_activity_by_server_name: dict[str, list[CharacterActivity]] = {
-        server_name: [] for server_name in SERVER_NAMES_LOWERCASE
-    }
-    characters_to_persist_to_db: list[Character] = []
+    all_character_activity: list[dict] = []
+    characters_to_persist_to_db: list[dict] = []
 
     # organize the characters into their servers
     for character in request_body.characters:
@@ -66,16 +64,14 @@ def handle_incoming_characters(
         # handle character activity
         # all character activity will be persisted to the database at the end
         deleted_ids_on_server = deleted_ids.intersection(incoming_character_ids)
-        character_activity_on_this_server: list[CharacterActivity] = []
-        # aggregate_character_activity_for_server(
-        #     previous_characters,
-        #     incoming_characters,
-        #     previous_character_ids,
-        #     incoming_character_ids,
-        #     deleted_character_ids=deleted_ids_on_server,
-        # )
-        character_activity_by_server_name[server_name] = (
-            character_activity_on_this_server
+        all_character_activity.extend(
+            aggregate_character_activity_for_server(
+                previous_characters,
+                incoming_characters,
+                previous_character_ids,
+                incoming_character_ids,
+                deleted_character_ids=deleted_ids_on_server,
+            )
         )
 
         # update the redis cache for this server
@@ -95,10 +91,10 @@ def handle_incoming_characters(
     # persist on characters that logged off to the database
     persist_deleted_characters_to_db(characters_to_persist_to_db)
     # persist character activity
-    persist_character_activity_to_db(character_activity_by_server_name)
+    persist_character_activity_to_db(all_character_activity)
 
 
-def persist_deleted_characters_to_db(characters: list[Character]):
+def persist_deleted_characters_to_db(characters: list[dict]):
     """
     Characters that have just logged off are about to be deleted
     from the cache. Persist them to the database for long-term storage.
@@ -117,139 +113,99 @@ def aggregate_character_activity_for_server(
     previous_character_ids: set[int],
     current_character_ids: set[int],
     deleted_character_ids: set[int],
-) -> list[CharacterActivity]:
+) -> list[dict]:
     """
-    Handle character activity events for a single server at a time.
+    Handle character activity events for a single server at a time. Returns a
+    list of character data dict.
     """
+    failed_count = 0
 
-    # TODO: Probably call .model_dump(exclude_unset=True) on the characters
-    # before processing them. If any current fields are left unset, then
-    # we really don't care about them.
+    # For every previous character that is not in current, they logged off
+    # For every current character that is not in previous, they logged on
+    # For every character that is in both, check for activity
 
-    update_failure_count = 0
-    activities: list[CharacterActivity] = []
+    logged_on_ids = current_character_ids - previous_character_ids
 
-    # characters that just logged in:
-    new_ids = current_character_ids - previous_character_ids
-    for character_id in new_ids:
-        activities.append(
-            CharacterActivity(
-                id=character_id,
-                activity_type=CharacterActivityType.status,
-                data={"value": True},
-            )
-        )
+    character_activity: list[CharacterActivity] = []
 
-    # characters that just logged off:
     for character_id in deleted_character_ids:
-        activities.append(
+        character_activity.append(
             CharacterActivity(
                 id=character_id,
-                activity_type=CharacterActivityType.status,
+                activity_type=CharacterActivityType.STATUS,
                 data={"value": False},
             )
         )
 
-    # character ids that potentially have activity:
-    # (we don't care about character's that just logged in)
-    # TODO: for characters that are just logging in, we should
-    # actually diff their data against whatever data is store
-    # in the database. Scenario: character logs off, changes
-    # server, and then logs in.
-    potential_activity_ids = current_character_ids - new_ids
-    for character_id in potential_activity_ids:
-        # location change
+    for character_id in logged_on_ids:
+        character_activity.append(
+            CharacterActivity(
+                id=character_id,
+                activity_type=CharacterActivityType.STATUS,
+                data={"value": True},
+            )
+        )
+
+    possible_activity_ids = current_character_ids - logged_on_ids
+
+    for character_id in possible_activity_ids:
         try:
+            current_character = current_characters[character_id]
+            previous_character = previous_characters[character_id]
 
-            def is_location_change(cur_char: Character, prev_char: Character) -> bool:
-                if cur_char.location_id is None:
-                    return False
+            if not previous_character:
+                # can't check for activity in this case
+                continue
 
-                previous_location_id: int = 0
-                if prev_char.location_id is not None:
-                    previous_location_id = prev_char.location_id
-                current_location_id = cur_char.location_id
-
-                if previous_location_id != current_location_id:
-                    return True
-                return False
-
-            if is_location_change(
-                current_characters[character_id], previous_characters[character_id]
-            ):
-                activities.append(
+            # check for location change
+            current_location = current_character.get("location_id")
+            previous_location = previous_character.get("location_id")
+            if current_location != previous_location:
+                character_activity.append(
                     CharacterActivity(
                         id=character_id,
-                        activity_type=CharacterActivityType.location,
-                        data={"value": current_characters[character_id].location_id},
+                        activity_type=CharacterActivityType.LOCATION,
+                        data={"value": current_location},
                     )
                 )
-        except Exception:
-            update_failure_count += 1
 
-        # guild change
-        try:
-            if current_characters[character_id].guild_name is not None and (
-                current_characters[character_id].guild_name
-                != previous_characters[character_id].guild_name
-            ):
-                activities.append(
+            # check for guild change
+            current_guild = current_character.get("guild")
+            previous_guild = previous_character.get("guild")
+            if current_guild != previous_guild:
+                character_activity.append(
                     CharacterActivity(
                         id=character_id,
-                        activity_type=CharacterActivityType.guild_name,
-                        data={"value": current_characters[character_id].guild_name},
+                        activity_type=CharacterActivityType.GUILD_NAME,
+                        data={"value": current_guild},
                     )
                 )
-        except Exception:
-            update_failure_count += 1
 
-        # classes changed (level up)
-        try:
-            if current_characters[character_id].total_level is not None and (
-                current_characters[character_id].total_level
-                != previous_characters[character_id].total_level
-            ):
-                class_list = [
-                    class_list_item.model_dump()
-                    for class_list_item in current_characters[character_id].classes
-                ]
-                activities.append(
+            # check for level change
+            current_level = current_character.get("total_level")
+            previous_level = previous_character.get("total_level")
+            if current_level != previous_level:
+                character_activity.append(
                     CharacterActivity(
                         id=character_id,
-                        activity_type=CharacterActivityType.total_level,
+                        activity_type=CharacterActivityType.TOTAL_LEVEL,
                         data={
-                            "total_level": current_characters[character_id].total_level,
-                            "classes": class_list,
+                            "total_level": current_level,
+                            "classes": current_character.get("classes"),
                         },
                     )
                 )
         except Exception:
-            update_failure_count += 1
+            failed_count += 1
 
-        # server change
-        try:
-            if current_characters[character_id].server_name is not None and (
-                current_characters[character_id].server_name
-                != previous_characters[character_id].server_name
-            ):
-                activities.append(
-                    CharacterActivity(
-                        id=character_id,
-                        activity_type=CharacterActivityType.server_name,
-                        data={"value": current_characters[character_id].server_name},
-                    )
-                )
-        except Exception:
-            update_failure_count += 1
+    if failed_count > 0:
+        print(f"Error: {failed_count} failed activity check(s)")
 
-    if update_failure_count > 0:
-        print(f"There were a total of {update_failure_count} update failures")
-
-    return activities
+    return [data.model_dump() for data in character_activity]
 
 
 def persist_character_activity_to_db(
-    activity_events: dict[str, list[CharacterActivity]],
+    activity_events: list[dict],
 ):
     """
     Persist character activity events from all servers to the database.

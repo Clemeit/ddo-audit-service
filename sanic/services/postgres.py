@@ -79,7 +79,7 @@ def get_db_connection():
         postgres_singleton.get_client().putconn(conn)
 
 
-def add_or_update_characters(characters: list[Character]):
+def add_or_update_characters(characters: list[dict]):
     (valid_area_ids, _, _) = get_valid_area_ids()
 
     with get_db_connection() as conn:
@@ -87,9 +87,8 @@ def add_or_update_characters(characters: list[Character]):
             try:
                 for character in characters:
                     # Check if the character's location_id is valid
-                    if character.location_id not in valid_area_ids:
-                        character.location_id = 0  # Set to 0 if invalid
-                    character_dump = character.model_dump()
+                    if character.get("location_id") not in valid_area_ids:
+                        character["location_id"] = 0  # Set to 0 if invalid
                     exclude_fields = [
                         "public_comment",
                         "group_id",
@@ -100,7 +99,7 @@ def add_or_update_characters(characters: list[Character]):
                     ]
                     character_fields = [
                         field
-                        for field in character_dump.keys()
+                        for field in character.keys()
                         if field not in exclude_fields
                     ]
                     update_list: list[str] = [
@@ -134,7 +133,7 @@ def add_or_update_characters(characters: list[Character]):
                     # Get the values of the Character model
                     values = [
                         json.dumps(value) if isinstance(value, (dict, list)) else value
-                        for key, value in character_dump.items()
+                        for key, value in character.items()
                         if key in character_fields
                     ]
 
@@ -394,28 +393,28 @@ def add_game_info(game_info: ServerInfoDict):
                 raise e
 
 
-def add_character_activity(game_activity: dict[str, list[CharacterActivity]]):
+def add_character_activity(activites: list[dict]):
     insert_query = """
         INSERT INTO character_activity (timestamp, id, activity_type, data)
         VALUES (NOW(), %s, %s, %s)
     """
+    print("activites", activites)
     batch_size = 500
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             try:
                 batch = []
-                for server_activity in game_activity.values():
-                    for activity in server_activity:
-                        batch.append(
-                            (
-                                activity.id,
-                                activity.activity_type.name,
-                                json.dumps(activity.data),
-                            )
+                for activity in activites:
+                    batch.append(
+                        (
+                            activity.get("id"),
+                            activity.get("activity_type").value,
+                            json.dumps(activity.get("data")),
                         )
-                        if len(batch) >= batch_size:
-                            cursor.executemany(insert_query, batch)
-                            batch.clear()
+                    )
+                    if len(batch) >= batch_size:
+                        cursor.executemany(insert_query, batch)
+                        batch.clear()
                 if batch:
                     cursor.executemany(insert_query, batch)
                 conn.commit()

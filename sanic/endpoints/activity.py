@@ -46,7 +46,7 @@ async def get_location_activity_by_character_id(request: Request, character_id: 
 
         verify_authorization(request, character_id)
         activity = postgres_client.get_character_activity_by_type_and_character_id(
-            character_id, CharacterActivityType.location, start_date, end_date, limit
+            character_id, CharacterActivityType.LOCATION, start_date, end_date, limit
         )
     except AuthorizationError as e:
         return json({"message": str(e)}, status=401)
@@ -80,7 +80,7 @@ async def get_level_activity_by_character_id(request, character_id: str):
 
         verify_authorization(request, character_id)
         activity = postgres_client.get_character_activity_by_type_and_character_id(
-            character_id, CharacterActivityType.total_level, start_date, end_date
+            character_id, CharacterActivityType.TOTAL_LEVEL, start_date, end_date
         )
     except AuthorizationError as e:
         return json({"message": str(e)}, status=401)
@@ -114,7 +114,7 @@ async def get_guild_name_activity_by_character_id(request, character_id: str):
 
         verify_authorization(request, character_id)
         activity = postgres_client.get_character_activity_by_type_and_character_id(
-            character_id, CharacterActivityType.guild_name, start_date, end_date
+            character_id, CharacterActivityType.GUILD_NAME, start_date, end_date
         )
     except AuthorizationError as e:
         return json({"message": str(e)}, status=401)
@@ -161,7 +161,7 @@ async def get_status_activity_by_character_id(request, character_id: str):
 
         verify_authorization(request, character_id)
         activity = postgres_client.get_character_activity_by_type_and_character_id(
-            character_id, CharacterActivityType.status, start_date, end_date
+            character_id, CharacterActivityType.STATUS, start_date, end_date
         )
     except AuthorizationError as e:
         return json({"message": str(e)}, status=401)

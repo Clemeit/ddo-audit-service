@@ -2,11 +2,11 @@ from enum import Enum
 
 
 class CharacterActivityType(str, Enum):
-    total_level = "total_level"
-    location = "location"
-    guild_name = "guild_name"
-    server_name = "server_name"
-    status = "status"
+    TOTAL_LEVEL = "total_level"
+    LOCATION = "location"
+    GUILD_NAME = "guild_name"
+    SERVER_NAME = "server_name"
+    STATUS = "status"
 
 
 MAX_CHARACTER_ACTIVITY_READ_LENGTH = 500  # 500 activity events
