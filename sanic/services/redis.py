@@ -447,7 +447,6 @@ def get_characters_by_name(character_name: str) -> dict[int, Character]:
 
 def set_characters_by_server_name(server_characters: dict[int, dict], server_name: str):
     """Set all character objects by server name"""
-    print("set server_characters", server_characters)
     with get_redis_client() as client:
         client.json().set(
             name=RedisKeys.CHARACTERS.value.format(server=server_name.lower()),
