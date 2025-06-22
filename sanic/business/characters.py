@@ -84,7 +84,7 @@ def handle_incoming_characters(
                 incoming_characters, server_name
             )
             redis_client.delete_characters_by_id_and_server_name(
-                deleted_ids_on_server, server_name
+                character_ids_we_can_save, server_name
             )
 
     # persist on characters that logged off to the database
