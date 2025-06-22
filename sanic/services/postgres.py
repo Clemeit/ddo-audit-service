@@ -398,7 +398,6 @@ def add_character_activity(activites: list[dict]):
         INSERT INTO character_activity (timestamp, id, activity_type, data)
         VALUES (NOW(), %s, %s, %s)
     """
-    print("activites", activites)
     batch_size = 500
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
