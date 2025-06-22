@@ -13,7 +13,7 @@ class CharacterRequestApiModel(BaseModel):
 
 class LfmRequestApiModel(BaseModel):
     lfms: Optional[list[Lfm]] = None
-    deleted_ids: Optional[list[str]] = []  # lfms taken down
+    deleted_ids: Optional[list[int]] = []  # lfms taken down
 
 
 class CharacterRequestType(str, Enum):

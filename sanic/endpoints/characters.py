@@ -4,9 +4,7 @@ Character endpoints.
 
 import services.postgres as postgres_client
 import services.redis as redis_client
-from constants.server import SERVER_NAMES_LOWERCASE
 from models.api import CharacterRequestApiModel, CharacterRequestType
-from models.character import Character
 from utils.validation import is_server_name_valid, is_character_name_valid
 from business.characters import (
     handle_incoming_characters,
@@ -22,7 +20,7 @@ character_blueprint = Blueprint("character", url_prefix="/characters", version=1
 
 # ===== Client-facing endpoints =====
 @character_blueprint.get("")
-async def get_all_characters(request):
+async def get_all_characters(request: Request):
     """
     Method: GET
 
@@ -37,7 +35,7 @@ async def get_all_characters(request):
 
 
 @character_blueprint.get("/summary")
-async def get_online_character_summary(request):
+async def get_online_character_summary(request: Request):
     """
     Method: GET
 
@@ -53,7 +51,7 @@ async def get_online_character_summary(request):
 
 
 @character_blueprint.get("/ids")
-async def get_online_character_ids(request):
+async def get_online_character_ids(request: Request):
     """
     Method: GET
 
@@ -69,7 +67,7 @@ async def get_online_character_ids(request):
 
 
 @character_blueprint.get("/<server_name:str>")
-async def get_characters_by_server(request, server_name: str):
+async def get_characters_by_server(request: Request, server_name: str):
     """
     Method: GET
 
@@ -89,7 +87,7 @@ async def get_characters_by_server(request, server_name: str):
 
 
 @character_blueprint.get("/<character_id:int>")
-async def get_character_by_id(request, character_id: int):
+async def get_character_by_id(request: Request, character_id: int):
     """
     Method: GET
 
@@ -115,7 +113,7 @@ async def get_character_by_id(request, character_id: int):
 
 
 @character_blueprint.get("/ids/<character_ids:str>")
-async def get_characters_by_ids(request, character_ids: str):
+async def get_characters_by_ids(request: Request, character_ids: str):
     """
     Method: GET
 
@@ -156,7 +154,7 @@ async def get_characters_by_ids(request, character_ids: str):
 
 @character_blueprint.get("/<server_name:str>/<character_name:str>")
 async def get_character_by_server_name_and_character_name(
-    request, server_name: str, character_name: str
+    request: Request, server_name: str, character_name: str
 ):
     """
     Method: GET

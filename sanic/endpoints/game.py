@@ -27,7 +27,7 @@ async def get_game_info(request):
     """
     # update in redis cache
     try:
-        game_info = redis_client.get_all_server_info_as_dict()
+        game_info = redis_client.get_server_info_as_dict()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -100,7 +100,7 @@ async def patch_game_info(request: Request):
 
     # update in redis cache
     try:
-        redis_client.merge_game_info(body)
+        redis_client.merge_server_info(body)
     except Exception as e:
         return json({"message": str(e)}, status=500)
 

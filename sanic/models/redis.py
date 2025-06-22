@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from models.area import Area
 from enum import Enum
 from models.service import News, PageMessage
+from models.quest import Quest
 
 
 class ServerSpecificInfo(BaseModel):
@@ -63,13 +64,13 @@ class ServerLfmData(BaseModel):
 # }
 
 
-class ValidAreaIdsModel(BaseModel):
-    valid_area_ids: Optional[list[int]] = None
+class KnownAreasModel(BaseModel):
+    areas: Optional[list[Area]] = None
     timestamp: Optional[float] = None
 
 
-class ValidAreasModel(BaseModel):
-    valid_areas: Optional[list[Area]] = None
+class KnownQuestsModel(BaseModel):
+    quests: Optional[list[Quest]] = None
     timestamp: Optional[float] = None
 
 
@@ -86,8 +87,8 @@ class PageMessagesModel(BaseModel):
 class RedisKeys(Enum):
     SERVER_INFO = "server_info"
     VERIFICATION_CHALLENGES = "verification_challenges"
-    VALID_AREA_IDS = "valid_area_ids"
-    VALID_AREAS = "valid_areas"
+    KNOWN_AREAS = "known_areas"
+    KNOWN_QUESTS = "known_quests"
     CHARACTERS = "{server}:characters"
     LFMS = "{server}:lfms"
     NEWS = "news"
@@ -98,19 +99,22 @@ class VerificationChallengesModel(BaseModel):
     challenges: Optional[Dict[int, str]] = None
 
 
+DictDict: dict[int, dict] = {}
+
+
 REDIS_KEY_TYPE_MAPPING: Dict[RedisKeys, type] = {
     RedisKeys.SERVER_INFO: ServerInfo,
     RedisKeys.VERIFICATION_CHALLENGES: VerificationChallengesModel,
-    RedisKeys.VALID_AREA_IDS: ValidAreaIdsModel,
-    RedisKeys.VALID_AREAS: ValidAreasModel,
+    RedisKeys.KNOWN_AREAS: KnownAreasModel,
+    RedisKeys.KNOWN_QUESTS: KnownQuestsModel,
     RedisKeys.NEWS: NewsModel,
     RedisKeys.PAGE_MESSAGES: PageMessagesModel,
     **{
-        RedisKeys.CHARACTERS.value.format(server=server): ServerCharacterData
+        RedisKeys.CHARACTERS.value.format(server=server): DictDict
         for server in SERVER_NAMES_LOWERCASE
     },
     **{
-        RedisKeys.LFMS.value.format(server=server): ServerLfmData
+        RedisKeys.LFMS.value.format(server=server): DictDict
         for server in SERVER_NAMES_LOWERCASE
     },
 }

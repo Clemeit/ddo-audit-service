@@ -13,9 +13,9 @@ from models.redis import (
     ServerCharacterData,
     ServerLfmData,
     ServerSpecificInfo,
-    ValidAreaIdsModel,
+    KnownAreasModel,
+    KnownQuestsModel,
     ServerInfoDict,
-    ValidAreasModel,
     RedisKeys,
     REDIS_KEY_TYPE_MAPPING,
 )
@@ -23,6 +23,7 @@ from time import time
 from constants.redis import VALID_AREA_CACHE_LIFETIME, VALID_QUEST_CACHE_LIFETIME
 from models.area import Area
 from models.service import News, PageMessage
+from models.quest import Quest
 
 import json
 from typing import Optional, Any
@@ -62,7 +63,7 @@ class RedisSingleton:
             if hasattr(value, "model_dump"):
                 self.client.json().set(key, path="$", obj=value.model_dump())
             elif isinstance(value, dict):
-                self.client.json().set(key, path="$", obj=json.dumps(value))
+                self.client.json().set(key, path="$", obj=value)
             else:
                 self.client.json().set(key, path="$", obj=value)
 
@@ -290,11 +291,12 @@ def get_all_characters() -> dict[str, dict[int, Character]]:
 
 def get_characters_by_server_name_as_dict(server_name: str) -> dict[int, dict]:
     """Get a dict of character id to character dict"""
-    return (
+    redis_data = (
         get_redis_client()
         .json()
         .get(RedisKeys.CHARACTERS.value.format(server=server_name.lower()))
     )
+    return {int(k): v for k, v in redis_data.items()} if redis_data else {}
 
 
 def get_characters_by_server_name(server_name: str) -> dict[int, Character]:
@@ -458,7 +460,6 @@ def update_characters_by_server_name(
     server_characters: dict[int, dict], server_name: str
 ):
     """Update all character objects by server name"""
-    print("update server_characters", server_characters)
     with get_redis_client() as client:
         client.json().merge(
             name=RedisKeys.CHARACTERS.value.format(server=server_name.lower()),
@@ -509,11 +510,12 @@ def get_all_lfms() -> dict[str, dict[int, Lfm]]:
 
 def get_lfms_by_server_name_as_dict(server_name: str) -> dict[int, dict]:
     """Get a dict of"""
-    return (
+    redis_data = (
         get_redis_client()
         .json()
         .get(RedisKeys.LFMS.value.format(server=server_name.lower()))
     )
+    return {int(k): v for k, v in redis_data.items()} if redis_data else {}
 
 
 def get_lfms_by_server_name(server_name: str) -> dict[int, Lfm]:
@@ -523,7 +525,7 @@ def get_lfms_by_server_name(server_name: str) -> dict[int, Lfm]:
     THIS IS EXPENSIVE! Don't use this unless there's a good reason to.
     """
     lfms_by_server_name = get_lfms_by_server_name_as_dict(server_name)
-    return {lfm_if: Lfm(**lfm) for [lfm_if, lfm] in lfms_by_server_name.items()}
+    return {lfm_if: Lfm(**lfm) for lfm_if, lfm in lfms_by_server_name.items()}
 
 
 def get_all_lfm_counts() -> dict[str, int]:
@@ -543,23 +545,23 @@ def get_lfm_count_by_server_name(server_name: str) -> int:
     )
 
 
-def set_lfms_by_server_name(server_lfms: ServerLfmData, server_name: str):
+def set_lfms_by_server_name(server_lfms: dict[int, dict], server_name: str):
     """Set all lfm objects by server name"""
     with get_redis_client() as client:
         client.json().set(
             RedisKeys.LFMS.value.format(server=server_name.lower()),
             path="$",
-            obj=server_lfms.model_dump(),
+            obj=server_lfms,
         )
 
 
-def update_lfms_by_server_name(server_lfms: ServerLfmData, server_name: str):
+def update_lfms_by_server_name(server_lfms: dict[int, dict], server_name: str):
     """Update all lfm objects by server name"""
     with get_redis_client() as client:
         client.json().merge(
             name=RedisKeys.LFMS.value.format(server=server_name.lower()),
             path="$",
-            obj=server_lfms.model_dump(exclude_unset=True),
+            obj=server_lfms,
         )
 
 
@@ -682,6 +684,41 @@ def set_challenge_for_character_by_character_id(character_id: int, challenge_wor
 
 
 # === Verification challenges ====
+
+
+# ======= Quests and Areas =======
+def get_known_areas() -> dict:
+    """Get all areas from the cache."""
+    return get_redis_client().json().get("known_areas")
+
+
+def set_known_areas(areas: list[Area]):
+    """Set the areas in the cache. It also sets the timestamp for cache expiration."""
+    areas_entry = KnownAreasModel(
+        areas=areas,
+        timestamp=time(),
+    )
+    get_redis_client().json().set("known_areas", path="$", obj=areas_entry.model_dump())
+
+
+def get_known_quests() -> dict:
+    """Get all quests from the cache."""
+    return get_redis_client().json().get("known_quests")
+
+
+def set_known_quests(quests: list[Quest]):
+    """Set the quests in the cache. It also sets the timestamp for cache expiration."""
+    quests_entry = KnownQuestsModel(
+        quests=quests,
+        timestamp=time(),
+    )
+    get_redis_client().json().set(
+        "known_quests", path="$", obj=quests_entry.model_dump()
+    )
+
+
+# ======= Quests and Areas =======
+
 
 ### verification challenge
 ## get

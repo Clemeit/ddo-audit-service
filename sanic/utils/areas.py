@@ -1,27 +1,23 @@
 import services.postgres as postgres_client
 import services.redis as redis_client
 
-area_cache_lifetime = 60 * 60 * 24 * 7  # 7 days in seconds
+from constants.redis import VALID_AREA_CACHE_LIFETIME, VALID_QUEST_CACHE_LIFETIME
+
+from time import time
+from datetime import datetime
+
 
 def get_valid_area_ids() -> tuple[list[int], str, str]:
     """
     Get all area IDs from the cache. If the cache is empty, fetch from the database
     and update the cache.
     """
-    source = "cache"
     try:
-        area_ids_dict, timestamp = redis_client.get_valid_area_ids()
-        if not area_ids_dict:
-            area_ids = postgres_client.get_all_area_ids()
-            if not area_ids:
-                return ([], None, None)
-            source = "database"
-            area_ids_dict = [area_id for area_id in area_ids]
-            redis_client.set_valid_area_ids(area_ids_dict)
+        known_areas, source, timestamp = get_areas()
+        return ([area.get("id") for area in known_areas], source, timestamp)
     except Exception as e:
         print(f"Error fetching area IDs: {e}")
         return ([], None, None)
-    return (area_ids_dict, source, timestamp)
 
 
 def get_areas() -> tuple[list[dict], str, str]:
@@ -29,17 +25,25 @@ def get_areas() -> tuple[list[dict], str, str]:
     Get all areas from the cache. If the cache is empty, fetch from the database
     and update the cache.
     """
-    source = "cache"
     try:
-        areas_dict, timestamp = redis_client.get_all_areas()
-        if not areas_dict:
-            areas = postgres_client.get_all_areas()
-            if not areas:
-                return ([], None, None)
-            source = "database"
-            areas_dict = [area.model_dump() for area in areas]
-            redis_client.set_all_areas(areas_dict)
+        known_areas_cached_data = redis_client.get_known_areas()
+        cached_areas = known_areas_cached_data.get("areas")
+        cached_timestamp: float = known_areas_cached_data.get("timestamp")
+        if cached_areas and time() - cached_timestamp < VALID_AREA_CACHE_LIFETIME:
+            return (
+                cached_areas,
+                "cache",
+                datetime.fromtimestamp(cached_timestamp).isoformat(),
+            )
+        database_areas = postgres_client.get_all_areas()
+        if not database_areas:
+            return ([], None, None)
+        redis_client.set_known_areas(database_areas)
+        return (
+            [area.model_dump() for area in database_areas],
+            "database",
+            datetime.now().isoformat(),
+        )
     except Exception as e:
-        print(f"Error fetching areas: {e}")
+        print(f"Error fetching area IDs: {e}")
         return ([], None, None)
-    return (areas_dict, source, timestamp)

@@ -15,33 +15,6 @@ from models.quest import Quest
 quest_blueprint = Blueprint("quests", url_prefix="/quests", version=1)
 
 
-class AuthorizationError(Exception):
-    pass
-
-
-class VerificationError(Exception):
-    pass
-
-
-# @quest_blueprint.get("/names")
-# async def quest_all_quest_names(
-#     request: Request,
-# ):
-#     """
-#     Method: GET
-
-#     Route: /quests/names
-
-#     Description: Get all quest names.
-#     """
-
-#     try:
-#         quest_name_list = postgres_client.get_all_quest_names()
-#     except Exception as e:
-#         return json({"message": str(e)}, status=500)
-#     return json({"data": quest_name_list})
-
-
 @quest_blueprint.get("/<quest_name:str>")
 async def get_quest_by_name(request: Request, quest_name: str):
     """
@@ -109,7 +82,7 @@ async def update_quests(request: Request):
     Description: Update quests.
     """
 
-    (all_area_ids, _, _) = get_valid_area_ids()
+    all_area_ids, _, _ = get_valid_area_ids()
 
     try:
         raw_quest_list = request.json
@@ -142,7 +115,11 @@ async def update_quests(request: Request):
                     heroic_normal_cr=quest.get("heroicnormalcr"),
                     epic_normal_cr=quest.get("epicnormalcr"),
                     required_adventure_pack=quest.get("requiredadventurepack"),
-                    adventure_area=quest.get("adventurearea") if quest.get("adventurearea") else None,
+                    adventure_area=(
+                        quest.get("adventurearea")
+                        if quest.get("adventurearea")
+                        else None
+                    ),
                     quest_journal_area=quest.get("questjournalgroup"),
                     group_size=quest.get("groupsize"),
                     patron=quest.get("patron"),

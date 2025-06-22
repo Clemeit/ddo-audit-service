@@ -48,7 +48,7 @@ class LfmActivityEvent(BaseModel):
 
 class LfmActivity(BaseModel):
     timestamp: Optional[str] = None
-    events: Optional[list[LfmActivityEvent]] = None
+    events: Optional[list[LfmActivityEvent]] = []
 
 
 class Lfm(BaseModel):
@@ -57,14 +57,14 @@ class Lfm(BaseModel):
     quest_id: Optional[int] = None
     is_quest_guess: Optional[bool] = None
     difficulty: Optional[str] = None
-    accepted_classes: Optional[list[str]] = None
+    accepted_classes: Optional[list[str]] = []
     accepted_classes_count: Optional[int] = None
     minimum_level: Optional[int] = None
     maximum_level: Optional[int] = None
     adventure_active_time: Optional[int] = None
     leader: Optional[Character] = None
-    members: Optional[list[Character]] = None
-    activity: Optional[list[LfmActivity]] = None
+    members: Optional[list[Character]] = []
+    activity: Optional[list[LfmActivity]] = []
     last_update: Optional[str] = None
     server_name: Optional[str] = None
 
