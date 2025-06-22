@@ -63,14 +63,13 @@ def handle_incoming_characters(
 
         # handle character activity
         # all character activity will be persisted to the database at the end
-        deleted_ids_on_server = deleted_ids.intersection(incoming_character_ids)
         all_character_activity.extend(
             aggregate_character_activity_for_server(
                 previous_characters,
                 incoming_characters,
                 previous_character_ids,
                 incoming_character_ids,
-                deleted_character_ids=deleted_ids_on_server,
+                deleted_character_ids=character_ids_we_can_save,
             )
         )
 
