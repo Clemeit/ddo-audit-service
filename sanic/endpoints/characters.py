@@ -203,18 +203,19 @@ async def get_characters_by_character_name(character_name: str):
         return json({"message": "Invalid character name"}, status=400)
 
     found_characters: dict[int, dict] = {}
-    character_name = character_name.lower().strip()
-    cached_characters = redis_client.get_characters_by_name_as_dict(character_name)
-    if cached_characters and len(cached_characters.keys()):
-        for character_id, character in cached_characters.items():
-            character["is_online"] = True
-            found_characters[character_id] = character
 
     database_characters = postgres_client.get_characters_by_name(character_name)
     if database_characters:
         for character in database_characters:
             character.is_online = False
             found_characters[character.id] = character.model_dump()
+
+    character_name = character_name.lower().strip()
+    cached_characters = redis_client.get_characters_by_name_as_dict(character_name)
+    if cached_characters and len(cached_characters.keys()):
+        for character_id, character in cached_characters.items():
+            character["is_online"] = True
+            found_characters[character_id] = character
 
     if not found_characters:
         return json({"message": "Character not found"}, status=404)
