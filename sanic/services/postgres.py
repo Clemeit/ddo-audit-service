@@ -291,7 +291,7 @@ def get_character_activity_by_type_and_character_id(
 
 
 def get_recent_quest_activity_by_character_id(
-    character_id: str,
+    character_id: int,
 ) -> list[dict[str, Quest]]:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
@@ -300,6 +300,28 @@ def get_recent_quest_activity_by_character_id(
                 SELECT timestamp, public.quests.name FROM public.character_activity
                 LEFT JOIN public.quests ON public.quests.area_id = CAST(public.character_activity.data ->> 'id' as INTEGER)
                 WHERE public.character_activity.id = %s AND activity_type = 'location' AND timestamp >= NOW() - INTERVAL '7 days'
+                ORDER BY timestamp DESC
+                LIMIT 500
+                """,
+                (character_id,),
+            )
+            activity = cursor.fetchall()
+            if not activity:
+                return []
+
+            return activity
+
+
+def get_recent_raid_activity_by_character_id(
+    character_id: int,
+) -> list[dict[str, Quest]]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT timestamp, public.quests.name FROM public.character_activity
+                LEFT JOIN public.quests ON public.quests.area_id = CAST(public.character_activity.data ->> 'id' as INTEGER)
+                WHERE quests.group_size = 'Raid' AND public.character_activity.id = %s AND activity_type = 'location' AND timestamp >= NOW() - INTERVAL '7 days'
                 ORDER BY timestamp DESC
                 LIMIT 500
                 """,

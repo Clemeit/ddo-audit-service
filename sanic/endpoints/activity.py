@@ -196,6 +196,30 @@ async def get_quest_quests_by_character_id(request, character_id: str):
     return json({"data": quest_activity})
 
 
+@activity_blueprint.get("/<character_id:int>/raids")
+async def get_raid_activity_by_character_id(request, character_id: str):
+    """
+    Method: GET
+
+    Route: /activity/<character_id:int>/raids
+
+    Description: Get recent raids by character ID.
+    """
+
+    try:
+        verify_authorization(request, character_id)
+        quest_activity = postgres_client.get_recent_raid_activity_by_character_id(
+            character_id
+        )
+    except AuthorizationError as e:
+        return json({"message": str(e)}, status=401)
+    except VerificationError as e:
+        return json({"message": str(e)}, status=403)
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+    return json({"data": quest_activity})
+
+
 def verify_authorization(request: Request, character_id: int):
     """
     Verify if the request is authorized.
