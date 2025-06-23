@@ -207,7 +207,7 @@ async def get_raid_activity_by_character_id(request, character_id: str):
     """
 
     try:
-        verify_authorization(request, character_id)
+        # verify_authorization(request, character_id)
         quest_activity = postgres_client.get_recent_raid_activity_by_character_id(
             character_id
         )
