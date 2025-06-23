@@ -320,10 +320,10 @@ def get_recent_raid_activity_by_character_id(
             cursor.execute(
                 """
                 SELECT timestamp, public.quests.name FROM public.character_activity
-                LEFT JOIN public.quests ON public.quests.area_id = CAST(public.character_activity.data ->> 'id' as INTEGER)
-                WHERE quests.group_size = 'Raid' AND public.character_activity.id = %s AND activity_type = 'location' AND timestamp >= NOW() - INTERVAL '7 days'
+                LEFT JOIN public.quests ON public.quests.area_id = CAST(public.character_activity.data ->> 'value' as INTEGER)
+                WHERE quests.group_size = 'Raid' AND character_activity.id = %s AND character_activity.activity_type = 'location' AND timestamp >= NOW() - INTERVAL '5 days'
                 ORDER BY timestamp DESC
-                LIMIT 500
+                LIMIT 100
                 """,
                 (character_id,),
             )
