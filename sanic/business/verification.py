@@ -28,5 +28,5 @@ def get_challenge_word_for_character_by_character_id(character_id: int) -> str:
     if existing_challenge_word:
         return existing_challenge_word
     new_challenge_word = random.choice(challenge_words)
-    set_challenge_for_character_by_character_id(character_id)
+    set_challenge_for_character_by_character_id(character_id, new_challenge_word)
     return new_challenge_word

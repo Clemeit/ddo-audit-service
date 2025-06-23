@@ -667,16 +667,20 @@ def set_page_messages(page_messages: list[PageMessage]):
 
 
 # === Verification challenges ====
-def get_challenge_for_character_by_character_id(character_id: int) -> str:
-    return (
-        get_redis_client().json().get(RedisKeys.VERIFICATION_CHALLENGES, character_id)
+def get_challenge_for_character_by_character_id(character_id: int) -> str | None:
+    challenges: dict[str, str] = (
+        get_redis_client()
+        .json()
+        .get(RedisKeys.VERIFICATION_CHALLENGES.value, "challenges")
     )
+    print(challenges)
+    return challenges.get(str(character_id))
 
 
 def set_challenge_for_character_by_character_id(character_id: int, challenge_word: str):
     get_redis_client().json().set(
-        RedisKeys.VERIFICATION_CHALLENGES,
-        path=character_id,
+        RedisKeys.VERIFICATION_CHALLENGES.value,
+        path=f"challenges.{character_id}",
         obj=challenge_word,
         nx=True,
     )

@@ -96,7 +96,7 @@ class RedisKeys(Enum):
 
 
 class VerificationChallengesModel(BaseModel):
-    challenges: Optional[Dict[int, str]] = None
+    challenges: Optional[Dict[int, str]] = {}
 
 
 DictDict: dict[int, dict] = {}
