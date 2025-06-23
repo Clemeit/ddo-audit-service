@@ -61,6 +61,11 @@ class CharacterActivitySummary(BaseModel):
     status_event_count: Optional[int] = None
 
 
+class CharacterQuestActivity(BaseModel):
+    timestamp: Optional[str] = None
+    quest_id: Optional[int] = None
+
+
 CHARACTER_ACTIVITY_TYPES = [item.value for item in CharacterActivityType]
 
 

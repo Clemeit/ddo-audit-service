@@ -10,6 +10,7 @@ from models.character import (
     Character,
     CharacterActivity,
     CharacterActivitySummary,
+    CharacterQuestActivity,
 )
 from models.game import PopulationDataPoint, PopulationPointInTime
 from models.redis import ServerInfo, ServerInfoDict
@@ -298,7 +299,7 @@ def get_recent_quest_activity_by_character_id(
             cursor.execute(
                 """
                 SELECT timestamp, public.quests.name FROM public.character_activity
-                LEFT JOIN public.quests ON public.quests.area_id = CAST(public.character_activity.data ->> 'id' as INTEGER)
+                LEFT JOIN public.quests ON public.quests.area_id = CAST(public.character_activity.data ->> 'value' as INTEGER)
                 WHERE public.character_activity.id = %s AND activity_type = 'location' AND timestamp >= NOW() - INTERVAL '7 days'
                 ORDER BY timestamp DESC
                 LIMIT 500
@@ -319,7 +320,7 @@ def get_recent_raid_activity_by_character_id(
         with conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT timestamp, public.quests.name FROM public.character_activity
+                SELECT timestamp, public.quests.id FROM public.character_activity
                 LEFT JOIN public.quests ON public.quests.area_id = CAST(public.character_activity.data ->> 'value' as INTEGER)
                 WHERE quests.group_size = 'Raid' AND character_activity.id = %s AND character_activity.activity_type = 'location' AND timestamp >= NOW() - INTERVAL '5 days'
                 ORDER BY timestamp DESC
@@ -327,11 +328,11 @@ def get_recent_raid_activity_by_character_id(
                 """,
                 (character_id,),
             )
-            activity = cursor.fetchall()
-            if not activity:
+            activities = cursor.fetchall()
+            if not activities:
                 return []
 
-            return activity
+            return build_character_activity_from_rows(activities)
 
 
 def get_game_population(
@@ -587,7 +588,7 @@ def add_page_message(page_message: PageMessage) -> PageMessage:
 
 def build_character_from_row(row: tuple) -> Character:
     return Character(
-        id=str(row[0]),
+        id=int(row[0]),
         name=row[1],
         gender=row[2],
         race=row[3],
@@ -642,6 +643,15 @@ def build_character_activity_summary_from_row(row: tuple) -> CharacterActivitySu
         guild_name_event_count=row[2],
         server_name_event_count=row[3],
         status_event_count=row[4],
+    )
+
+
+def build_character_quest_activity_from_row(row: tuple) -> CharacterQuestActivity:
+    return CharacterQuestActivity(
+        timestamp=(
+            datetime_to_datetime_string(row[0]) if isinstance(row[0], datetime) else ""
+        ),
+        quest_id=int(row[1]),
     )
 
 
