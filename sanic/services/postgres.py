@@ -24,6 +24,7 @@ from models.quest import Quest
 from models.area import Area
 
 from utils.areas import get_valid_area_ids
+from utils.time import datetime_to_datetime_string
 
 # Load environment variables
 DB_CONFIG = {
@@ -264,6 +265,7 @@ def get_character_activity_by_type_and_character_id(
     )
 
     with get_db_connection() as conn:
+        # TODO: use datetime_to_datetime_string ?
         with conn.cursor() as cursor:
             cursor.execute(
                 """
@@ -574,15 +576,25 @@ def build_character_from_row(row: tuple) -> Character:
         server_name=row[8],
         home_server_name=row[9],
         is_anonymous=row[10],
-        last_update=row[11].isoformat() if isinstance(row[11], datetime) else "",
-        last_save=row[12].isoformat() if isinstance(row[12], datetime) else "",
+        last_update=(
+            datetime_to_datetime_string(row[11])
+            if isinstance(row[11], datetime)
+            else ""
+        ),
+        last_save=(
+            datetime_to_datetime_string(row[12])
+            if isinstance(row[12], datetime)
+            else ""
+        ),
     )
 
 
 def build_news_from_row(row: tuple) -> News:
     return News(
         id=row[0],
-        date=row[1].isoformat() if isinstance(row[1], datetime) else "",
+        date=(
+            datetime_to_datetime_string(row[1]) if isinstance(row[1], datetime) else ""
+        ),
         message=row[2],
     )
 
@@ -592,8 +604,12 @@ def build_page_message_from_row(row: tuple) -> PageMessage:
         id=row[0],
         message=row[1],
         affected_pages=row[2],
-        start_date=row[3].isoformat() if isinstance(row[3], datetime) else "",
-        end_date=row[4].isoformat() if isinstance(row[4], datetime) else "",
+        start_date=(
+            datetime_to_datetime_string(row[3]) if isinstance(row[3], datetime) else ""
+        ),
+        end_date=(
+            datetime_to_datetime_string(row[4]) if isinstance(row[4], datetime) else ""
+        ),
     )
 
 
@@ -610,7 +626,11 @@ def build_character_activity_summary_from_row(row: tuple) -> CharacterActivitySu
 def build_character_activity_from_rows(rows: list[tuple]) -> list[dict]:
     return [
         {
-            "timestamp": row[0].isoformat() if isinstance(row[0], datetime) else "",
+            "timestamp": (
+                datetime_to_datetime_string(row[0])
+                if isinstance(row[0], datetime)
+                else ""
+            ),
             "data": row[1],
         }
         for row in rows

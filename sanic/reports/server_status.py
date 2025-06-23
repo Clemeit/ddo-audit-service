@@ -10,6 +10,7 @@ from requests import HTTPError
 from utils.scheduler import run_batch_on_schedule
 from constants.server import SERVER_NAMES_LOWERCASE
 from services.betterstack import server_status_heartbeat
+from utils.time import get_current_datetime_string
 
 
 class ServerStatusUpdater:
@@ -88,7 +89,7 @@ class ServerStatusUpdater:
                 )
                 server_info = ServerSpecificInfo(
                     index=world.order,
-                    last_status_check=datetime.now().isoformat(),
+                    last_status_check=get_current_datetime_string(),
                     is_online=is_online,
                     queue_number=world.queue_number,
                     is_vip_only=is_vip_only,
@@ -96,13 +97,13 @@ class ServerStatusUpdater:
                 server_status[world.name.lower()] = server_info
             except Exception:
                 server_status[world.name.lower()] = ServerSpecificInfo(
-                    last_status_check=datetime.now().isoformat(), is_online=False
+                    last_status_check=get_current_datetime_string(), is_online=False
                 )
         # for any server that is missing in server_status, add it with is_online=False
         for server_name in SERVER_NAMES_LOWERCASE:
             if server_name not in server_status:
                 server_status[server_name] = ServerSpecificInfo(
-                    last_status_check=datetime.now().isoformat(), is_online=False
+                    last_status_check=get_current_datetime_string(), is_online=False
                 )
         game_info = ServerInfo(servers=server_status)
         return game_info

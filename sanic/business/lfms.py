@@ -3,9 +3,8 @@ from constants.server import SERVER_NAMES_LOWERCASE
 from models.api import LfmRequestApiModel, LfmRequestType
 from models.lfm import Lfm, LfmActivity, LfmActivityEvent, LfmActivityType
 from models.redis import ServerLfmData
-from models.character import Character
 
-import datetime
+from utils.time import get_current_datetime_string
 
 
 def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType):
@@ -23,7 +22,7 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
         if not server_name_lower in SERVER_NAMES_LOWERCASE:
             continue
 
-        lfm.last_update = datetime.datetime.now().isoformat()
+        lfm.last_update = get_current_datetime_string()
         lfms_by_server_name[server_name_lower].lfms[lfm.id] = lfm
 
     # go through each server...

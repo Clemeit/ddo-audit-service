@@ -3,10 +3,10 @@ import services.redis as redis_client
 from constants.activity import CharacterActivityType
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.api import CharacterRequestApiModel, CharacterRequestType
-from models.character import Character, CharacterActivity
+from models.character import CharacterActivity
 from models.redis import ServerCharacterData
 
-import datetime
+from utils.time import get_current_datetime_string
 
 
 def handle_incoming_characters(
@@ -30,7 +30,7 @@ def handle_incoming_characters(
         if not server_name_lower in SERVER_NAMES_LOWERCASE:
             continue
 
-        character.last_update = datetime.datetime.now().isoformat()
+        character.last_update = get_current_datetime_string()
         characters_by_server_name[server_name_lower].characters[
             character.id
         ] = character

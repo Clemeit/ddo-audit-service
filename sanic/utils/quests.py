@@ -1,10 +1,10 @@
 import services.postgres as postgres_client
 import services.redis as redis_client
+from utils.time import timestamp_to_datetime_string, get_current_datetime_string
 
-from constants.redis import VALID_AREA_CACHE_LIFETIME, VALID_QUEST_CACHE_LIFETIME
+from constants.redis import VALID_QUEST_CACHE_LIFETIME
 
 from time import time
-from datetime import datetime
 
 
 def get_valid_quest_ids() -> tuple[list[int], str, str]:
@@ -33,7 +33,7 @@ def get_quests() -> tuple[list[dict], str, str]:
             return (
                 cached_quests,
                 "cache",
-                datetime.fromtimestamp(cached_timestamp).isoformat(),
+                timestamp_to_datetime_string(cached_timestamp),
             )
         database_quests = postgres_client.get_all_quests()
         if not database_quests:
@@ -42,7 +42,7 @@ def get_quests() -> tuple[list[dict], str, str]:
         return (
             [quest.model_dump() for quest in database_quests],
             "database",
-            datetime.now().isoformat(),
+            get_current_datetime_string(),
         )
     except Exception as e:
         print(f"Error fetching quest IDs: {e}")

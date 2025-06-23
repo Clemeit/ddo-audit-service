@@ -1,10 +1,10 @@
 import services.postgres as postgres_client
 import services.redis as redis_client
+from utils.time import timestamp_to_datetime_string, get_current_datetime_string
 
-from constants.redis import VALID_AREA_CACHE_LIFETIME, VALID_QUEST_CACHE_LIFETIME
+from constants.redis import VALID_AREA_CACHE_LIFETIME
 
 from time import time
-from datetime import datetime
 
 
 def get_valid_area_ids() -> tuple[list[int], str, str]:
@@ -33,7 +33,7 @@ def get_areas() -> tuple[list[dict], str, str]:
             return (
                 cached_areas,
                 "cache",
-                datetime.fromtimestamp(cached_timestamp).isoformat(),
+                timestamp_to_datetime_string(cached_timestamp),
             )
         database_areas = postgres_client.get_all_areas()
         if not database_areas:
@@ -42,7 +42,7 @@ def get_areas() -> tuple[list[dict], str, str]:
         return (
             [area.model_dump() for area in database_areas],
             "database",
-            datetime.now().isoformat(),
+            get_current_datetime_string(),
         )
     except Exception as e:
         print(f"Error fetching area IDs: {e}")
