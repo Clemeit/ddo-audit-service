@@ -224,7 +224,6 @@ def verify_authorization(request: Request, character_id: int):
     """
     Verify if the request is authorized.
     """
-    pass  # TODO: remove
     auth_header = request.headers.get("Authorization")
     if not auth_header:
         raise AuthorizationError("Authorization required")
