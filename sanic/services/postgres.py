@@ -962,13 +962,15 @@ def persist_log(log: LogRequest):
             try:
                 cursor.execute(
                     """
-                    INSERT INTO public.logs (message, level, timestamp, session_id, user_id, user_agent, browser, browser_version, os, screen_resolution, viewport_size, url, page_title, referrer, route, component, ip_address, country)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO public.logs (message, level, timestamp, component, action, session_id, user_id, user_agent, browser, browser_version, os, screen_resolution, viewport_size, url, page_title, referrer, route, ip_address, country)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         log.message,
                         log.level,
                         log.timestamp,
+                        log.component,
+                        log.action,
                         log.session_id,
                         log.user_id,
                         log.user_agent,
@@ -981,7 +983,6 @@ def persist_log(log: LogRequest):
                         log.page_title,
                         log.referrer,
                         log.route,
-                        log.component,
                         log.ip_address,
                         log.country,
                     ),

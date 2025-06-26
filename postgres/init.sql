@@ -160,6 +160,8 @@ CREATE TABLE IF NOT EXISTS public."logs"
     message text NOT NULL,
     level text NOT NULL,
     timestamp timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    component text,
+    action text,
     session_id text,
     user_id text,
     user_agent text,
@@ -172,7 +174,6 @@ CREATE TABLE IF NOT EXISTS public."logs"
     page_title text,
     referrer text,
     route text,
-    component text,
     ip_address text,
     country text,
     PRIMARY KEY (id)
