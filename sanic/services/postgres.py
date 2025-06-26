@@ -971,7 +971,7 @@ def persist_log(log: LogRequest):
                         log.timestamp,
                         log.component,
                         log.action,
-                        log.metadata,
+                        json.dumps(log.metadata) if log.metadata else None,
                         log.session_id,
                         log.user_id,
                         log.user_agent,
