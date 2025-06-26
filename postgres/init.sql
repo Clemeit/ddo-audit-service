@@ -162,6 +162,7 @@ CREATE TABLE IF NOT EXISTS public."logs"
     timestamp timestamp with time zone NOT NULL DEFAULT current_timestamp,
     component text,
     action text,
+    metadata jsonb,
     session_id text,
     user_id text,
     user_agent text,

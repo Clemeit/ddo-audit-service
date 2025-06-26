@@ -47,6 +47,7 @@ class LogRequest(BaseModel):
     route: Optional[str] = None
     component: Optional[str] = None
     action: Optional[str] = None
+    metadata: Optional[dict] = None
 
     # Network
     ip_address: Optional[str] = None
