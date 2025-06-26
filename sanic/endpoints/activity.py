@@ -206,6 +206,10 @@ async def get_raid_activity_by_character_id(request, character_id: str):
     Description: Get recent raids by character ID.
     """
 
+    # TODO: This should be changed to /activity/raids and the character IDs should be sent along in the body
+    # of the request. This endpoint should support looking up multiple characted IDs.
+    # How many IDs?
+
     try:
         # verify_authorization(request, character_id)
         quest_activity = postgres_client.get_recent_raid_activity_by_character_id(

@@ -137,3 +137,48 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."access_tokens"
     OWNER to pgadmin;
+
+CREATE TABLE IF NOT EXISTS public."feedback"
+(
+    id serial NOT NULL,
+    date timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    message text,
+    contact text,
+    ticket text,
+    response text,
+    PRIMARY KEY (id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."feedback"
+    OWNER to pgadmin;
+
+CREATE TABLE IF NOT EXISTS public."logs"
+(
+    id serial NOT NULL,
+    message text NOT NULL,
+    level text NOT NULL,
+    timestamp timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    session_id text,
+    user_id text,
+    user_agent text,
+    browser text,
+    browser_version text,
+    os text,
+    screen_resolution text,
+    viewport_size text,
+    url text NOT NULL,
+    page_title text,
+    referrer text,
+    route text,
+    component text,
+    ip_address text,
+    country text,
+    PRIMARY KEY (id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."logs"
+    OWNER to pgadmin;

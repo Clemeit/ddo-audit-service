@@ -8,13 +8,12 @@ from typing import Optional
 from constants.activity import CharacterActivityType
 from models.character import (
     Character,
-    CharacterActivity,
     CharacterActivitySummary,
     CharacterQuestActivity,
 )
 from models.game import PopulationDataPoint, PopulationPointInTime
 from models.redis import ServerInfo, ServerInfoDict
-from models.service import News, PageMessage
+from models.service import News, PageMessage, FeedbackRequest, LogRequest
 from psycopg2 import pool  # type: ignore
 from constants.activity import (
     MAX_CHARACTER_ACTIVITY_READ_LENGTH,
@@ -926,6 +925,70 @@ def update_areas(areas_list: list[Area]) -> None:
                 conn.commit()
             except Exception as e:
                 print(f"Failed to save area to the database: {e}")
+                conn.rollback()
+                raise e
+
+
+def post_feedback(feedback: FeedbackRequest, ticket: str):
+    """Save feedback to the database."""
+    feedbackMessage = feedback.message
+    feedbackContact = feedback.contact
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO public.feedback (message, contact, ticket)
+                    VALUES (%s, %s, %s)
+                    """,
+                    (
+                        feedbackMessage,
+                        feedbackContact,
+                        ticket,
+                    ),
+                )
+                conn.commit()
+            except Exception as e:
+                print(f"Failed to save feedback to the database: {e}")
+                conn.rollback()
+                raise e
+
+
+def persist_log(log: LogRequest):
+    """Save log to the database."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO public.logs (message, level, timestamp, session_id, user_id, user_agent, browser, browser_version, os, screen_resolution, viewport_size, url, page_title, referrer, route, component, ip_address, country)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        log.message,
+                        log.level,
+                        log.timestamp,
+                        log.session_id,
+                        log.user_id,
+                        log.user_agent,
+                        log.browser,
+                        log.browser_version,
+                        log.os,
+                        log.screen_resolution,
+                        log.viewport_size,
+                        log.url,
+                        log.page_title,
+                        log.referrer,
+                        log.route,
+                        log.component,
+                        log.ip_address,
+                        log.country,
+                    ),
+                )
+                conn.commit()
+            except Exception as e:
+                print(f"Failed to save log to the database: {e}")
                 conn.rollback()
                 raise e
 
