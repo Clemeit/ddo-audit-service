@@ -82,7 +82,7 @@ ALTER TABLE IF EXISTS public."server_info"
 CREATE TABLE IF NOT EXISTS public."character_activity"
 (
 	timestamp TIMESTAMPTZ NOT NULL,
-	id BIGINT NOT NULL,
+	character_id BIGINT NOT NULL,
 	activity_type TEXT,
 	data jsonb
 );

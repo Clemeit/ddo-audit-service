@@ -48,7 +48,7 @@ class CharacterActivity(BaseModel):
     This model will be used to store information about each character's activity in the postgres database.
     """
 
-    id: int
+    character_id: int
     activity_type: CharacterActivityType
     data: dict
 

@@ -130,7 +130,7 @@ def aggregate_character_activity_for_server(
     for character_id in deleted_character_ids:
         character_activity.append(
             CharacterActivity(
-                id=character_id,
+                character_id=character_id,
                 activity_type=CharacterActivityType.STATUS,
                 data={"value": False},
             )
@@ -139,7 +139,7 @@ def aggregate_character_activity_for_server(
     for character_id in logged_on_ids:
         character_activity.append(
             CharacterActivity(
-                id=character_id,
+                character_id=character_id,
                 activity_type=CharacterActivityType.STATUS,
                 data={"value": True},
             )
@@ -162,7 +162,7 @@ def aggregate_character_activity_for_server(
             if current_location != previous_location:
                 character_activity.append(
                     CharacterActivity(
-                        id=character_id,
+                        character_id=character_id,
                         activity_type=CharacterActivityType.LOCATION,
                         data={"value": current_location},
                     )
@@ -174,7 +174,7 @@ def aggregate_character_activity_for_server(
             if current_guild != previous_guild:
                 character_activity.append(
                     CharacterActivity(
-                        id=character_id,
+                        character_id=character_id,
                         activity_type=CharacterActivityType.GUILD_NAME,
                         data={"value": current_guild},
                     )
@@ -186,7 +186,7 @@ def aggregate_character_activity_for_server(
             if current_level != previous_level:
                 character_activity.append(
                     CharacterActivity(
-                        id=character_id,
+                        character_id=character_id,
                         activity_type=CharacterActivityType.TOTAL_LEVEL,
                         data={
                             "total_level": current_level,

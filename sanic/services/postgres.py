@@ -269,7 +269,7 @@ def get_character_activity_by_type_and_character_id(
         with conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT timestamp, data
+                SELECT timestamp, character_id, data
                 FROM public.character_activity
                 WHERE id = %s AND activity_type = %s AND timestamp BETWEEN %s AND %s
                 ORDER BY timestamp DESC
@@ -297,9 +297,9 @@ def get_recent_quest_activity_by_character_id(
         with conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT timestamp, public.quests.name FROM public.character_activity
+                SELECT timestamp, public.character_activity.character_id, public.quests.name FROM public.character_activity
                 LEFT JOIN public.quests ON public.quests.area_id = CAST(public.character_activity.data ->> 'value' as INTEGER)
-                WHERE public.character_activity.id = %s AND activity_type = 'location' AND timestamp >= NOW() - INTERVAL '7 days'
+                WHERE public.character_activity.character_id = %s AND activity_type = 'location' AND timestamp >= NOW() - INTERVAL '7 days'
                 ORDER BY timestamp DESC
                 LIMIT 500
                 """,
@@ -319,13 +319,35 @@ def get_recent_raid_activity_by_character_id(
         with conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT timestamp, public.quests.id FROM public.character_activity
+                SELECT timestamp, public.character_activity.character_id, public.quests.id FROM public.character_activity
                 LEFT JOIN public.quests ON public.quests.area_id = CAST(public.character_activity.data ->> 'value' as INTEGER)
-                WHERE quests.group_size = 'Raid' AND character_activity.id = %s AND character_activity.activity_type = 'location' AND timestamp >= NOW() - INTERVAL '5 days'
+                WHERE quests.group_size = 'Raid' AND character_activity.character_id = %s AND character_activity.activity_type = 'location' AND timestamp >= NOW() - INTERVAL '5 days'
                 ORDER BY timestamp DESC
                 LIMIT 100
                 """,
                 (character_id,),
+            )
+            activities = cursor.fetchall()
+            if not activities:
+                return []
+
+            return build_character_activity_from_rows(activities)
+
+
+def get_recent_raid_activity_by_character_ids(
+    character_ids: list[int],
+) -> list[dict]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT timestamp, public.character_activity.character_id, quests.id as quest_id FROM public.character_activity
+                LEFT JOIN public.quests ON public.quests.area_id = CAST(public.character_activity.data ->> 'value' as INTEGER)
+                WHERE quests.group_size = 'Raid' AND character_activity.character_id = ANY(%s) AND character_activity.activity_type = 'location' AND timestamp >= NOW() - INTERVAL '5 days'
+                ORDER BY timestamp DESC
+                LIMIT 100
+                """,
+                (character_ids,),
             )
             activities = cursor.fetchall()
             if not activities:
@@ -419,7 +441,7 @@ def add_game_info(game_info: ServerInfoDict):
 
 def add_character_activity(activites: list[dict]):
     insert_query = """
-        INSERT INTO character_activity (timestamp, id, activity_type, data)
+        INSERT INTO character_activity (timestamp, character_id, activity_type, data)
         VALUES (NOW(), %s, %s, %s)
     """
     batch_size = 500
@@ -430,7 +452,7 @@ def add_character_activity(activites: list[dict]):
                 for activity in activites:
                     batch.append(
                         (
-                            activity.get("id"),
+                            activity.get("character_id"),
                             activity.get("activity_type").value,
                             json.dumps(activity.get("data")),
                         )
@@ -662,7 +684,8 @@ def build_character_activity_from_rows(rows: list[tuple]) -> list[dict]:
                 if isinstance(row[0], datetime)
                 else ""
             ),
-            "data": row[1],
+            "character_id": int(row[1]),
+            "data": row[2],
         }
         for row in rows
     ]
