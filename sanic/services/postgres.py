@@ -356,11 +356,23 @@ def get_recent_raid_activity_by_character_ids(
             return build_character_activity_from_rows(activities)
 
 
+def get_game_population_relative(days: int = 1) -> list[PopulationPointInTime]:
+    """
+    Get population info for a relative date range starting at some
+    offset number of days ago and ending now.
+    """
+    return get_game_population(start_date=f"NOW() - INTERVAL '{days}'")
+
+
 def get_game_population(
     start_date: str = None, end_date: str = None
-) -> list[dict]:  # TODO: add type
+) -> list[PopulationPointInTime]:
+    """
+    Get population info for a range of dates, provided as valid
+    SQL timestamps.
+    """
     if not start_date:
-        start_date = "NOW() - INTERVAL 1 day"
+        start_date = "NOW() - INTERVAL '1 day'"
     if not end_date:
         end_date = "NOW()"
 
@@ -384,7 +396,7 @@ def get_game_population(
             if not game_info_list:
                 return []
 
-            population_points: list[dict] = []
+            population_points: list[PopulationPointInTime] = []
             for game_info in game_info_list:
                 try:
                     timestamp = game_info[0]
@@ -408,7 +420,7 @@ def get_game_population(
                     population_point = PopulationPointInTime(
                         timestamp=timestamp, data=population_data_points
                     )
-                    population_points.append(population_point.model_dump())
+                    population_points.append(population_point)
                 except Exception:
                     pass
             return population_points

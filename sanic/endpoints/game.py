@@ -55,23 +55,18 @@ async def get_server_info_by_server(request, server_name):
     return json(server_info)
 
 
-@game_blueprint.get("/population")
+@game_blueprint.get("/population/day")
 async def get_game_stats(request: Request):
     """
     Method: GET
 
-    Route: /game/population
+    Route: /game/population/day
 
-    Description: Get the population (character and lfm counts) of the game servers.
-    Can be filtered by date range. If no date range is provided, the data is for the last 24 hours.
+    Description: Get the population (character and lfm counts) of the game servers
+    for the last 24 hours.
     """
-    # get query parameters
-    start_date = request.args.get("start_date", None)
-    end_date = request.args.get("end_date", None)
-
-    # get data from redis cache
     try:
-        data = postgres_client.get_game_population(start_date, end_date)
+        data = postgres_client.get_game_population_relative(1)
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
