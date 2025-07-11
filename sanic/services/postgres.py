@@ -418,7 +418,7 @@ def get_game_population(
                 try:
                     timestamp = datetime_to_datetime_string(game_info[0])
                     data = ServerInfo(**game_info[1])
-                    population_data_points: list[dict[str, PopulationDataPoint]] = []
+                    population_data_points: dict[str, PopulationDataPoint] = {}
                     for server_name, server_info in data.servers.items():
                         character_count = 0
                         lfm_count = 0
@@ -431,9 +431,7 @@ def get_game_population(
                             character_count=character_count,
                             lfm_count=lfm_count,
                         )
-                        population_data_points.append(
-                            {server_name: population_data_point}
-                        )
+                        population_data_points[server_name] = population_data_point
                     population_point = PopulationPointInTime(
                         timestamp=timestamp, data=population_data_points
                     )
@@ -1104,6 +1102,14 @@ def get_game_population_last_week() -> list[PopulationPointInTime]:
     """Get population data for the last week (full days)."""
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday_start = today - timedelta(days=7)
+    yesterday_end = today
+    return get_game_population(start_date=yesterday_start, end_date=yesterday_end)
+
+
+def get_game_population_last_month() -> list[PopulationPointInTime]:
+    """Get population data for the last week (full days)."""
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today - timedelta(days=28)
     yesterday_end = today
     return get_game_population(start_date=yesterday_start, end_date=yesterday_end)
 

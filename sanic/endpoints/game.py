@@ -8,7 +8,11 @@ from models.redis import ServerInfo
 from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
-from utils.game import get_game_population_1_day, get_game_population_1_week
+from utils.game import (
+    get_game_population_1_day,
+    get_game_population_1_week,
+    get_game_population_1_month,
+)
 
 from utils.validation import is_server_name_valid
 
@@ -81,10 +85,28 @@ async def get_1_week_population(request: Request):
     Route: /game/population/week
 
     Description: Get the population (character and lfm counts) of the game servers
-    for the last 24 hours.
+    for the last week. Hourly averages.
     """
     try:
         data = get_game_population_1_week()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@game_blueprint.get("/population/month")
+async def get_1_month_population(request: Request):
+    """
+    Method: GET
+
+    Route: /game/population/month
+
+    Description: Get the population (character and lfm counts) of the game servers
+    for the last month. Daily averages.
+    """
+    try:
+        data = get_game_population_1_month()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
