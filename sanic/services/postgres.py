@@ -361,20 +361,38 @@ def get_game_population_relative(days: int = 1) -> list[PopulationPointInTime]:
     Get population info for a relative date range starting at some
     offset number of days ago and ending now.
     """
-    return get_game_population(start_date=f"NOW() - INTERVAL '{days}'")
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+    return get_game_population(start_date=start_date, end_date=end_date)
 
 
 def get_game_population(
-    start_date: str = None, end_date: str = None
+    start_date: datetime = None, end_date: datetime = None
 ) -> list[PopulationPointInTime]:
     """
-    Get population info for a range of dates, provided as valid
-    SQL timestamps.
+    Get population info for a range of dates.
+
+    Args:
+        start_date: Start datetime (defaults to 1 day ago)
+        end_date: End datetime (defaults to now)
+
+    Returns:
+        List of population data points within the date range
     """
-    if not start_date:
-        start_date = "NOW() - INTERVAL '1 day'"
+    # Set defaults
     if not end_date:
-        end_date = "NOW()"
+        end_date = datetime.now()
+    if not start_date:
+        start_date = end_date - timedelta(days=1)
+
+    # Validate date range
+    if start_date >= end_date:
+        raise ValueError("start_date must be before end_date")
+
+    # Limit the range to prevent excessive data retrieval (adjust as needed)
+    max_days = 30
+    if (end_date - start_date).days > max_days:
+        raise ValueError(f"Date range cannot exceed {max_days} days")
 
     # get all entries from the game_info table
     with get_db_connection() as conn:
@@ -384,10 +402,11 @@ def get_game_population(
                 SELECT timestamp, data
                 FROM public.game_info
                 WHERE timestamp BETWEEN %s AND %s
+                ORDER BY timestamp ASC
                 """,
                 (
-                    start_date,
-                    end_date,
+                    start_date.isoformat(),
+                    end_date.isoformat(),
                 ),
             )
             game_info_list = cursor.fetchall()
@@ -397,7 +416,7 @@ def get_game_population(
             population_points: list[PopulationPointInTime] = []
             for game_info in game_info_list:
                 try:
-                    timestamp = game_info[0]
+                    timestamp = datetime_to_datetime_string(game_info[0])
                     data = ServerInfo(**game_info[1])
                     population_data_points: list[dict[str, PopulationDataPoint]] = []
                     for server_name, server_info in data.servers.items():
@@ -1056,3 +1075,62 @@ def build_area_from_row(row: tuple) -> Area:
         is_wilderness=row[3],
         region=row[4],
     )
+
+
+# Add some helper functions for common time ranges
+def get_game_population_last_hours(hours: int = 24) -> list[PopulationPointInTime]:
+    """Get population data for the last N hours."""
+    end_date = datetime.now()
+    start_date = end_date - timedelta(hours=hours)
+    return get_game_population(start_date=start_date, end_date=end_date)
+
+
+def get_game_population_today() -> list[PopulationPointInTime]:
+    """Get population data for today (from midnight to now)."""
+    now = datetime.now()
+    start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return get_game_population(start_date=start_of_day, end_date=now)
+
+
+def get_game_population_yesterday() -> list[PopulationPointInTime]:
+    """Get population data for yesterday (full day)."""
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today - timedelta(days=1)
+    yesterday_end = today
+    return get_game_population(start_date=yesterday_start, end_date=yesterday_end)
+
+
+def get_game_population_last_week() -> list[PopulationPointInTime]:
+    """Get population data for the last week (full days)."""
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today - timedelta(days=7)
+    yesterday_end = today
+    return get_game_population(start_date=yesterday_start, end_date=yesterday_end)
+
+
+# def get_game_population_by_date_strings(
+#     start_date_str: str = None, end_date_str: str = None, date_format: str = "%Y-%m-%d"
+# ) -> list[PopulationPointInTime]:
+#     """
+#     Get population info using date strings.
+
+#     Args:
+#         start_date_str: Start date as string (e.g., "2025-07-01")
+#         end_date_str: End date as string (e.g., "2025-07-10")
+#         date_format: Format of the date strings (defaults to "%Y-%m-%d")
+
+#     Returns:
+#         List of population data points within the date range
+#     """
+#     start_date = None
+#     end_date = None
+
+#     try:
+#         if start_date_str:
+#             start_date = datetime.strptime(start_date_str, date_format)
+#         if end_date_str:
+#             end_date = datetime.strptime(end_date_str, date_format)
+#     except ValueError as e:
+#         raise ValueError(f"Invalid date format. Expected format: {date_format}. Error: {e}")
+
+#     return get_game_population(start_date=start_date, end_date=end_date)

@@ -2,13 +2,13 @@
 Game endpoints.
 """
 
-import services.postgres as postgres_client
 import services.redis as redis_client
 from models.redis import ServerInfo
 
 from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
+from utils.game import get_game_population_1_day, get_game_population_1_week
 
 from utils.validation import is_server_name_valid
 
@@ -56,7 +56,7 @@ async def get_server_info_by_server(request, server_name):
 
 
 @game_blueprint.get("/population/day")
-async def get_game_stats(request: Request):
+async def get_1_day_population(request: Request):
     """
     Method: GET
 
@@ -66,11 +66,29 @@ async def get_game_stats(request: Request):
     for the last 24 hours.
     """
     try:
-        data = postgres_client.get_game_population_relative(1)
+        data = get_game_population_1_day()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json(data)
+    return json({"data": data})
+
+
+@game_blueprint.get("/population/week")
+async def get_1_week_population(request: Request):
+    """
+    Method: GET
+
+    Route: /game/population/week
+
+    Description: Get the population (character and lfm counts) of the game servers
+    for the last 24 hours.
+    """
+    try:
+        data = get_game_population_1_week()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
 
 
 # ===================================

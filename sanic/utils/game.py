@@ -56,7 +56,7 @@ def get_game_population_1_week() -> list[dict]:
     ):
         return cached_data.get("data")
 
-    postgres_data = postgres_client.get_game_population_relative(7)
+    postgres_data = postgres_client.get_game_population_last_week()
 
     averaged_data: list[PopulationPointInTime] = []
     points_in_last_hour: list[PopulationPointInTime] = []
