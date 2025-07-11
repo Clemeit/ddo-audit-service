@@ -381,9 +381,7 @@ def get_game_population(
         with conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT
-                    EXTRACT(EPOCH FROM timestamp) as timestamp,
-                    data
+                SELECT timestamp, data
                 FROM public.game_info
                 WHERE timestamp BETWEEN %s AND %s
                 """,
