@@ -7,7 +7,7 @@ import services.redis as redis_client
 from models.game import GameWorld
 from models.redis import ServerInfo, ServerSpecificInfo
 from requests import HTTPError
-from utils.scheduler import run_batch_on_schedule
+from utils.scheduler import run_on_schedule
 from constants.server import SERVER_NAMES_LOWERCASE
 from services.betterstack import server_status_heartbeat
 from utils.time import get_current_datetime_string
@@ -120,17 +120,14 @@ class ServerStatusUpdater:
 
     def save_game_info(self):
         try:
-            game_info = redis_client.get_all_server_info_as_class()
+            game_info = redis_client.get_server_info_as_dict()
             postgres_client.add_game_info(game_info)
         except Exception as e:
             print(f"Failed to save game info: {e}")
 
 
 def get_game_info_scheduler(
-    query_game_info_interval: int = 10, save_game_info_interval: int = 300
+    save_game_info_interval: int = 300,
 ) -> tuple[callable, callable]:
     game_info_updater = ServerStatusUpdater()
-    return run_batch_on_schedule(
-        (game_info_updater.update_game_info, query_game_info_interval),
-        (game_info_updater.save_game_info, save_game_info_interval),
-    )
+    return run_on_schedule(game_info_updater.save_game_info, save_game_info_interval)

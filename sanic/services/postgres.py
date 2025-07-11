@@ -414,13 +414,13 @@ def get_game_population(
             return population_points
 
 
-def add_game_info(game_info: ServerInfoDict):
+def add_game_info(game_info: dict):
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             try:
                 serialized_data = {
                     "servers": {
-                        server_name: server_info.model_dump()
+                        server_name: server_info
                         for server_name, server_info in game_info.items()
                     }
                 }
