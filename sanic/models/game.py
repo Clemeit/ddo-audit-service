@@ -4,13 +4,13 @@ from pydantic import BaseModel
 
 
 class PopulationDataPoint(BaseModel):
-    character_count: int
-    lfm_count: int
+    character_count: float
+    lfm_count: float
 
 
 class PopulationPointInTime(BaseModel):
     timestamp: Optional[str]
-    data: Optional[list[dict[str, PopulationDataPoint]]] = None
+    data: Optional[dict[str, PopulationDataPoint]] = None
 
 
 class GameWorld(BaseModel):

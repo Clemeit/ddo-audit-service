@@ -2,7 +2,7 @@ import services.postgres as postgres_client
 import services.redis as redis_client
 from utils.time import timestamp_to_datetime_string, get_current_datetime_string
 
-from constants.redis import VALID_QUEST_CACHE_LIFETIME
+from constants.redis import VALID_QUEST_CACHE_TTL
 
 from time import time
 
@@ -29,7 +29,7 @@ def get_quests() -> tuple[list[dict], str, str]:
         known_quests_cached_data = redis_client.get_known_quests()
         cached_quests = known_quests_cached_data.get("quests")
         cached_timestamp: float = known_quests_cached_data.get("timestamp")
-        if cached_quests and time() - cached_timestamp < VALID_QUEST_CACHE_LIFETIME:
+        if cached_quests and time() - cached_timestamp < VALID_QUEST_CACHE_TTL:
             return (
                 cached_quests,
                 "cache",

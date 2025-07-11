@@ -2,13 +2,17 @@
 Game endpoints.
 """
 
-import services.postgres as postgres_client
 import services.redis as redis_client
 from models.redis import ServerInfo
 
 from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
+from utils.game import (
+    get_game_population_1_day,
+    get_game_population_1_week,
+    get_game_population_1_month,
+)
 
 from utils.validation import is_server_name_valid
 
@@ -55,27 +59,58 @@ async def get_server_info_by_server(request, server_name):
     return json(server_info)
 
 
-@game_blueprint.get("/population")
-async def get_game_stats(request: Request):
+@game_blueprint.get("/population/day")
+async def get_1_day_population(request: Request):
     """
     Method: GET
 
-    Route: /game/population
+    Route: /game/population/day
 
-    Description: Get the population (character and lfm counts) of the game servers.
-    Can be filtered by date range. If no date range is provided, the data is for the last 24 hours.
+    Description: Get the population (character and lfm counts) of the game servers
+    for the last 24 hours.
     """
-    # get query parameters
-    start_date = request.args.get("start_date", None)
-    end_date = request.args.get("end_date", None)
-
-    # get data from redis cache
     try:
-        data = postgres_client.get_game_population(start_date, end_date)
+        data = get_game_population_1_day()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
-    return json(data)
+    return json({"data": data})
+
+
+@game_blueprint.get("/population/week")
+async def get_1_week_population(request: Request):
+    """
+    Method: GET
+
+    Route: /game/population/week
+
+    Description: Get the population (character and lfm counts) of the game servers
+    for the last week. Hourly averages.
+    """
+    try:
+        data = get_game_population_1_week()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@game_blueprint.get("/population/month")
+async def get_1_month_population(request: Request):
+    """
+    Method: GET
+
+    Route: /game/population/month
+
+    Description: Get the population (character and lfm counts) of the game servers
+    for the last month. Daily averages.
+    """
+    try:
+        data = get_game_population_1_month()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
 
 
 # ===================================
