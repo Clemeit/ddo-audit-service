@@ -58,7 +58,7 @@ def get_game_population_1_week() -> list[dict]:
     postgres_data = postgres_client.get_game_population_last_week()
     averaged_data = average_hourly_data(postgres_data)
     data_dump = [datum.model_dump() for datum in averaged_data]
-    redis_client.set_game_population_1_day(data_dump)
+    redis_client.set_game_population_1_week(data_dump)
     return data_dump
 
 
