@@ -33,9 +33,10 @@ def get_game_population_1_day() -> list[dict]:
     cached_data = redis_client.get_game_population_1_day()
     if (
         cached_data
+        and cached_data.get("timestamp")
         and time() - cached_data.get("timestamp") < POPULATION_1_DAY_CACHE_TTL
     ):
-        return cached_data.get("data")
+        return cached_data.get("data", [])
 
     postgres_data = postgres_client.get_game_population_relative(1)
     data_dump = [datum.model_dump() for datum in postgres_data]
@@ -51,9 +52,10 @@ def get_game_population_1_week() -> list[dict]:
     cached_data = redis_client.get_game_population_1_week()
     if (
         cached_data
+        and cached_data.get("timestamp")
         and time() - cached_data.get("timestamp") < POPULATION_1_WEEK_CACHE_TTL
     ):
-        return cached_data.get("data")
+        return cached_data.get("data", [])
 
     postgres_data = postgres_client.get_game_population_last_week()
     averaged_data = average_hourly_data(postgres_data)
@@ -70,9 +72,10 @@ def get_game_population_1_month() -> list[dict]:
     cached_data = redis_client.get_game_population_1_month()
     if (
         cached_data
+        and cached_data.get("timestamp")
         and time() - cached_data.get("timestamp") < POPULATION_1_MONTH_CACHE_TTL
     ):
-        return cached_data.get("data")
+        return cached_data.get("data", [])
 
     postgres_data = postgres_client.get_game_population_last_month()
     averaged_data = average_daily_data(postgres_data)
