@@ -228,7 +228,7 @@ def summed_population_data_points(
     input_data: list[PopulationPointInTime],
 ) -> tuple[dict[str, int], dict[str, PopulationDataPoint]]:
     if len(input_data) == 0:
-        return []
+        return {}, {}
 
     total_counts: dict[str, int] = {}
     summed_data_points: dict[str, PopulationDataPoint] = {}
