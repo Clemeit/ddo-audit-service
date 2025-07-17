@@ -511,7 +511,7 @@ def add_news(news: News) -> News:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             try:
-                if news.date is None:
+                if not news.date or news.date.strip() == "":
                     cursor.execute(
                         """
                         INSERT INTO public.news (message)
