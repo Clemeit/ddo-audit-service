@@ -44,6 +44,28 @@ def get_game_population_1_day() -> list[dict]:
     return data_dump
 
 
+def get_game_population_totals_1_day() -> list[dict]:
+    """
+    Gets 1 day of total game population per server.
+    Checks cache then database.
+    """
+    cached_data = redis_client.get_game_population_totals_1_day()
+    if (
+        cached_data
+        and cached_data.get("timestamp")
+        and time() - cached_data.get("timestamp") < POPULATION_1_DAY_CACHE_TTL
+    ):
+        return cached_data.get("data", [])
+
+    postgres_data = postgres_client.get_game_population_relative(1)
+    _, total_data = summed_population_data_points(postgres_data)
+    data_dump = {
+        serverName: datum.model_dump() for serverName, datum in total_data.items()
+    }
+    redis_client.set_game_population_totals_1_day(data_dump)
+    return data_dump
+
+
 def get_game_population_1_week() -> list[dict]:
     """
     Gets 1 week of game population reported as hourly averages.
@@ -64,6 +86,28 @@ def get_game_population_1_week() -> list[dict]:
     return data_dump
 
 
+def get_game_population_totals_1_week() -> list[dict]:
+    """
+    Gets 1 week of total game population per server.
+    Checks cache then database.
+    """
+    cached_data = redis_client.get_game_population_totals_1_week()
+    if (
+        cached_data
+        and cached_data.get("timestamp")
+        and time() - cached_data.get("timestamp") < POPULATION_1_WEEK_CACHE_TTL
+    ):
+        return cached_data.get("data", [])
+
+    postgres_data = postgres_client.get_game_population_last_week()
+    _, total_data = summed_population_data_points(postgres_data)
+    data_dump = {
+        serverName: datum.model_dump() for serverName, datum in total_data.items()
+    }
+    redis_client.set_game_population_totals_1_week(data_dump)
+    return data_dump
+
+
 def get_game_population_1_month() -> list[dict]:
     """
     Gets 1 month of game population reported as daily averages.
@@ -81,6 +125,28 @@ def get_game_population_1_month() -> list[dict]:
     averaged_data = average_daily_data(postgres_data)
     data_dump = [datum.model_dump() for datum in averaged_data]
     redis_client.set_game_population_1_month(data_dump)
+    return data_dump
+
+
+def get_game_population_totals_1_month() -> list[dict]:
+    """
+    Gets 1 month of total game population per server.
+    Checks cache then database.
+    """
+    cached_data = redis_client.get_game_population_totals_1_month()
+    if (
+        cached_data
+        and cached_data.get("timestamp")
+        and time() - cached_data.get("timestamp") < POPULATION_1_MONTH_CACHE_TTL
+    ):
+        return cached_data.get("data", [])
+
+    postgres_data = postgres_client.get_game_population_last_month()
+    _, total_data = summed_population_data_points(postgres_data)
+    data_dump = {
+        serverName: datum.model_dump() for serverName, datum in total_data.items()
+    }
+    redis_client.set_game_population_totals_1_month(data_dump)
     return data_dump
 
 
@@ -158,9 +224,9 @@ def average_daily_data(
     return hourly_averaged_data
 
 
-def averaged_population_data_points(
+def summed_population_data_points(
     input_data: list[PopulationPointInTime],
-) -> dict[str, PopulationDataPoint]:
+) -> tuple[dict[str, int], dict[str, PopulationDataPoint]]:
     if len(input_data) == 0:
         return []
 
@@ -183,6 +249,17 @@ def averaged_population_data_points(
                 total_counts[server_name] += 1
             else:
                 total_counts[server_name] = 1
+
+    return total_counts, summed_data_points
+
+
+def averaged_population_data_points(
+    input_data: list[PopulationPointInTime],
+) -> dict[str, PopulationDataPoint]:
+    if len(input_data) == 0:
+        return []
+
+    total_counts, summed_data_points = summed_population_data_points(input_data)
 
     averaged_data_points: dict[str, PopulationDataPoint] = {}
     for server_name, server_data in summed_data_points.items():

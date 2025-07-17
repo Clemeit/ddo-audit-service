@@ -562,6 +562,19 @@ def set_game_population_1_day(data: list[dict]):
     )
 
 
+def get_game_population_totals_1_day() -> dict:
+    return get_redis_client().json().get("game_population_totals_1_day")
+
+
+def set_game_population_totals_1_day(data: list[dict]):
+    entry = {"data": data, "timestamp": time()}
+    get_redis_client().json().set(
+        "game_population_totals_1_day",
+        path="$",
+        obj=entry,
+    )
+
+
 def get_game_population_1_week() -> dict:
     return get_redis_client().json().get("game_population_1_week")
 
@@ -575,6 +588,19 @@ def set_game_population_1_week(data: list[dict]):
     )
 
 
+def get_game_population_totals_1_week() -> dict:
+    return get_redis_client().json().get("game_population_totals_1_week")
+
+
+def set_game_population_totals_1_week(data: list[dict]):
+    entry = {"data": data, "timestamp": time()}
+    get_redis_client().json().set(
+        "game_population_totals_1_week",
+        path="$",
+        obj=entry,
+    )
+
+
 def get_game_population_1_month() -> dict:
     return get_redis_client().json().get("game_population_1_month")
 
@@ -583,6 +609,19 @@ def set_game_population_1_month(data: list[dict]):
     entry = {"data": data, "timestamp": time()}
     get_redis_client().json().set(
         "game_population_1_month",
+        path="$",
+        obj=entry,
+    )
+
+
+def get_game_population_totals_1_month() -> dict:
+    return get_redis_client().json().get("game_population_totals_1_month")
+
+
+def set_game_population_totals_1_month(data: list[dict]):
+    entry = {"data": data, "timestamp": time()}
+    get_redis_client().json().set(
+        "game_population_totals_1_month",
         path="$",
         obj=entry,
     )

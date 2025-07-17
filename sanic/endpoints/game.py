@@ -12,6 +12,9 @@ from utils.game import (
     get_game_population_1_day,
     get_game_population_1_week,
     get_game_population_1_month,
+    get_game_population_totals_1_day,
+    get_game_population_totals_1_week,
+    get_game_population_totals_1_month,
 )
 
 from utils.validation import is_server_name_valid
@@ -107,6 +110,57 @@ async def get_1_month_population(request: Request):
     """
     try:
         data = get_game_population_1_month()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@game_blueprint.get("/population/totals/day")
+async def get_1_day_total_population(request: Request):
+    """
+    Method: GET
+
+    Route: /population/totals/day
+
+    Description: Get the total summed population for the last 24 hours.
+    """
+    try:
+        data = get_game_population_totals_1_day()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@game_blueprint.get("/population/totals/week")
+async def get_1_week_total_population(request: Request):
+    """
+    Method: GET
+
+    Route: /population/totals/week
+
+    Description: Get the total summed population for the last week.
+    """
+    try:
+        data = get_game_population_totals_1_week()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@game_blueprint.get("/population/totals/month")
+async def get_1_month_total_population(request: Request):
+    """
+    Method: GET
+
+    Route: /population/totals/month
+
+    Description: Get the total summed population for the last month.
+    """
+    try:
+        data = get_game_population_totals_1_month()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
