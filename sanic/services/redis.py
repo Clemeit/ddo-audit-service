@@ -245,7 +245,10 @@ async def close_redis_async():
 
 def redis_health_check() -> bool:
     """Check if Redis is healthy and responsive."""
-    return _redis_manager.health_check()
+    healthy = _redis_manager.health_check()
+    return {
+        "healthy": healthy,
+    }
 
 
 async def redis_health_check_async() -> bool:

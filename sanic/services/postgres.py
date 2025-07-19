@@ -63,6 +63,15 @@ class PostgresConnectionManager:
     def __init__(self):
         self._connection_pool: Optional[pool.SimpleConnectionPool] = None
         self._is_initialized = False
+        # Track connection usage statistics
+        self._connection_stats = {
+            "total_connections_requested": 0,
+            "total_connections_returned": 0,
+            "current_connections_in_use": 0,
+            "peak_connections_in_use": 0,
+            "connection_errors": 0,
+            "last_reset_time": datetime.now(),
+        }
 
     def initialize(self):
         """Initialize PostgreSQL connection pool."""
@@ -109,10 +118,24 @@ class PostgresConnectionManager:
 
         conn = None
         try:
+            # Update connection statistics
+            self._connection_stats["total_connections_requested"] += 1
+
             conn = self._connection_pool.getconn()
 
             if conn is None:
+                self._connection_stats["connection_errors"] += 1
                 raise ConnectionError("Failed to get connection from pool")
+
+            # Track active connections
+            self._connection_stats["current_connections_in_use"] += 1
+            if (
+                self._connection_stats["current_connections_in_use"]
+                > self._connection_stats["peak_connections_in_use"]
+            ):
+                self._connection_stats["peak_connections_in_use"] = (
+                    self._connection_stats["current_connections_in_use"]
+                )
 
             # Set autocommit to False for transaction control
             conn.autocommit = False
@@ -129,13 +152,17 @@ class PostgresConnectionManager:
                     conn.rollback()
                 except Exception as rollback_error:
                     logger.error(f"Error during rollback: {rollback_error}")
+            self._connection_stats["connection_errors"] += 1
             raise e
         finally:
             if conn:
                 try:
                     self._connection_pool.putconn(conn)
+                    self._connection_stats["total_connections_returned"] += 1
+                    self._connection_stats["current_connections_in_use"] -= 1
                 except Exception as putconn_error:
                     logger.error(f"Error returning connection to pool: {putconn_error}")
+                    self._connection_stats["connection_errors"] += 1
 
     @contextmanager
     def get_cursor(self, commit: bool = True) -> Generator:
@@ -253,16 +280,79 @@ class PostgresConnectionManager:
             return {"error": "Pool not initialized"}
 
         try:
-            # Note: psycopg2 SimpleConnectionPool doesn't expose detailed stats
-            # This is a basic implementation
+            # psycopg2 SimpleConnectionPool has limited introspection
+            # but we can get some basic info
+            pool = self._connection_pool
+
+            # Try to access private attributes (may vary by psycopg2 version)
+            try:
+                # These are internal attributes and may not always be available
+                total_connections = (
+                    len(pool._pool) if hasattr(pool, "_pool") else "unknown"
+                )
+                available_connections = (
+                    len(pool._pool) if hasattr(pool, "_pool") else "unknown"
+                )
+                used_connections = getattr(pool, "_used", {})
+                used_count = (
+                    len(used_connections)
+                    if isinstance(used_connections, dict)
+                    else "unknown"
+                )
+            except (AttributeError, TypeError):
+                total_connections = "unknown"
+                available_connections = "unknown"
+                used_count = "unknown"
+
+            # Include our custom tracking statistics
+            uptime_seconds = (
+                datetime.now() - self._connection_stats["last_reset_time"]
+            ).total_seconds()
+
             return {
                 "min_connections": POSTGRES_MIN_CONN,
                 "max_connections": POSTGRES_MAX_CONN,
                 "initialized": self._is_initialized,
+                "pool_total_connections": total_connections,
+                "pool_available_connections": available_connections,
+                "pool_used_connections": used_count,
+                # Custom tracking statistics
+                "runtime_stats": {
+                    "total_connections_requested": self._connection_stats[
+                        "total_connections_requested"
+                    ],
+                    "total_connections_returned": self._connection_stats[
+                        "total_connections_returned"
+                    ],
+                    "current_connections_in_use": self._connection_stats[
+                        "current_connections_in_use"
+                    ],
+                    "peak_connections_in_use": self._connection_stats[
+                        "peak_connections_in_use"
+                    ],
+                    "connection_errors": self._connection_stats["connection_errors"],
+                    "uptime_seconds": round(uptime_seconds, 2),
+                    "requests_per_second": round(
+                        self._connection_stats["total_connections_requested"]
+                        / max(uptime_seconds, 1),
+                        2,
+                    ),
+                },
             }
         except Exception as e:
             logger.error(f"Error getting pool stats: {e}")
             return {"error": str(e)}
+
+    def reset_connection_stats(self):
+        """Reset connection statistics for monitoring."""
+        self._connection_stats = {
+            "total_connections_requested": 0,
+            "total_connections_returned": 0,
+            "current_connections_in_use": 0,
+            "peak_connections_in_use": 0,
+            "connection_errors": 0,
+            "last_reset_time": datetime.now(),
+        }
 
     def close(self):
         """Close all PostgreSQL connections."""
@@ -311,6 +401,11 @@ def get_postgres_pool_stats() -> dict:
     return _postgres_manager.get_pool_stats()
 
 
+def reset_postgres_connection_stats():
+    """Reset PostgreSQL connection tracking statistics."""
+    return _postgres_manager.reset_connection_stats()
+
+
 @contextmanager
 def get_db_connection():
     """Get a database connection context manager for backward compatibility."""
@@ -355,27 +450,133 @@ def get_detailed_connection_info():
     """Get detailed connection information for debugging."""
     try:
         with get_db_cursor(commit=False) as cursor:
+            # Get overall connection stats
             cursor.execute(
                 """
                 SELECT 
                     count(*) as total_connections,
                     count(*) FILTER (WHERE state = 'active') as active,
                     count(*) FILTER (WHERE state = 'idle') as idle,
-                    count(*) FILTER (WHERE application_name = %s) as our_app_connections
+                    count(*) FILTER (WHERE state = 'idle in transaction') as idle_in_transaction,
+                    count(*) FILTER (WHERE application_name = %s) as our_app_connections,
+                    count(*) FILTER (WHERE application_name = %s AND state = 'active') as our_active_connections,
+                    count(*) FILTER (WHERE application_name = %s AND state = 'idle') as our_idle_connections
                 FROM pg_stat_activity
+                WHERE pid != pg_backend_pid()  -- Exclude current connection
             """,
-                (POSTGRES_APPLICATION_NAME,),
+                (
+                    POSTGRES_APPLICATION_NAME,
+                    POSTGRES_APPLICATION_NAME,
+                    POSTGRES_APPLICATION_NAME,
+                ),
             )
 
             result = cursor.fetchone()
+
+            # Get additional database stats
+            cursor.execute(
+                """
+                SELECT 
+                    numbackends as backends,
+                    xact_commit as transactions_committed,
+                    xact_rollback as transactions_rolled_back,
+                    blks_read as blocks_read,
+                    blks_hit as blocks_hit,
+                    tup_returned as tuples_returned,
+                    tup_fetched as tuples_fetched,
+                    tup_inserted as tuples_inserted,
+                    tup_updated as tuples_updated,
+                    tup_deleted as tuples_deleted
+                FROM pg_stat_database 
+                WHERE datname = current_database()
+                """
+            )
+
+            db_stats = cursor.fetchone()
+
+            # Calculate cache hit ratio
+            blocks_hit = db_stats[4] if db_stats and db_stats[4] else 0
+            blocks_read = db_stats[3] if db_stats and db_stats[3] else 0
+            total_blocks = blocks_hit + blocks_read
+            cache_hit_ratio = (
+                (blocks_hit / total_blocks * 100) if total_blocks > 0 else 0
+            )
+
             return {
                 "total_connections": result[0],
                 "active_connections": result[1],
                 "idle_connections": result[2],
-                "our_app_connections": result[3],
+                "idle_in_transaction_connections": result[3],
+                "our_app_connections": result[4],
+                "our_active_connections": result[5],
+                "our_idle_connections": result[6],
+                "database_backends": db_stats[0] if db_stats else 0,
+                "transactions_committed": db_stats[1] if db_stats else 0,
+                "transactions_rolled_back": db_stats[2] if db_stats else 0,
+                "cache_hit_ratio_percent": round(cache_hit_ratio, 2),
+                "blocks_read": blocks_read,
+                "blocks_hit": blocks_hit,
+                "tuples_returned": db_stats[5] if db_stats else 0,
+                "tuples_fetched": db_stats[6] if db_stats else 0,
+                "tuples_inserted": db_stats[7] if db_stats else 0,
+                "tuples_updated": db_stats[8] if db_stats else 0,
+                "tuples_deleted": db_stats[9] if db_stats else 0,
             }
     except Exception as e:
         logger.error(f"Error getting connection info: {e}")
+        return {"error": str(e)}
+
+
+def get_active_queries_info():
+    """Get information about currently running queries."""
+    try:
+        with get_db_cursor(commit=False) as cursor:
+            cursor.execute(
+                """
+                SELECT 
+                    pid,
+                    application_name,
+                    client_addr,
+                    state,
+                    query_start,
+                    state_change,
+                    wait_event_type,
+                    wait_event,
+                    EXTRACT(EPOCH FROM (now() - query_start)) as query_duration_seconds,
+                    LEFT(query, 100) as query_preview
+                FROM pg_stat_activity 
+                WHERE state = 'active' 
+                    AND pid != pg_backend_pid()  -- Exclude current connection
+                    AND application_name = %s
+                ORDER BY query_start
+                LIMIT 10
+                """,
+                (POSTGRES_APPLICATION_NAME,),
+            )
+
+            active_queries = cursor.fetchall()
+
+            queries_info = []
+            for query in active_queries:
+                queries_info.append(
+                    {
+                        "pid": query[0],
+                        "application_name": query[1],
+                        "client_addr": str(query[2]) if query[2] else None,
+                        "state": query[3],
+                        "query_start": query[4].isoformat() if query[4] else None,
+                        "state_change": query[5].isoformat() if query[5] else None,
+                        "wait_event_type": query[6],
+                        "wait_event": query[7],
+                        "query_duration_seconds": round(query[8], 2) if query[8] else 0,
+                        "query_preview": query[9],
+                    }
+                )
+
+            return queries_info
+
+    except Exception as e:
+        logger.error(f"Error getting active queries info: {e}")
         return {"error": str(e)}
 
 
@@ -385,6 +586,7 @@ def health_check():
         stats = get_postgres_pool_stats()
         health_status = postgres_health_check()
         connection_info = get_detailed_connection_info()
+        active_queries = get_active_queries_info()
 
         # Add basic performance metrics
         with get_db_cursor(commit=False) as cursor:
@@ -399,6 +601,52 @@ def health_check():
             cursor.execute("SHOW max_connections")
             pg_max_connections = cursor.fetchone()[0]
 
+            # Get current connection info for this specific connection
+            cursor.execute(
+                """
+                SELECT 
+                    application_name,
+                    client_addr,
+                    state,
+                    query_start,
+                    state_change,
+                    backend_start
+                FROM pg_stat_activity 
+                WHERE pid = pg_backend_pid()
+                """
+            )
+            current_conn_info = cursor.fetchone()
+
+        # Format current connection info
+        current_connection = (
+            {
+                "application_name": current_conn_info[0] if current_conn_info else None,
+                "client_addr": (
+                    str(current_conn_info[1])
+                    if current_conn_info and current_conn_info[1]
+                    else None
+                ),
+                "state": current_conn_info[2] if current_conn_info else None,
+                "query_start": (
+                    current_conn_info[3].isoformat()
+                    if current_conn_info and current_conn_info[3]
+                    else None
+                ),
+                "state_change": (
+                    current_conn_info[4].isoformat()
+                    if current_conn_info and current_conn_info[4]
+                    else None
+                ),
+                "backend_start": (
+                    current_conn_info[5].isoformat()
+                    if current_conn_info and current_conn_info[5]
+                    else None
+                ),
+            }
+            if current_conn_info
+            else {}
+        )
+
         return {
             "database": {
                 "healthy": health_status,
@@ -407,6 +655,9 @@ def health_check():
                 "pool_stats": stats,
                 "postgresql_max_connections": int(pg_max_connections),
                 "connection_info": connection_info,
+                "current_connection": current_connection,
+                "active_queries": active_queries,
+                "application_name": POSTGRES_APPLICATION_NAME,
             }
         }
     except Exception as e:
