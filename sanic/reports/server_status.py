@@ -21,7 +21,6 @@ class ServerStatusUpdater:
         BODY = '<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><GetDatacenters xmlns="http://www.turbine.com/SE/GLS"><game>DDO</game></GetDatacenters></soap:Body></soap:Envelope>'
 
     def __init__(self):
-        self.redis_client = redis_client.get_redis_client()
         self.postgres_client = postgres_client.get_postgres_client()
         self.game_info = None
 

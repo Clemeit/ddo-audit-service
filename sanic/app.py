@@ -10,7 +10,7 @@ from endpoints.verification import verification_blueprint
 from endpoints.quests import quest_blueprint
 from endpoints.areas import area_blueprint
 from reports.server_status import get_game_info_scheduler
-from services.redis import close_redis, initialize_redis
+from services.redis import close_redis_async, initialize_redis
 from utils.route import is_method_open, is_route_open
 
 from sanic import Sanic, json
@@ -46,7 +46,7 @@ async def set_up_connections(app, loop):
 
 @app.listener("after_server_stop")
 async def close_connections(app, loop):
-    close_redis()
+    await close_redis_async()
     stop_game_info_polling()
 
 
