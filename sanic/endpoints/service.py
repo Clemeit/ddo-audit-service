@@ -129,6 +129,23 @@ async def post_news(request: Request):
     return json({"data": added_news.model_dump()})
 
 
+@service_blueprint.delete("/news/<news_id:int>")
+async def delete_news(request: Request, news_id: int):
+    """
+    Method: DELETE
+
+    Route: /service/news/<news_id>
+
+    Description: Delete news by ID.
+    """
+    try:
+        postgres_client.delete_news(news_id)
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return empty()
+
+
 @service_blueprint.post("/page_messages")
 async def post_page_message(request: Request):
     """

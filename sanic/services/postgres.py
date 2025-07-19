@@ -546,6 +546,18 @@ def add_news(news: News) -> News:
                 raise e
 
 
+def delete_news(news_id: int):
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            try:
+                cursor.execute("DELETE FROM public.news WHERE id = %s", (news_id,))
+                conn.commit()
+            except Exception as e:
+                print(f"Failed to delete news from the database: {e}")
+                conn.rollback()
+                raise e
+
+
 def get_page_messages(page_name: Optional[str] = None) -> list[PageMessage]:
     # TODO: Add support for page_name because right now it doesn't work
     with get_db_connection() as conn:
