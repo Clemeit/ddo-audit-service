@@ -12,9 +12,13 @@ from utils.game import (
     get_game_population_1_day,
     get_game_population_1_week,
     get_game_population_1_month,
+    get_game_population_1_year,
     get_game_population_totals_1_day,
     get_game_population_totals_1_week,
     get_game_population_totals_1_month,
+    get_game_population_totals_1_year,
+    get_unique_character_count_breakdown_1_month,
+    get_unique_character_count_breakdown_1_quarter,
 )
 
 from utils.validation import is_server_name_valid
@@ -62,12 +66,12 @@ async def get_server_info_by_server(request, server_name):
     return json(server_info)
 
 
-@game_blueprint.get("/population/day")
+@game_blueprint.get("/population/data/day")
 async def get_1_day_population(request: Request):
     """
     Method: GET
 
-    Route: /game/population/day
+    Route: /game/population/data/day
 
     Description: Get the population (character and lfm counts) of the game servers
     for the last 24 hours.
@@ -80,12 +84,12 @@ async def get_1_day_population(request: Request):
     return json({"data": data})
 
 
-@game_blueprint.get("/population/week")
+@game_blueprint.get("/population/data/week")
 async def get_1_week_population(request: Request):
     """
     Method: GET
 
-    Route: /game/population/week
+    Route: /game/population/data/week
 
     Description: Get the population (character and lfm counts) of the game servers
     for the last week. Hourly averages.
@@ -98,18 +102,36 @@ async def get_1_week_population(request: Request):
     return json({"data": data})
 
 
-@game_blueprint.get("/population/month")
+@game_blueprint.get("/population/data/month")
 async def get_1_month_population(request: Request):
     """
     Method: GET
 
-    Route: /game/population/month
+    Route: /game/population/data/month
 
     Description: Get the population (character and lfm counts) of the game servers
     for the last month. Daily averages.
     """
     try:
         data = get_game_population_1_month()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@game_blueprint.get("/population/data/year")
+async def get_1_year_population(request: Request):
+    """
+    Method: GET
+
+    Route: /game/population/data/year
+
+    Description: Get the population (character and lfm counts) of the game servers
+    for the last year. Daily averages.
+    """
+    try:
+        data = get_game_population_1_year()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -161,6 +183,57 @@ async def get_1_month_total_population(request: Request):
     """
     try:
         data = get_game_population_totals_1_month()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@game_blueprint.get("/population/totals/year")
+async def get_1_year_total_population(request: Request):
+    """
+    Method: GET
+
+    Route: /population/totals/year
+
+    Description: Get the total summed population for the last year.
+    """
+    try:
+        data = get_game_population_totals_1_year()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@game_blueprint.get("/population/unique/month")
+async def get_unique_character_count_breakdown_1_month(request: Request):
+    """
+    Method: GET
+
+    Route: /population/unique/month
+
+    Description: Get the unique character count breakdown for the last month.
+    """
+    try:
+        data = get_unique_character_count_breakdown_1_month()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@game_blueprint.get("/population/unique/quarter")
+async def get_unique_character_count_breakdown_1_quarter(request: Request):
+    """
+    Method: GET
+
+    Route: /population/unique/quarter
+
+    Description: Get the unique character count breakdown for the last quarter.
+    """
+    try:
+        data = get_unique_character_count_breakdown_1_quarter()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 

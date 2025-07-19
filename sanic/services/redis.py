@@ -909,4 +909,40 @@ def set_game_population_totals_1_month(data: list[dict]):
         client.json().set("game_population_totals_1_month", path="$", obj=entry)
 
 
+def get_game_population_totals_1_year() -> dict:
+    with get_redis_client() as client:
+        return client.json().get("game_population_totals_1_year")
+
+
+def set_game_population_totals_1_year(data: list[dict]):
+    entry = {"data": data, "timestamp": time()}
+    with get_redis_client() as client:
+        client.json().set("game_population_totals_1_year", path="$", obj=entry)
+
+
+def get_unique_character_count_month() -> dict:
+    with get_redis_client() as client:
+        return client.json().get("unique_character_count_month")
+
+
+def set_unique_character_count_month(data: list[dict]):
+    entry = {"data": data, "timestamp": time()}
+    with get_redis_client() as client:
+        client.json().set("unique_character_count_month", path="$", obj=entry)
+
+
+def get_by_key(key: str) -> Optional[Any]:
+    """Get data by key from the game population cache."""
+    with get_redis_client() as client:
+        return client.json().get(key)
+
+
+def set_by_key(key: str, data: dict, ttl: int = None):
+    """Set data by key in the game population cache."""
+    with get_redis_client() as client:
+        client.json().set(key, path="$", obj=data)
+        if ttl:
+            client.expire(key, ttl)  # Set TTL if provided
+
+
 # ======= Game Population ========

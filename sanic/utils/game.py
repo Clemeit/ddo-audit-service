@@ -7,6 +7,8 @@ from constants.redis import (
     POPULATION_1_DAY_CACHE_TTL,
     POPULATION_1_WEEK_CACHE_TTL,
     POPULATION_1_MONTH_CACHE_TTL,
+    POPULATION_1_YEAR_CACHE_TTL,
+    POPULATION_1_QUARTER_CACHE_TTL,
 )
 
 from time import time
@@ -30,18 +32,16 @@ def get_game_population_1_day() -> list[dict]:
     Gets 1 day of game population reported by the minute.
     Checks cache then database.
     """
-    cached_data = redis_client.get_game_population_1_day()
-    if (
-        cached_data
-        and cached_data.get("timestamp")
-        and time() - cached_data.get("timestamp") < POPULATION_1_DAY_CACHE_TTL
-    ):
-        return cached_data.get("data", [])
 
-    postgres_data = postgres_client.get_game_population_relative(1)
-    data_dump = [datum.model_dump() for datum in postgres_data]
-    redis_client.set_game_population_1_day(data_dump)
-    return data_dump
+    def fetch_data():
+        postgres_data = postgres_client.get_game_population_relative(1)
+        return [datum.model_dump() for datum in postgres_data]
+
+    return get_cached_data_with_fallback(
+        "game_population_1_day",
+        fetch_data,
+        POPULATION_1_DAY_CACHE_TTL,
+    )
 
 
 def get_game_population_totals_1_day() -> list[dict]:
@@ -49,21 +49,19 @@ def get_game_population_totals_1_day() -> list[dict]:
     Gets 1 day of total game population per server.
     Checks cache then database.
     """
-    cached_data = redis_client.get_game_population_totals_1_day()
-    if (
-        cached_data
-        and cached_data.get("timestamp")
-        and time() - cached_data.get("timestamp") < POPULATION_1_DAY_CACHE_TTL
-    ):
-        return cached_data.get("data", [])
 
-    postgres_data = postgres_client.get_game_population_relative(1)
-    _, total_data = summed_population_data_points(postgres_data)
-    data_dump = {
-        serverName: datum.model_dump() for serverName, datum in total_data.items()
-    }
-    redis_client.set_game_population_totals_1_day(data_dump)
-    return data_dump
+    def fetch_data():
+        postgres_data = postgres_client.get_game_population_relative(1)
+        _, total_data = summed_population_data_points(postgres_data)
+        return {
+            serverName: datum.model_dump() for serverName, datum in total_data.items()
+        }
+
+    return get_cached_data_with_fallback(
+        "game_population_totals_1_day",
+        fetch_data,
+        POPULATION_1_DAY_CACHE_TTL,
+    )
 
 
 def get_game_population_1_week() -> list[dict]:
@@ -71,19 +69,17 @@ def get_game_population_1_week() -> list[dict]:
     Gets 1 week of game population reported as hourly averages.
     Checks cache then database.
     """
-    cached_data = redis_client.get_game_population_1_week()
-    if (
-        cached_data
-        and cached_data.get("timestamp")
-        and time() - cached_data.get("timestamp") < POPULATION_1_WEEK_CACHE_TTL
-    ):
-        return cached_data.get("data", [])
 
-    postgres_data = postgres_client.get_game_population_last_week()
-    averaged_data = average_hourly_data(postgres_data)
-    data_dump = [datum.model_dump() for datum in averaged_data]
-    redis_client.set_game_population_1_week(data_dump)
-    return data_dump
+    def fetch_data():
+        postgres_data = postgres_client.get_game_population_last_week()
+        averaged_data = average_hourly_data(postgres_data)
+        return [datum.model_dump() for datum in averaged_data]
+
+    return get_cached_data_with_fallback(
+        "game_population_1_week",
+        fetch_data,
+        POPULATION_1_WEEK_CACHE_TTL,
+    )
 
 
 def get_game_population_totals_1_week() -> list[dict]:
@@ -91,21 +87,19 @@ def get_game_population_totals_1_week() -> list[dict]:
     Gets 1 week of total game population per server.
     Checks cache then database.
     """
-    cached_data = redis_client.get_game_population_totals_1_week()
-    if (
-        cached_data
-        and cached_data.get("timestamp")
-        and time() - cached_data.get("timestamp") < POPULATION_1_WEEK_CACHE_TTL
-    ):
-        return cached_data.get("data", [])
 
-    postgres_data = postgres_client.get_game_population_last_week()
-    _, total_data = summed_population_data_points(postgres_data)
-    data_dump = {
-        serverName: datum.model_dump() for serverName, datum in total_data.items()
-    }
-    redis_client.set_game_population_totals_1_week(data_dump)
-    return data_dump
+    def fetch_data():
+        postgres_data = postgres_client.get_game_population_last_week()
+        _, total_data = summed_population_data_points(postgres_data)
+        return {
+            serverName: datum.model_dump() for serverName, datum in total_data.items()
+        }
+
+    return get_cached_data_with_fallback(
+        "game_population_totals_1_week",
+        fetch_data,
+        POPULATION_1_WEEK_CACHE_TTL,
+    )
 
 
 def get_game_population_1_month() -> list[dict]:
@@ -113,19 +107,17 @@ def get_game_population_1_month() -> list[dict]:
     Gets 1 month of game population reported as daily averages.
     Checks cache then database.
     """
-    cached_data = redis_client.get_game_population_1_month()
-    if (
-        cached_data
-        and cached_data.get("timestamp")
-        and time() - cached_data.get("timestamp") < POPULATION_1_MONTH_CACHE_TTL
-    ):
-        return cached_data.get("data", [])
 
-    postgres_data = postgres_client.get_game_population_last_month()
-    averaged_data = average_daily_data(postgres_data)
-    data_dump = [datum.model_dump() for datum in averaged_data]
-    redis_client.set_game_population_1_month(data_dump)
-    return data_dump
+    def fetch_data():
+        postgres_data = postgres_client.get_game_population_last_month()
+        averaged_data = average_daily_data(postgres_data)
+        return [datum.model_dump() for datum in averaged_data]
+
+    return get_cached_data_with_fallback(
+        "game_population_1_month",
+        fetch_data,
+        POPULATION_1_MONTH_CACHE_TTL,
+    )
 
 
 def get_game_population_totals_1_month() -> list[dict]:
@@ -133,21 +125,96 @@ def get_game_population_totals_1_month() -> list[dict]:
     Gets 1 month of total game population per server.
     Checks cache then database.
     """
-    cached_data = redis_client.get_game_population_totals_1_month()
-    if (
-        cached_data
-        and cached_data.get("timestamp")
-        and time() - cached_data.get("timestamp") < POPULATION_1_MONTH_CACHE_TTL
-    ):
-        return cached_data.get("data", [])
 
-    postgres_data = postgres_client.get_game_population_last_month()
-    _, total_data = summed_population_data_points(postgres_data)
-    data_dump = {
-        serverName: datum.model_dump() for serverName, datum in total_data.items()
-    }
-    redis_client.set_game_population_totals_1_month(data_dump)
-    return data_dump
+    def fetch_data():
+        postgres_data = postgres_client.get_game_population_last_month()
+        _, total_data = summed_population_data_points(postgres_data)
+        return {
+            serverName: datum.model_dump() for serverName, datum in total_data.items()
+        }
+
+    return get_cached_data_with_fallback(
+        "game_population_totals_1_month",
+        fetch_data,
+        POPULATION_1_MONTH_CACHE_TTL,
+    )
+
+
+def get_game_population_1_year() -> list[dict]:
+    """
+    Gets 1 year of game population reported as daily averages.
+    Checks cache then database.
+    """
+
+    def fetch_data():
+        postgres_data = postgres_client.get_game_population_last_year()
+        averaged_data = average_daily_data(postgres_data)
+        return [datum.model_dump() for datum in averaged_data]
+
+    return get_cached_data_with_fallback(
+        "game_population_1_year",
+        fetch_data,
+        POPULATION_1_YEAR_CACHE_TTL,
+    )
+
+
+def get_game_population_totals_1_year() -> list[dict]:
+    """
+    Gets 1 year of total game population per server.
+    Checks cache then database.
+    """
+
+    def fetch_data():
+        postgres_data = postgres_client.get_game_population_last_year()
+        _, total_data = summed_population_data_points(postgres_data)
+        return {
+            serverName: datum.model_dump() for serverName, datum in total_data.items()
+        }
+
+    return get_cached_data_with_fallback(
+        "game_population_totals_1_year",
+        fetch_data,
+        POPULATION_1_YEAR_CACHE_TTL,
+    )
+
+
+def get_unique_character_count_breakdown_1_month() -> dict:
+    """
+    Gets a unique character count breakdown for the last month.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "unique_character_count_breakdown_1_month",
+        lambda: postgres_client.get_unique_character_count(30),
+        POPULATION_1_QUARTER_CACHE_TTL,
+    )
+
+
+def get_unique_character_count_breakdown_1_quarter() -> dict:
+    """
+    Gets a unique character count breakdown for the last quarter.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "unique_character_count_breakdown_1_quarter",
+        lambda: postgres_client.get_unique_character_count(90),
+        POPULATION_1_QUARTER_CACHE_TTL,
+    )
+
+
+# ===== HELPER FUNCTIONS =====
+
+
+def get_cached_data_with_fallback(key: str, fallback_func, ttl: int = 60 * 60) -> dict:
+    """Get cached data, regenerate if expired."""
+    cached_data = redis_client.get_by_key(key)
+
+    if not cached_data:
+        fresh_data = fallback_func()
+        redis_client.set_by_key(key, fresh_data, ttl=ttl)
+        return fresh_data
+
+    return cached_data
 
 
 def average_hourly_data(

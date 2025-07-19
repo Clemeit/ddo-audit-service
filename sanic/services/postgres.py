@@ -1753,6 +1753,212 @@ def get_game_population_last_month() -> list[PopulationPointInTime]:
     return get_game_population(start_date=yesterday_start, end_date=yesterday_end)
 
 
+def get_game_population_last_year() -> list[PopulationPointInTime]:
+    """Get population data for the last week (full days)."""
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today - timedelta(days=365)
+    yesterday_end = today
+    return get_game_population(start_date=yesterday_start, end_date=yesterday_end)
+
+
+def get_unique_character_count(days: int = 90, server_name: str = None) -> dict:
+    """
+    Get the count of unique characters within a specified time range and optionally filtered by server.
+
+    Args:
+        days: Number of days to look back from now (defaults to 90)
+        server_name: Optional server name to filter by. If None, includes all servers.
+
+    Returns:
+        Dictionary containing the count and query parameters used
+    """
+    try:
+        # Calculate the start date (end date is always now)
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+
+        with get_db_cursor(commit=False) as cursor:
+            if server_name:
+                # Query for specific server
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) as unique_character_count
+                    FROM public.characters 
+                    WHERE last_save >= %s 
+                        AND LOWER(server_name) = LOWER(%s)
+                    """,
+                    (start_date, server_name),
+                )
+                result = cursor.fetchone()
+                unique_count = result[0] if result else 0
+                server_breakdown = {}
+            else:
+                # Query for all servers - get breakdown and sum for total
+                cursor.execute(
+                    """
+                    SELECT server_name, COUNT(*) as unique_character_count
+                    FROM public.characters 
+                    WHERE last_save >= %s
+                        AND server_name IS NOT NULL
+                    GROUP BY server_name
+                    ORDER BY unique_character_count DESC
+                    """,
+                    (start_date,),
+                )
+
+                server_results = cursor.fetchall()
+                server_breakdown = (
+                    {server: count for server, count in server_results}
+                    if server_results
+                    else {}
+                )
+
+                # Calculate total by summing the breakdown
+                unique_count = sum(server_breakdown.values()) if server_breakdown else 0
+
+            return {
+                "unique_character_count": unique_count,
+                "days_analyzed": days,
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "server_name": server_name,
+                "server_breakdown": server_breakdown if not server_name else None,
+            }
+
+    except Exception as e:
+        logger.error(f"Error getting unique character count: {e}")
+        return {
+            "unique_character_count": 0,
+            "error": str(e),
+            "days_analyzed": days,
+            "server_name": server_name,
+        }
+
+
+def get_character_activity_stats(days: int = 90, server_name: str = None) -> dict:
+    """
+    Get comprehensive character activity statistics within a time range.
+
+    Args:
+        days: Number of days to look back from now (defaults to 90)
+        server_name: Optional server name to filter by. If None, includes all servers.
+
+    Returns:
+        Dictionary containing various character activity metrics
+    """
+    try:
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+
+        with get_db_cursor(commit=False) as cursor:
+            # Base WHERE clause
+            base_where = "WHERE last_save >= %s"
+            params = [start_date]
+
+            if server_name:
+                base_where += " AND LOWER(server_name) = LOWER(%s)"
+                params.append(server_name)
+
+            # Get unique character count and various metrics
+            cursor.execute(
+                f"""
+                SELECT 
+                    COUNT(*) as unique_characters,
+                    COUNT(*) as total_character_records,
+                    COUNT(DISTINCT server_name) as servers_with_activity,
+                    MIN(last_save) as earliest_activity,
+                    MAX(last_save) as latest_activity,
+                    AVG(total_level) as avg_character_level
+                FROM public.characters 
+                {base_where}
+                """,
+                params,
+            )
+
+            stats = cursor.fetchone()
+
+            # Get level distribution
+            cursor.execute(
+                f"""
+                SELECT 
+                    CASE 
+                        WHEN total_level >= 30 THEN '30+'
+                        WHEN total_level >= 20 THEN '20-29'
+                        WHEN total_level >= 10 THEN '10-19'
+                        WHEN total_level >= 1 THEN '1-9'
+                        ELSE 'Unknown'
+                    END as level_range,
+                    COUNT(*) as character_count
+                FROM public.characters 
+                {base_where}
+                GROUP BY level_range
+                ORDER BY level_range
+                """,
+                params,
+            )
+
+            level_results = cursor.fetchall()
+            level_distribution = {
+                level_range: count for level_range, count in level_results
+            }
+
+            # Get server breakdown if no specific server requested
+            server_breakdown = {}
+            if not server_name:
+                cursor.execute(
+                    f"""
+                    SELECT 
+                        server_name,
+                        COUNT(*) as unique_characters,
+                        AVG(total_level) as avg_level
+                    FROM public.characters 
+                    {base_where}
+                        AND server_name IS NOT NULL
+                    GROUP BY server_name
+                    ORDER BY unique_characters DESC
+                    """,
+                    params,
+                )
+
+                server_results = cursor.fetchall()
+                server_breakdown = {
+                    server: {
+                        "unique_characters": count,
+                        "avg_level": round(float(avg_level), 1) if avg_level else 0,
+                    }
+                    for server, count, avg_level in server_results
+                }
+
+            return {
+                "unique_characters": stats[0] if stats else 0,
+                "total_character_records": stats[1] if stats else 0,
+                "servers_with_activity": stats[2] if stats else 0,
+                "earliest_activity": (
+                    stats[3].isoformat() if stats and stats[3] else None
+                ),
+                "latest_activity": stats[4].isoformat() if stats and stats[4] else None,
+                "avg_character_level": (
+                    round(float(stats[5]), 1) if stats and stats[5] else 0
+                ),
+                "level_distribution": level_distribution,
+                "server_breakdown": server_breakdown if not server_name else None,
+                "query_parameters": {
+                    "days_analyzed": days,
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                    "server_name": server_name,
+                },
+            }
+
+    except Exception as e:
+        logger.error(f"Error getting character activity stats: {e}")
+        return {
+            "unique_characters": 0,
+            "error": str(e),
+            "query_parameters": {"days_analyzed": days, "server_name": server_name},
+        }
+
+
 # def get_game_population_by_date_strings(
 #     start_date_str: str = None, end_date_str: str = None, date_format: str = "%Y-%m-%d"
 # ) -> list[PopulationPointInTime]:
