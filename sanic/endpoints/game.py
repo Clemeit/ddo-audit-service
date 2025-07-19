@@ -207,7 +207,7 @@ async def get_1_year_total_population(request: Request):
 
 
 @game_blueprint.get("/population/unique/month")
-async def get_unique_character_count_breakdown_1_month(request: Request):
+async def get_1_month_unique_breakdown(request: Request):
     """
     Method: GET
 
@@ -224,7 +224,7 @@ async def get_unique_character_count_breakdown_1_month(request: Request):
 
 
 @game_blueprint.get("/population/unique/quarter")
-async def get_unique_character_count_breakdown_1_quarter(request: Request):
+async def get_1_year_unique_breakdown(request: Request):
     """
     Method: GET
 
