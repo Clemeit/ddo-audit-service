@@ -351,11 +351,40 @@ def execute_transaction(operations: list):
     return _postgres_manager.execute_transaction(operations)
 
 
+def get_detailed_connection_info():
+    """Get detailed connection information for debugging."""
+    try:
+        with get_db_cursor(commit=False) as cursor:
+            cursor.execute(
+                """
+                SELECT 
+                    count(*) as total_connections,
+                    count(*) FILTER (WHERE state = 'active') as active,
+                    count(*) FILTER (WHERE state = 'idle') as idle,
+                    count(*) FILTER (WHERE application_name = %s) as our_app_connections
+                FROM pg_stat_activity
+            """,
+                (POSTGRES_APPLICATION_NAME,),
+            )
+
+            result = cursor.fetchone()
+            return {
+                "total_connections": result[0],
+                "active_connections": result[1],
+                "idle_connections": result[2],
+                "our_app_connections": result[3],
+            }
+    except Exception as e:
+        logger.error(f"Error getting connection info: {e}")
+        return {"error": str(e)}
+
+
 def health_check():
     """Add database performance monitoring information."""
     try:
         stats = get_postgres_pool_stats()
         health_status = postgres_health_check()
+        connection_info = get_detailed_connection_info()
 
         # Add basic performance metrics
         with get_db_cursor(commit=False) as cursor:
@@ -367,12 +396,17 @@ def health_check():
             cursor.execute("SELECT pg_database_size(current_database())")
             db_size = cursor.fetchone()[0]
 
+            cursor.execute("SHOW max_connections")
+            pg_max_connections = cursor.fetchone()[0]
+
         return {
             "database": {
                 "healthy": health_status,
                 "active_connections": active_connections,
                 "database_size_bytes": db_size,
                 "pool_stats": stats,
+                "postgresql_max_connections": int(pg_max_connections),
+                "connection_info": connection_info,
             }
         }
     except Exception as e:
