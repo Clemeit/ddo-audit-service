@@ -351,7 +351,7 @@ def execute_transaction(operations: list):
     return _postgres_manager.execute_transaction(operations)
 
 
-def add_performance_monitoring_to_health_endpoint():
+def health_check():
     """Add database performance monitoring information."""
     try:
         stats = get_postgres_pool_stats()

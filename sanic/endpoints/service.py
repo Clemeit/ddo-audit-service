@@ -16,6 +16,24 @@ service_blueprint = Blueprint("service", url_prefix="/service", version=1)
 
 
 # ===== Client-facing endpoints =====
+@service_blueprint.get("/health")
+async def get_health(request):
+    """
+    Method: GET
+
+    Route: /service/health
+
+    Description: Check the health of the service which includes checking the database and Redis connection.
+    """
+    try:
+        postgres_health = postgres_client.health_check()
+        redis_health = redis_client.redis_health_check()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": {"postgres": postgres_health, "redis": redis_health}})
+
+
 @service_blueprint.get("/news")
 async def get_news(request):
     """
