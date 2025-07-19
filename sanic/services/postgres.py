@@ -1761,16 +1761,18 @@ def get_game_population_last_year() -> list[PopulationPointInTime]:
     return get_game_population(start_date=yesterday_start, end_date=yesterday_end)
 
 
-def get_unique_character_count(days: int = 90, server_name: str = None) -> dict:
+def get_unique_character_and_guild_count(
+    days: int = 90, server_name: str = None
+) -> dict:
     """
-    Get the count of unique characters within a specified time range and optionally filtered by server.
+    Get the count of unique characters and guilds within a specified time range and optionally filtered by server.
 
     Args:
         days: Number of days to look back from now (defaults to 90)
         server_name: Optional server name to filter by. If None, includes all servers.
 
     Returns:
-        Dictionary containing the count and query parameters used
+        Dictionary containing character counts, guild counts, and query parameters used
     """
     try:
         # Calculate the start date (end date is always now)
@@ -1782,21 +1784,29 @@ def get_unique_character_count(days: int = 90, server_name: str = None) -> dict:
                 # Query for specific server
                 cursor.execute(
                     """
-                    SELECT COUNT(*) as unique_character_count
+                    SELECT 
+                        COUNT(*) as unique_character_count,
+                        COUNT(DISTINCT guild_name) as unique_guild_count
                     FROM public.characters 
                     WHERE last_save >= %s 
                         AND LOWER(server_name) = LOWER(%s)
+                        AND guild_name IS NOT NULL
+                        AND guild_name != ''
                     """,
                     (start_date, server_name),
                 )
                 result = cursor.fetchone()
-                unique_count = result[0] if result else 0
+                unique_character_count = result[0] if result else 0
+                unique_guild_count = result[1] if result else 0
                 server_breakdown = {}
             else:
-                # Query for all servers - get breakdown and sum for total
+                # Query for all servers - get breakdown and sum for totals
                 cursor.execute(
                     """
-                    SELECT server_name, COUNT(*) as unique_character_count
+                    SELECT 
+                        server_name, 
+                        COUNT(*) as unique_character_count,
+                        COUNT(DISTINCT guild_name) as unique_guild_count
                     FROM public.characters 
                     WHERE last_save >= %s
                         AND server_name IS NOT NULL
@@ -1808,16 +1818,37 @@ def get_unique_character_count(days: int = 90, server_name: str = None) -> dict:
 
                 server_results = cursor.fetchall()
                 server_breakdown = (
-                    {str(server).lower(): count for server, count in server_results}
+                    {
+                        str(server).lower(): {
+                            "unique_character_count": char_count,
+                            "unique_guild_count": guild_count,
+                        }
+                        for server, char_count, guild_count in server_results
+                    }
                     if server_results
                     else {}
                 )
 
-                # Calculate total by summing the breakdown
-                unique_count = sum(server_breakdown.values()) if server_breakdown else 0
+                # Calculate totals by summing the breakdown
+                unique_character_count = (
+                    sum(
+                        data["unique_character_count"]
+                        for data in server_breakdown.values()
+                    )
+                    if server_breakdown
+                    else 0
+                )
+                unique_guild_count = (
+                    sum(
+                        data["unique_guild_count"] for data in server_breakdown.values()
+                    )
+                    if server_breakdown
+                    else 0
+                )
 
             return {
-                "unique_character_count": unique_count,
+                "unique_character_count": unique_character_count,
+                "unique_guild_count": unique_guild_count,
                 "days_analyzed": days,
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),
@@ -1829,6 +1860,7 @@ def get_unique_character_count(days: int = 90, server_name: str = None) -> dict:
         logger.error(f"Error getting unique character count: {e}")
         return {
             "unique_character_count": 0,
+            "unique_guild_count": 0,
             "error": str(e),
             "days_analyzed": days,
             "server_name": server_name,

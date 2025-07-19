@@ -920,15 +920,15 @@ def set_game_population_totals_1_year(data: list[dict]):
         client.json().set("game_population_totals_1_year", path="$", obj=entry)
 
 
-def get_unique_character_count_month() -> dict:
+def get_unique_character_and_guild_count_month() -> dict:
     with get_redis_client() as client:
-        return client.json().get("unique_character_count_month")
+        return client.json().get("unique_character_and_guild_count_month")
 
 
 def set_unique_character_count_month(data: list[dict]):
     entry = {"data": data, "timestamp": time()}
     with get_redis_client() as client:
-        client.json().set("unique_character_count_month", path="$", obj=entry)
+        client.json().set("unique_character_and_guild_count_month", path="$", obj=entry)
 
 
 def get_by_key(key: str) -> Optional[Any]:

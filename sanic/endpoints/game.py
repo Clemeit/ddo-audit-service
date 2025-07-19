@@ -17,8 +17,8 @@ from utils.game import (
     get_game_population_totals_1_week,
     get_game_population_totals_1_month,
     get_game_population_totals_1_year,
-    get_unique_character_count_breakdown_1_month,
-    get_unique_character_count_breakdown_1_quarter,
+    get_unique_character_and_guild_count_breakdown_1_month,
+    get_unique_character_and_guild_count_breakdown_1_quarter,
     get_character_activity_stats_1_quarter,
 )
 
@@ -217,7 +217,7 @@ async def get_1_month_unique_breakdown(request: Request):
     Description: Get the unique character count breakdown for the last month.
     """
     try:
-        data = get_unique_character_count_breakdown_1_month()
+        data = get_unique_character_and_guild_count_breakdown_1_month()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -234,7 +234,7 @@ async def get_1_year_unique_breakdown(request: Request):
     Description: Get the unique character count breakdown for the last quarter.
     """
     try:
-        data = get_unique_character_count_breakdown_1_quarter()
+        data = get_unique_character_and_guild_count_breakdown_1_quarter()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
