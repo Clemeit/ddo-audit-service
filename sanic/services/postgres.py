@@ -1808,7 +1808,7 @@ def get_unique_character_count(days: int = 90, server_name: str = None) -> dict:
 
                 server_results = cursor.fetchall()
                 server_breakdown = (
-                    {server: count for server, count in server_results}
+                    {str(server).lower(): count for server, count in server_results}
                     if server_results
                     else {}
                 )
@@ -1922,7 +1922,7 @@ def get_character_activity_stats(days: int = 90, server_name: str = None) -> dic
 
                 server_results = cursor.fetchall()
                 server_breakdown = {
-                    server: {
+                    str(server).lower(): {
                         "unique_characters": count,
                         "avg_level": round(float(avg_level), 1) if avg_level else 0,
                     }

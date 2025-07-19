@@ -19,6 +19,7 @@ from utils.game import (
     get_game_population_totals_1_year,
     get_unique_character_count_breakdown_1_month,
     get_unique_character_count_breakdown_1_quarter,
+    get_character_activity_stats_1_quarter,
 )
 
 from utils.validation import is_server_name_valid
@@ -234,6 +235,23 @@ async def get_1_year_unique_breakdown(request: Request):
     """
     try:
         data = get_unique_character_count_breakdown_1_quarter()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@game_blueprint.get("/population/stats/quarter")
+async def get_1_year_stats_breakdown(request: Request):
+    """
+    Method: GET
+
+    Route: /population/stats/quarter
+
+    Description: Get the character stats for the last quarter.
+    """
+    try:
+        data = get_character_activity_stats_1_quarter()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 

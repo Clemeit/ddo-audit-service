@@ -202,6 +202,18 @@ def get_unique_character_count_breakdown_1_quarter() -> dict:
     )
 
 
+def get_character_activity_stats_1_quarter() -> dict:
+    """
+    Gets character activity stats for the last quarter.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "character_activity_stats_1_quarter",
+        lambda: postgres_client.get_character_activity_stats(90),
+        POPULATION_1_QUARTER_CACHE_TTL,
+    )
+
+
 # ===== HELPER FUNCTIONS =====
 
 
