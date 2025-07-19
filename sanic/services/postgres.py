@@ -53,7 +53,7 @@ DB_CONFIG = {
     "password": POSTGRES_PASSWORD,
     "connect_timeout": POSTGRES_CONNECT_TIMEOUT,
     "application_name": POSTGRES_APPLICATION_NAME,
-    "cursor_factory": psycopg2.extras.RealDictCursor,  # Use dict-like cursors by default
+    # Removed cursor_factory to use default tuple cursors for compatibility
 }
 
 
@@ -85,12 +85,20 @@ class PostgresConnectionManager:
                 f"(min: {POSTGRES_MIN_CONN}, max: {POSTGRES_MAX_CONN})"
             )
 
-            # Test the connection
-            if not self.health_check():
-                raise ConnectionError("Initial health check failed")
+            # Test the connection (but don't fail initialization if it fails)
+            # This allows the app to start even if DB is temporarily unavailable
+            if self.health_check():
+                logger.info("PostgreSQL initial health check passed")
+            else:
+                logger.warning(
+                    "PostgreSQL initial health check failed, but continuing startup"
+                )
 
         except Exception as e:
             logger.error(f"Failed to initialize PostgreSQL connection pool: {e}")
+            # Reset initialization state on failure
+            self._is_initialized = False
+            self._connection_pool = None
             raise
 
     @contextmanager
@@ -315,6 +323,20 @@ def get_db_cursor(commit: bool = True):
     """Get a database cursor with automatic transaction management."""
     with _postgres_manager.get_cursor(commit=commit) as cursor:
         yield cursor
+
+
+@contextmanager
+def get_dict_cursor(commit: bool = True):
+    """Get a database cursor that returns dict-like results."""
+    with _postgres_manager.get_connection() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            try:
+                yield cursor
+                if commit:
+                    conn.commit()
+            except Exception as e:
+                conn.rollback()
+                raise e
 
 
 def execute_bulk_operation(
