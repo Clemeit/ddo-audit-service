@@ -11,6 +11,7 @@ from endpoints.quests import quest_blueprint
 from endpoints.areas import area_blueprint
 from reports.server_status import get_game_info_scheduler
 from services.redis import close_redis_async, initialize_redis
+from services.postgres import initialize_postgres, close_postgres_client
 from utils.route import is_method_open, is_route_open
 
 from sanic import Sanic, json
@@ -41,12 +42,14 @@ start_game_info_polling, stop_game_info_polling = get_game_info_scheduler()
 @app.listener("before_server_start")
 async def set_up_connections(app, loop):
     initialize_redis()
+    initialize_postgres()
     start_game_info_polling()
 
 
 @app.listener("after_server_stop")
 async def close_connections(app, loop):
     await close_redis_async()
+    close_postgres_client()
     stop_game_info_polling()
 
 

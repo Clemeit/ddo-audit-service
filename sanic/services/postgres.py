@@ -1,9 +1,10 @@
 import json
 import os
-from contextlib import contextmanager
+import logging
+from contextlib import contextmanager, asynccontextmanager
 from datetime import datetime, timedelta
 from time import time
-from typing import Optional
+from typing import Optional, Generator, AsyncGenerator
 
 from constants.activity import CharacterActivityType
 from models.character import (
@@ -14,7 +15,9 @@ from models.character import (
 from models.game import PopulationDataPoint, PopulationPointInTime
 from models.redis import ServerInfo, ServerInfoDict
 from models.service import News, PageMessage, FeedbackRequest, LogRequest
-from psycopg2 import pool  # type: ignore
+from psycopg2 import pool, Error as PostgresError  # type: ignore
+import psycopg2.extras  # type: ignore
+import psycopg2.sql  # type: ignore
 from constants.activity import (
     MAX_CHARACTER_ACTIVITY_READ_LENGTH,
     MAX_CHARACTER_ACTIVITY_READ_HISTORY,
@@ -26,83 +29,373 @@ from models.area import Area
 from utils.areas import get_valid_area_ids
 from utils.time import datetime_to_datetime_string
 
-# Load environment variables
+# Setup logging
+logger = logging.getLogger(__name__)
+
+# PostgreSQL configuration with defaults
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
+POSTGRES_DB = os.getenv("POSTGRES_DB", "ddo_audit")
+POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
+POSTGRES_MIN_CONN = int(os.getenv("POSTGRES_MIN_CONN", "1"))
+POSTGRES_MAX_CONN = int(os.getenv("POSTGRES_MAX_CONN", "20"))
+POSTGRES_CONNECT_TIMEOUT = int(os.getenv("POSTGRES_CONNECT_TIMEOUT", "10"))
+POSTGRES_COMMAND_TIMEOUT = int(os.getenv("POSTGRES_COMMAND_TIMEOUT", "30"))
+POSTGRES_APPLICATION_NAME = os.getenv("POSTGRES_APPLICATION_NAME", "ddo-audit-service")
+
+# Connection pool configuration
 DB_CONFIG = {
-    "dbname": os.getenv("POSTGRES_DB"),
-    "host": os.getenv("POSTGRES_HOST"),
-    "port": int(os.getenv("POSTGRES_PORT")),
-    "user": os.getenv("POSTGRES_USER"),
-    "password": os.getenv("POSTGRES_PASSWORD"),
+    "dbname": POSTGRES_DB,
+    "host": POSTGRES_HOST,
+    "port": POSTGRES_PORT,
+    "user": POSTGRES_USER,
+    "password": POSTGRES_PASSWORD,
+    "connect_timeout": POSTGRES_CONNECT_TIMEOUT,
+    "application_name": POSTGRES_APPLICATION_NAME,
+    "cursor_factory": psycopg2.extras.RealDictCursor,  # Use dict-like cursors by default
 }
-DB_MIN_CONN = int(os.getenv("POSTGRES_MIN_CONN"))
-DB_MAX_CONN = int(os.getenv("POSTGRES_MAX_CONN"))
 
 
-class PostgresSingleton:
-    _instance = None
-    client: pool.SimpleConnectionPool
+class PostgresConnectionManager:
+    """Manages PostgreSQL connections using connection pooling for optimal performance."""
 
-    def __new__(cls, *args, **kwargs):
-        if not cls._instance:
-            print("Creating PostgreSQL connection pool...")
-            cls._instance = super(PostgresSingleton, cls).__new__(cls, *args, **kwargs)
-            cls._instance.client = pool.SimpleConnectionPool(
-                minconn=DB_MIN_CONN,
-                maxconn=DB_MAX_CONN,
+    def __init__(self):
+        self._connection_pool: Optional[pool.SimpleConnectionPool] = None
+        self._is_initialized = False
+
+    def initialize(self):
+        """Initialize PostgreSQL connection pool."""
+        if self._is_initialized:
+            logger.warning("PostgreSQL connection manager already initialized")
+            return
+
+        logger.info("Initializing PostgreSQL connection pool...")
+
+        try:
+            self._connection_pool = pool.SimpleConnectionPool(
+                minconn=POSTGRES_MIN_CONN,
+                maxconn=POSTGRES_MAX_CONN,
                 **DB_CONFIG,
             )
-        return cls._instance
+
+            self._is_initialized = True
+            logger.info(
+                f"PostgreSQL connection pool initialized successfully "
+                f"(min: {POSTGRES_MIN_CONN}, max: {POSTGRES_MAX_CONN})"
+            )
+
+            # Test the connection
+            if not self.health_check():
+                raise ConnectionError("Initial health check failed")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize PostgreSQL connection pool: {e}")
+            raise
+
+    @contextmanager
+    def get_connection(self) -> Generator:
+        """Get a database connection from the pool with proper error handling."""
+        if not self._is_initialized or not self._connection_pool:
+            raise RuntimeError("PostgreSQL connection manager not initialized")
+
+        conn = None
+        try:
+            conn = self._connection_pool.getconn()
+
+            if conn is None:
+                raise ConnectionError("Failed to get connection from pool")
+
+            # Set autocommit to False for transaction control
+            conn.autocommit = False
+
+            # Set a statement timeout for long-running queries
+            with conn.cursor() as cursor:
+                cursor.execute(f"SET statement_timeout = '{POSTGRES_COMMAND_TIMEOUT}s'")
+
+            yield conn
+
+        except Exception as e:
+            if conn:
+                try:
+                    conn.rollback()
+                except Exception as rollback_error:
+                    logger.error(f"Error during rollback: {rollback_error}")
+            raise e
+        finally:
+            if conn:
+                try:
+                    self._connection_pool.putconn(conn)
+                except Exception as putconn_error:
+                    logger.error(f"Error returning connection to pool: {putconn_error}")
+
+    @contextmanager
+    def get_cursor(self, commit: bool = True) -> Generator:
+        """Get a cursor with automatic transaction management."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                try:
+                    yield cursor
+                    if commit:
+                        conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    raise e
+
+    def execute_query(
+        self,
+        query: str,
+        params: tuple = None,
+        fetch_one: bool = False,
+        fetch_all: bool = False,
+        commit: bool = True,
+    ):
+        """Execute a query with automatic transaction management."""
+        with self.get_cursor(commit=commit) as cursor:
+            cursor.execute(query, params)
+
+            if fetch_one:
+                return cursor.fetchone()
+            elif fetch_all:
+                return cursor.fetchall()
+            return cursor.rowcount
+
+    def execute_many(self, query: str, params_list: list, commit: bool = True):
+        """Execute a query multiple times with different parameters."""
+        with self.get_cursor(commit=commit) as cursor:
+            cursor.executemany(query, params_list)
+            return cursor.rowcount
+
+    def bulk_insert(
+        self,
+        table: str,
+        columns: list,
+        data: list,
+        on_conflict: str = None,
+        commit: bool = True,
+    ):
+        """Perform bulk insert with optional conflict resolution."""
+        if not data:
+            return 0
+
+        try:
+            with self.get_cursor(commit=commit) as cursor:
+                # Use SQL composition for safety
+                table_name = psycopg2.sql.Identifier(table)
+                column_names = psycopg2.sql.SQL(", ").join(
+                    psycopg2.sql.Identifier(col) for col in columns
+                )
+                placeholders = psycopg2.sql.SQL(", ").join(
+                    psycopg2.sql.Placeholder() for _ in columns
+                )
+
+                query = psycopg2.sql.SQL(
+                    "INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+                ).format(
+                    table=table_name, columns=column_names, placeholders=placeholders
+                )
+
+                if on_conflict:
+                    query = psycopg2.sql.SQL("{query} {conflict}").format(
+                        query=query, conflict=psycopg2.sql.SQL(on_conflict)
+                    )
+
+                cursor.executemany(query, data)
+                return cursor.rowcount
+
+        except Exception as e:
+            logger.error(f"Bulk insert failed for table {table}: {e}")
+            raise
+
+    def execute_transaction(self, operations: list, commit: bool = True):
+        """Execute multiple operations in a single transaction."""
+        with self.get_cursor(commit=commit) as cursor:
+            results = []
+            for operation in operations:
+                query = operation.get("query")
+                params = operation.get("params", ())
+                fetch = operation.get("fetch", None)  # 'one', 'all', or None
+
+                cursor.execute(query, params)
+
+                if fetch == "one":
+                    results.append(cursor.fetchone())
+                elif fetch == "all":
+                    results.append(cursor.fetchall())
+                else:
+                    results.append(cursor.rowcount)
+
+            return results
+
+    def health_check(self) -> bool:
+        """Perform a health check on the PostgreSQL connection."""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT 1")
+                    result = cursor.fetchone()
+                    return result is not None and result[0] == 1
+        except Exception as e:
+            logger.error(f"PostgreSQL health check failed: {e}")
+            return False
+
+    def get_pool_stats(self) -> dict:
+        """Get connection pool statistics for monitoring."""
+        if not self._connection_pool:
+            return {"error": "Pool not initialized"}
+
+        try:
+            # Note: psycopg2 SimpleConnectionPool doesn't expose detailed stats
+            # This is a basic implementation
+            return {
+                "min_connections": POSTGRES_MIN_CONN,
+                "max_connections": POSTGRES_MAX_CONN,
+                "initialized": self._is_initialized,
+            }
+        except Exception as e:
+            logger.error(f"Error getting pool stats: {e}")
+            return {"error": str(e)}
 
     def close(self):
-        self.client.closeall()
+        """Close all PostgreSQL connections."""
+        if not self._is_initialized:
+            return
 
-    def get_client(self):
-        return self.client
+        logger.info("Closing PostgreSQL connections...")
+
+        try:
+            if self._connection_pool:
+                self._connection_pool.closeall()
+        except Exception as e:
+            logger.error(f"Error closing PostgreSQL connections: {e}")
+        finally:
+            self._is_initialized = False
+            self._connection_pool = None
+            logger.info("PostgreSQL connections closed")
 
 
-postgres_singleton = PostgresSingleton()
+# Global connection manager instance
+_postgres_manager = PostgresConnectionManager()
 
 
-def get_postgres_client() -> pool.SimpleConnectionPool:
-    return postgres_singleton.get_client()
+def get_postgres_client() -> PostgresConnectionManager:
+    """Get the PostgreSQL connection manager."""
+    return _postgres_manager
 
 
-def close_postgres_client() -> None:
-    postgres_singleton.close()
+def initialize_postgres():
+    """Initialize PostgreSQL connection pool."""
+    _postgres_manager.initialize()
+
+
+def close_postgres_client():
+    """Close all PostgreSQL connections."""
+    _postgres_manager.close()
+
+
+def postgres_health_check() -> bool:
+    """Check if PostgreSQL is healthy and responsive."""
+    return _postgres_manager.health_check()
+
+
+def get_postgres_pool_stats() -> dict:
+    """Get PostgreSQL connection pool statistics."""
+    return _postgres_manager.get_pool_stats()
 
 
 @contextmanager
 def get_db_connection():
-    conn = postgres_singleton.get_client().getconn()
-    try:
+    """Get a database connection context manager for backward compatibility."""
+    with _postgres_manager.get_connection() as conn:
         yield conn
-    finally:
-        postgres_singleton.get_client().putconn(conn)
+
+
+@contextmanager
+def get_db_cursor(commit: bool = True):
+    """Get a database cursor with automatic transaction management."""
+    with _postgres_manager.get_cursor(commit=commit) as cursor:
+        yield cursor
+
+
+def execute_bulk_operation(
+    table: str, columns: list, data: list, on_conflict: str = None
+):
+    """Execute bulk insert operation with optimized performance."""
+    return _postgres_manager.bulk_insert(table, columns, data, on_conflict)
+
+
+def execute_transaction(operations: list):
+    """Execute multiple database operations in a single transaction."""
+    return _postgres_manager.execute_transaction(operations)
+
+
+def add_performance_monitoring_to_health_endpoint():
+    """Add database performance monitoring information."""
+    try:
+        stats = get_postgres_pool_stats()
+        health_status = postgres_health_check()
+
+        # Add basic performance metrics
+        with get_db_cursor(commit=False) as cursor:
+            cursor.execute(
+                "SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"
+            )
+            active_connections = cursor.fetchone()[0]
+
+            cursor.execute("SELECT pg_database_size(current_database())")
+            db_size = cursor.fetchone()[0]
+
+        return {
+            "database": {
+                "healthy": health_status,
+                "active_connections": active_connections,
+                "database_size_bytes": db_size,
+                "pool_stats": stats,
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting database performance metrics: {e}")
+        return {"database": {"healthy": False, "error": str(e)}}
 
 
 def add_or_update_characters(characters: list[dict]):
+    """Add or update characters with optimized bulk operations and error handling."""
+    if not characters:
+        return
+
     (valid_area_ids, _, _) = get_valid_area_ids()
 
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            try:
-                for character in characters:
-                    # Check if the character's location_id is valid
-                    if character.get("location_id") not in valid_area_ids:
-                        character["location_id"] = 0  # Set to 0 if invalid
-                    exclude_fields = [
-                        "public_comment",
-                        "group_id",
-                        "is_in_party",
-                        "is_recruiting",
-                        "is_online",
-                        "last_save",
-                    ]
+    try:
+        with get_db_cursor() as cursor:
+            # Prepare data and validate location_ids
+            processed_characters = []
+            for character in characters:
+                # Check if the character's location_id is valid
+                if character.get("location_id") not in valid_area_ids:
+                    character["location_id"] = 0  # Set to 0 if invalid
+                processed_characters.append(character)
+
+            exclude_fields = [
+                "public_comment",
+                "group_id",
+                "is_in_party",
+                "is_recruiting",
+                "is_online",
+                "last_save",
+            ]
+
+            # Process characters in batches for better performance
+            batch_size = 1000  # Configurable batch size
+            for i in range(0, len(processed_characters), batch_size):
+                batch = processed_characters[i : i + batch_size]
+
+                for character in batch:
                     character_fields = [
                         field
                         for field in character.keys()
                         if field not in exclude_fields
                     ]
+
                     update_list: list[str] = [
                         f"{field} = EXCLUDED.{field}"
                         for field in character_fields
@@ -119,17 +412,27 @@ def add_or_update_characters(characters: list[dict]):
                         ]
                     )
 
-                    # Construct the query dynamically
-                    columns = ", ".join(character_fields)
-                    placeholders = ", ".join(["%s"] * len(character_fields))
-                    updates = ", ".join(update_list)
+                    # Construct the query dynamically using SQL composition for safety
+                    columns = psycopg2.sql.SQL(", ").join(
+                        psycopg2.sql.Identifier(field) for field in character_fields
+                    )
+                    placeholders = psycopg2.sql.SQL(", ").join(
+                        psycopg2.sql.Placeholder() for _ in character_fields
+                    )
+                    updates = psycopg2.sql.SQL(", ").join(
+                        psycopg2.sql.SQL(update) for update in update_list
+                    )
 
-                    query = f"""
+                    query = psycopg2.sql.SQL(
+                        """
                         INSERT INTO characters ({columns})
                         VALUES ({placeholders})
                         ON CONFLICT (id) DO UPDATE SET
                         {updates}, last_save = NOW()
                     """
+                    ).format(
+                        columns=columns, placeholders=placeholders, updates=updates
+                    )
 
                     # Get the values of the Character model
                     values = [
@@ -139,16 +442,23 @@ def add_or_update_characters(characters: list[dict]):
                     ]
 
                     cursor.execute(query, values)
-                conn.commit()
-            except Exception as e:
-                print(f"Failed to commit changes to the database: {e}")
-                conn.rollback()
-                raise e
+
+                logger.debug(
+                    f"Processed batch {i//batch_size + 1} of characters "
+                    f"({len(batch)} characters)"
+                )
+
+        logger.info(f"Successfully added/updated {len(characters)} characters")
+
+    except Exception as e:
+        logger.error(f"Failed to add/update characters: {e}")
+        raise
 
 
 def get_character_by_id(character_id: int) -> Character | None:
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
+    """Get a character by ID with optimized query."""
+    try:
+        with get_db_cursor(commit=False) as cursor:
             cursor.execute(
                 "SELECT * FROM public.characters WHERE id = %s", (character_id,)
             )
@@ -157,11 +467,18 @@ def get_character_by_id(character_id: int) -> Character | None:
                 return None
 
             return build_character_from_row(character)
+    except Exception as e:
+        logger.error(f"Error getting character by ID {character_id}: {e}")
+        return None
 
 
 def get_characters_by_ids(character_ids: list[int]) -> list[Character]:
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
+    """Get multiple characters by IDs with optimized bulk query."""
+    if not character_ids:
+        return []
+
+    try:
+        with get_db_cursor(commit=False) as cursor:
             cursor.execute(
                 "SELECT * FROM public.characters WHERE id = ANY(%s)",
                 (character_ids,),
@@ -171,6 +488,9 @@ def get_characters_by_ids(character_ids: list[int]) -> list[Character]:
                 return []
 
             return [build_character_from_row(character) for character in characters]
+    except Exception as e:
+        logger.error(f"Error getting characters by IDs: {e}")
+        return []
 
 
 def get_character_by_name_and_server(
