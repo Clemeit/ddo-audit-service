@@ -372,113 +372,97 @@ def normalize_population_data(
     input_data: list[PopulationPointInTime],
 ) -> list[PopulationPointInTime]:
     """
-    Normalize the population data to ensure all servers are represented.
-    If a server is missing, it will be added with zero counts.
+    Normalize population data per server using min-max normalization.
+    Each server's values are normalized to 0-1 range based on that server's own min/max values.
     """
-    if len(input_data) == 0:
+    if not input_data:
         return []
 
-    # First pass: collect all values to find min/max for normalization
-    per_server_character_counts: dict[str, list[int]] = {}
-    per_server_lfm_counts: dict[str, list[int]] = {}
+    # First pass: collect all values per server to find their individual min/max
+    server_stats = {}
     valid_data_points = []
 
     for data_point in input_data:
-        try:
-            if not data_point.data:
-                continue
-
-            valid_server_data = {}
-            for server_name, server_data in data_point.data.items():
-                try:
-                    character_count = max(0.0, float(server_data.character_count))
-                    lfm_count = max(0.0, float(server_data.lfm_count))
-
-                    valid_server_data[server_name] = {
-                        "character_count": character_count,
-                        "lfm_count": lfm_count,
-                    }
-                    if server_name not in per_server_character_counts:
-                        per_server_character_counts[server_name] = []
-                    if server_name not in per_server_lfm_counts:
-                        per_server_lfm_counts[server_name] = []
-                    per_server_character_counts[server_name].append(character_count)
-                    per_server_lfm_counts[server_name].append(lfm_count)
-                except (ValueError, TypeError, AttributeError):
-                    continue
-
-            if valid_server_data:
-                valid_data_points.append(
-                    {
-                        "timestamp": data_point.timestamp,
-                        "data": valid_server_data,
-                    }
-                )
-        except (AttributeError, TypeError):
+        if not data_point.data:
             continue
 
-    if not per_server_character_counts or not per_server_lfm_counts:
+        valid_server_data = {}
+        for server_name, server_data in data_point.data.items():
+            try:
+                character_count = max(0.0, float(server_data.character_count))
+                lfm_count = max(0.0, float(server_data.lfm_count))
+
+                valid_server_data[server_name] = {
+                    "character_count": character_count,
+                    "lfm_count": lfm_count,
+                }
+
+                # Initialize server stats if not exists
+                if server_name not in server_stats:
+                    server_stats[server_name] = {
+                        "character_counts": [],
+                        "lfm_counts": [],
+                    }
+
+                server_stats[server_name]["character_counts"].append(character_count)
+                server_stats[server_name]["lfm_counts"].append(lfm_count)
+
+            except (ValueError, TypeError, AttributeError):
+                continue
+
+        if valid_server_data:
+            valid_data_points.append(
+                {
+                    "timestamp": data_point.timestamp,
+                    "data": valid_server_data,
+                }
+            )
+
+    if not server_stats:
         return []
 
-    # Find min/max for normalization
-    per_server_min_character_count = {
-        server_name: min(counts)
-        for server_name, counts in per_server_character_counts.items()
-    }
-    per_server_max_character_count = {
-        server_name: max(counts)
-        for server_name, counts in per_server_character_counts.items()
-    }
-    per_server_min_lfm_count = {
-        server_name: min(counts)
-        for server_name, counts in per_server_lfm_counts.items()
-    }
-    per_server_max_lfm_count = {
-        server_name: max(counts)
-        for server_name, counts in per_server_lfm_counts.items()
-    }
+    # Calculate min/max and ranges for each server
+    server_normalization_params = {}
+    for server_name, stats in server_stats.items():
+        char_counts = stats["character_counts"]
+        lfm_counts = stats["lfm_counts"]
 
-    # Avoid division by zero
-    per_server_character_range = {
-        server_name: max(
-            0.0,
-            per_server_max_character_count[server_name]
-            - per_server_min_character_count[server_name],
-        )
-        for server_name in per_server_character_counts
-    }
-    per_server_lfm_range = {
-        server_name: max(
-            0.0,
-            per_server_max_lfm_count[server_name]
-            - per_server_min_lfm_count[server_name],
-        )
-        for server_name in per_server_lfm_counts
-    }
+        char_min, char_max = min(char_counts), max(char_counts)
+        lfm_min, lfm_max = min(lfm_counts), max(lfm_counts)
 
-    # Second pass: normalize values to 0-1 range
-    normalized_data: list[PopulationPointInTime] = []
+        server_normalization_params[server_name] = {
+            "char_min": char_min,
+            "char_range": max(0.0, char_max - char_min),
+            "lfm_min": lfm_min,
+            "lfm_range": max(0.0, lfm_max - lfm_min),
+        }
+
+    # Second pass: normalize values to 0-1 range per server
+    normalized_data = []
     for data_point in valid_data_points:
-        normalized_server_data: PopulationDataPoint = {}
-        for server_name, server_data in data_point["data"].items():
-            # Normalize to 0-1 range using min-max normalization
-            if per_server_character_range[server_name] > 0:
-                normalized_character_count = (
-                    server_data["character_count"]
-                    - per_server_min_character_count[server_name]
-                ) / per_server_character_range[server_name]
-            else:
-                normalized_character_count = 0.0
+        normalized_server_data = {}
 
-            if per_server_lfm_range > 0:
+        for server_name, server_data in data_point["data"].items():
+            params = server_normalization_params[server_name]
+
+            # Normalize character count
+            if params["char_range"] > 0:
+                normalized_char_count = (
+                    server_data["character_count"] - params["char_min"]
+                ) / params["char_range"]
+            else:
+                normalized_char_count = 0.0
+
+            # Normalize LFM count
+            if params["lfm_range"] > 0:
                 normalized_lfm_count = (
-                    server_data["lfm_count"] - per_server_min_lfm_count[server_name]
-                ) / per_server_lfm_range
+                    server_data["lfm_count"] - params["lfm_min"]
+                ) / params["lfm_range"]
             else:
                 normalized_lfm_count = 0.0
 
             normalized_server_data[server_name] = PopulationDataPoint(
-                character_count=round(normalized_character_count, 6),
+                character_count=round(normalized_char_count, 6),
                 lfm_count=round(normalized_lfm_count, 6),
             )
 
