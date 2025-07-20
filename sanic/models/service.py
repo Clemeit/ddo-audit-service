@@ -12,6 +12,8 @@ class PageMessage(BaseModel):
     id: Optional[int] = None
     message: str
     affected_pages: Optional[list[str]] = None
+    dismissable: bool = False
+    type: str = "info"  # 'info', 'warning', 'critical', or 'success'
     start_date: Optional[str] = None
     end_date: Optional[str] = None
 

@@ -34,6 +34,40 @@ async def get_health(request):
     return json({"data": {"postgres": postgres_health, "redis": redis_health}})
 
 
+@service_blueprint.get("/config")
+async def get_config(request):
+    """
+    Method: GET
+
+    Route: /service/config
+
+    Description: Get the service configuration.
+    """
+    try:
+        config = postgres_client.get_config()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": config})
+
+
+@service_blueprint.get("/config/<key:str>")
+async def get_config_By_key(request, key: str):
+    """
+    Method: GET
+
+    Route: /service/config
+
+    Description: Get the service configuration.
+    """
+    try:
+        config = postgres_client.get_config_by_key(key)
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": config})
+
+
 @service_blueprint.get("/news")
 async def get_news(request):
     """

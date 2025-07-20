@@ -116,6 +116,8 @@ CREATE TABLE IF NOT EXISTS public."page_messages"
     id serial NOT NULL,
     message text NOT NULL,
     affected_pages jsonb NOT NULL,
+    dismissable boolean NOT NULL DEFAULT false,
+    type text NOT NULL DEFAULT 'info',
     start_date timestamp with time zone NOT NULL DEFAULT current_timestamp,
     end_date timestamp with time zone NOT NULL DEFAULT current_timestamp + INTERVAL '1 day',
     PRIMARY KEY (id)
@@ -184,3 +186,27 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."logs"
     OWNER to pgadmin;
+
+CREATE TABLE IF NOT EXISTS public."config"
+(
+    key text NOT NULL,
+    value text,
+    value_type text NOT NULL DEFAULT 'string',
+    description text,
+    category text,
+    is_enabled boolean NOT NULL DEFAULT true,
+    created_date timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    updated_date timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    PRIMARY KEY (key)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."config"
+    OWNER to pgadmin;
+
+-- Create an index on category for faster filtering
+CREATE INDEX idx_config_category ON public."config" (category);
+
+-- Create an index on is_enabled for quick feature toggles
+CREATE INDEX idx_config_enabled ON public."config" (is_enabled);

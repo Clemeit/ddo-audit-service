@@ -1314,11 +1314,13 @@ def build_page_message_from_row(row: tuple) -> PageMessage:
         id=row[0],
         message=row[1],
         affected_pages=row[2],
+        dismissable=row[3],
+        type=row[4],
         start_date=(
-            datetime_to_datetime_string(row[3]) if isinstance(row[3], datetime) else ""
+            datetime_to_datetime_string(row[5]) if isinstance(row[5], datetime) else ""
         ),
         end_date=(
-            datetime_to_datetime_string(row[4]) if isinstance(row[4], datetime) else ""
+            datetime_to_datetime_string(row[6]) if isinstance(row[6], datetime) else ""
         ),
     )
 
@@ -1989,6 +1991,62 @@ def get_character_activity_stats(days: int = 90, server_name: str = None) -> dic
             "error": str(e),
             "query_parameters": {"days_analyzed": days, "server_name": server_name},
         }
+
+
+def get_config() -> dict:
+    """
+    Get all configuration settings from the database.
+
+    Returns:
+        Dictionary containing all configuration settings
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM public.config")
+            config_rows = cursor.fetchall()
+            if not config_rows:
+                return {}
+
+            return {
+                row[0]: {
+                    "value": row[1],
+                    "value_type": row[2],
+                    "description": row[3],
+                    "category": row[4],
+                    "is_enabled": row[5],
+                }
+                for row in config_rows
+            }
+
+
+def get_config_by_key(key: str) -> dict | None:
+    """
+    Get a specific configuration setting by key.
+
+    Args:
+        key: The configuration key to retrieve
+
+    Returns:
+        Dictionary containing the configuration setting or None if not found
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM public.config WHERE key = %s",
+                (key,),
+            )
+            config_row = cursor.fetchone()
+            if not config_row:
+                return None
+
+            return {
+                "key": config_row[0],
+                "value": config_row[1],
+                "value_type": config_row[2],
+                "description": config_row[3],
+                "category": config_row[4],
+                "is_enabled": config_row[5],
+            }
 
 
 # def get_game_population_by_date_strings(
