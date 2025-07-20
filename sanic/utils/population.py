@@ -379,8 +379,8 @@ def normalize_population_data(
         return []
 
     # First pass: collect all values to find min/max for normalization
-    all_character_counts = []
-    all_lfm_counts = []
+    per_server_character_counts: dict[str, list[int]] = {}
+    per_server_lfm_counts: dict[str, list[int]] = {}
     valid_data_points = []
 
     for data_point in input_data:
@@ -398,8 +398,12 @@ def normalize_population_data(
                         "character_count": character_count,
                         "lfm_count": lfm_count,
                     }
-                    all_character_counts.append(character_count)
-                    all_lfm_counts.append(lfm_count)
+                    if server_name not in per_server_character_counts:
+                        per_server_character_counts[server_name] = []
+                    if server_name not in per_server_lfm_counts:
+                        per_server_lfm_counts[server_name] = []
+                    per_server_character_counts[server_name].append(character_count)
+                    per_server_lfm_counts[server_name].append(lfm_count)
                 except (ValueError, TypeError, AttributeError):
                     continue
 
@@ -413,18 +417,44 @@ def normalize_population_data(
         except (AttributeError, TypeError):
             continue
 
-    if not all_character_counts or not all_lfm_counts:
+    if not per_server_character_counts or not per_server_lfm_counts:
         return []
 
     # Find min/max for normalization
-    min_character_count = min(all_character_counts)
-    max_character_count = max(all_character_counts)
-    min_lfm_count = min(all_lfm_counts)
-    max_lfm_count = max(all_lfm_counts)
+    per_server_min_character_count = {
+        server_name: min(counts)
+        for server_name, counts in per_server_character_counts.items()
+    }
+    per_server_max_character_count = {
+        server_name: max(counts)
+        for server_name, counts in per_server_character_counts.items()
+    }
+    per_server_min_lfm_count = {
+        server_name: min(counts)
+        for server_name, counts in per_server_lfm_counts.items()
+    }
+    per_server_max_lfm_count = {
+        server_name: max(counts)
+        for server_name, counts in per_server_lfm_counts.items()
+    }
 
     # Avoid division by zero
-    character_range = max_character_count - min_character_count
-    lfm_range = max_lfm_count - min_lfm_count
+    per_server_character_range = {
+        server_name: max(
+            0.0,
+            per_server_max_character_count[server_name]
+            - per_server_min_character_count[server_name],
+        )
+        for server_name in per_server_character_counts
+    }
+    per_server_lfm_range = {
+        server_name: max(
+            0.0,
+            per_server_max_lfm_count[server_name]
+            - per_server_min_lfm_count[server_name],
+        )
+        for server_name in per_server_lfm_counts
+    }
 
     # Second pass: normalize values to 0-1 range
     normalized_data: list[PopulationPointInTime] = []
@@ -432,17 +462,18 @@ def normalize_population_data(
         normalized_server_data: PopulationDataPoint = {}
         for server_name, server_data in data_point["data"].items():
             # Normalize to 0-1 range using min-max normalization
-            if character_range > 0:
+            if per_server_character_range[server_name] > 0:
                 normalized_character_count = (
-                    server_data["character_count"] - min_character_count
-                ) / character_range
+                    server_data["character_count"]
+                    - per_server_min_character_count[server_name]
+                ) / per_server_character_range[server_name]
             else:
                 normalized_character_count = 0.0
 
-            if lfm_range > 0:
+            if per_server_lfm_range > 0:
                 normalized_lfm_count = (
-                    server_data["lfm_count"] - min_lfm_count
-                ) / lfm_range
+                    server_data["lfm_count"] - per_server_min_lfm_count[server_name]
+                ) / per_server_lfm_range
             else:
                 normalized_lfm_count = 0.0
 
