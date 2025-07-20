@@ -427,9 +427,9 @@ def normalize_population_data(
     lfm_range = max_lfm_count - min_lfm_count
 
     # Second pass: normalize values to 0-1 range
-    normalized_data = []
+    normalized_data: list[PopulationPointInTime] = []
     for data_point in valid_data_points:
-        normalized_server_data = {}
+        normalized_server_data: PopulationDataPoint = {}
         for server_name, server_data in data_point["data"].items():
             # Normalize to 0-1 range using min-max normalization
             if character_range > 0:
@@ -446,16 +446,16 @@ def normalize_population_data(
             else:
                 normalized_lfm_count = 0.0
 
-            normalized_server_data[server_name] = {
-                "character_count": round(normalized_character_count, 6),
-                "lfm_count": round(normalized_lfm_count, 6),
-            }
+            normalized_server_data[server_name] = PopulationDataPoint(
+                character_count=round(normalized_character_count, 6),
+                lfm_count=round(normalized_lfm_count, 6),
+            )
 
         normalized_data.append(
-            {
-                "timestamp": data_point["timestamp"],
-                "data": normalized_server_data,
-            }
+            PopulationPointInTime(
+                timestamp=data_point["timestamp"],
+                data=normalized_server_data,
+            )
         )
 
     return normalized_data
