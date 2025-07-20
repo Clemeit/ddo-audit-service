@@ -206,7 +206,7 @@ async def get_raid_activity_by_character_ids(request: Request):
     """
     try:
         # get character IDs from the query parameter
-        character_ids_param = request.args.get("character_ids")
+        character_ids_param: str = request.args.get("character_ids")
         if not character_ids_param:
             return json(
                 {"message": "character_ids query parameter is required"}, status=400

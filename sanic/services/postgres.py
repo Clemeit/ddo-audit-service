@@ -968,9 +968,26 @@ def get_recent_raid_activity_by_character_ids(
         with conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT timestamp, public.character_activity.character_id, quests.id as quest_id FROM public.character_activity
-                LEFT JOIN public.quests ON public.quests.area_id = CAST(public.character_activity.data ->> 'value' as INTEGER)
-                WHERE quests.group_size = 'Raid' AND character_activity.character_id = ANY(%s) AND character_activity.activity_type = 'location' AND timestamp >= NOW() - INTERVAL '5 days'
+                SELECT 
+                    next_activity.timestamp as timestamp,
+                    current_activity.character_id, 
+                    ARRAY_AGG(DISTINCT quests.id ORDER BY quests.id) as quest_ids
+                FROM public.character_activity current_activity
+                LEFT JOIN public.quests ON public.quests.area_id = CAST(current_activity.data ->> 'value' as INTEGER)
+                INNER JOIN LATERAL (
+                    SELECT timestamp 
+                    FROM public.character_activity next_activity
+                    WHERE next_activity.character_id = current_activity.character_id 
+                        AND next_activity.activity_type = 'location'
+                        AND next_activity.timestamp > current_activity.timestamp
+                    ORDER BY next_activity.timestamp ASC
+                    LIMIT 1
+                ) next_activity ON true
+                WHERE quests.group_size = 'Raid' 
+                    AND current_activity.character_id = ANY(%s) 
+                    AND current_activity.activity_type = 'location' 
+                    AND current_activity.timestamp >= NOW() - INTERVAL '5 days'
+                GROUP BY next_activity.timestamp, current_activity.character_id
                 ORDER BY timestamp DESC
                 LIMIT 100
                 """,
@@ -1353,7 +1370,13 @@ def build_character_activity_from_rows(rows: list[tuple]) -> list[dict]:
                 else ""
             ),
             "character_id": int(row[1]),
-            "data": row[2],
+            "data": {
+                "quest_ids": (
+                    [int(quest_id) for quest_id in row[2] if quest_id is not None]
+                    if row[2]
+                    else []
+                ),
+            },
         }
         for row in rows
     ]
