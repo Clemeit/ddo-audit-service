@@ -92,8 +92,8 @@ jobs:
         key: ${{ secrets.SSH_KEY }}
         script: |
           cd /var/www/ddoaudit-stage.com/app
-          docker compose -p ddoaudit-stage pull
-          docker compose -p ddoaudit-stage up -d
+          docker compose --env-file .env -p ddoaudit-stage pull
+          docker compose --env-file .env -p ddoaudit-stage up -d
     
     - name: Prune unused Docker images
       uses: appleboy/ssh-action@master
@@ -174,8 +174,15 @@ jobs:
         key: ${{ secrets.SSH_KEY }}
         script: |
           cd /var/www/ddoaudit.com/app
-          docker compose -p ddoaudit pull
-          docker compose -p ddoaudit up -d
+          echo "=== Environment Debug ==="
+          echo "Current directory: $(pwd)"
+          echo "Contents of .env file:"
+          cat .env | grep STATIC_FILES_PATH
+          echo "Docker Compose config (nginx volumes):"
+          docker compose --env-file .env config | grep -A3 -B3 "usr/share/nginx/html"
+          echo "========================="
+          docker compose --env-file .env -p ddoaudit pull
+          docker compose --env-file .env -p ddoaudit up -d
     
     - name: Prune unused Docker images
       uses: appleboy/ssh-action@master
