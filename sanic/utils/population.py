@@ -32,13 +32,14 @@ def get_game_population_1_day() -> list[dict]:
     Checks cache then database.
     """
 
-    def fetch_data():
+    def fetch_and_normalize_data():
         postgres_data = postgres_client.get_game_population_relative(1)
-        return [datum.model_dump() for datum in postgres_data]
+        normalized_data = normalize_population_data(postgres_data)
+        return [datum.model_dump() for datum in normalized_data]
 
     return get_cached_data_with_fallback(
         "game_population_1_day",
-        fetch_data,
+        fetch_and_normalize_data,
         POPULATION_1_DAY_CACHE_TTL,
     )
 
@@ -72,7 +73,8 @@ def get_game_population_1_week() -> list[dict]:
     def fetch_data():
         postgres_data = postgres_client.get_game_population_last_week()
         averaged_data = average_hourly_data(postgres_data)
-        return [datum.model_dump() for datum in averaged_data]
+        normalized_data = normalize_population_data(averaged_data)
+        return [datum.model_dump() for datum in normalized_data]
 
     return get_cached_data_with_fallback(
         "game_population_1_week",
@@ -110,7 +112,8 @@ def get_game_population_1_month() -> list[dict]:
     def fetch_data():
         postgres_data = postgres_client.get_game_population_last_month()
         averaged_data = average_daily_data(postgres_data)
-        return [datum.model_dump() for datum in averaged_data]
+        normalized_data = normalize_population_data(averaged_data)
+        return [datum.model_dump() for datum in normalized_data]
 
     return get_cached_data_with_fallback(
         "game_population_1_month",
@@ -148,7 +151,8 @@ def get_game_population_1_year() -> list[dict]:
     def fetch_data():
         postgres_data = postgres_client.get_game_population_last_year()
         averaged_data = average_daily_data(postgres_data)
-        return [datum.model_dump() for datum in averaged_data]
+        normalized_data = normalize_population_data(averaged_data)
+        return [datum.model_dump() for datum in normalized_data]
 
     return get_cached_data_with_fallback(
         "game_population_1_year",
@@ -362,3 +366,96 @@ def averaged_population_data_points(
         )
 
     return averaged_data_points
+
+
+def normalize_population_data(
+    input_data: list[PopulationPointInTime],
+) -> list[PopulationPointInTime]:
+    """
+    Normalize the population data to ensure all servers are represented.
+    If a server is missing, it will be added with zero counts.
+    """
+    if len(input_data) == 0:
+        return []
+
+    # First pass: collect all values to find min/max for normalization
+    all_character_counts = []
+    all_lfm_counts = []
+    valid_data_points = []
+
+    for data_point in input_data:
+        try:
+            if not data_point.data:
+                continue
+
+            valid_server_data = {}
+            for server_name, server_data in data_point.data.items():
+                try:
+                    character_count = max(0.0, float(server_data.character_count))
+                    lfm_count = max(0.0, float(server_data.lfm_count))
+
+                    valid_server_data[server_name] = {
+                        "character_count": character_count,
+                        "lfm_count": lfm_count,
+                    }
+                    all_character_counts.append(character_count)
+                    all_lfm_counts.append(lfm_count)
+                except (ValueError, TypeError, AttributeError):
+                    continue
+
+            if valid_server_data:
+                valid_data_points.append(
+                    {
+                        "timestamp": data_point.timestamp,
+                        "data": valid_server_data,
+                    }
+                )
+        except (AttributeError, TypeError):
+            continue
+
+    if not all_character_counts or not all_lfm_counts:
+        return []
+
+    # Find min/max for normalization
+    min_character_count = min(all_character_counts)
+    max_character_count = max(all_character_counts)
+    min_lfm_count = min(all_lfm_counts)
+    max_lfm_count = max(all_lfm_counts)
+
+    # Avoid division by zero
+    character_range = max_character_count - min_character_count
+    lfm_range = max_lfm_count - min_lfm_count
+
+    # Second pass: normalize values to 0-1 range
+    normalized_data = []
+    for data_point in valid_data_points:
+        normalized_server_data = {}
+        for server_name, server_data in data_point["data"].items():
+            # Normalize to 0-1 range using min-max normalization
+            if character_range > 0:
+                normalized_character_count = (
+                    server_data["character_count"] - min_character_count
+                ) / character_range
+            else:
+                normalized_character_count = 0.0
+
+            if lfm_range > 0:
+                normalized_lfm_count = (
+                    server_data["lfm_count"] - min_lfm_count
+                ) / lfm_range
+            else:
+                normalized_lfm_count = 0.0
+
+            normalized_server_data[server_name] = {
+                "character_count": round(normalized_character_count, 6),
+                "lfm_count": round(normalized_lfm_count, 6),
+            }
+
+        normalized_data.append(
+            {
+                "timestamp": data_point["timestamp"],
+                "data": normalized_server_data,
+            }
+        )
+
+    return normalized_data
