@@ -11,7 +11,6 @@ from constants.redis import (
     POPULATION_1_QUARTER_CACHE_TTL,
 )
 
-from time import time
 from datetime import datetime
 
 

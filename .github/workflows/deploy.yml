@@ -2,7 +2,7 @@ name: CI/CD with Stage and Production
 
 on:
   push:
-    branches: [master] 
+    branches: [master]
   workflow_dispatch:
 
 jobs:
@@ -10,17 +10,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-    
-    - name: Log in to Docker Hub
-      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Build Docker image with Compose
-      run: docker compose build
-    
-    - name: Push Docker image with Compose
-      run: docker compose push
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build Docker image with Compose
+        run: docker compose build
+
+      - name: Push Docker image with Compose
+        run: docker compose push
 
   deploy-stage:
     needs: build-and-push-images
@@ -29,80 +29,80 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Create .env file
-      run: |
-        cat > .env <<EOF
-        POSTGRES_DB=${{ vars.POSTGRES_DB }}
-        POSTGRES_HOST=${{ vars.POSTGRES_HOST }}
-        POSTGRES_PORT=${{ vars.POSTGRES_PORT }}
-        POSTGRES_USER=${{ vars.POSTGRES_USER }}
-        POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-        POSTGRES_MIN_CONN=${{ vars.POSTGRES_MIN_CONN }}
-        POSTGRES_MAX_CONN=${{ vars.POSTGRES_MAX_CONN }}
-        API_KEY=${{ secrets.API_KEY }}
-        APP_HOST=${{ vars.APP_HOST }}
-        APP_PORT=${{ vars.APP_PORT }}
-        APP_WORKERS=${{ vars.APP_WORKERS }}
-        CRYPTO_PASS=${{ secrets.CRYPTO_PASS }}
-        REDIS_HOST=${{ vars.REDIS_HOST }}
-        REDIS_PORT=${{ vars.REDIS_PORT }}
-        PGADMIN_DEFAULT_PASSWORD=${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
-        PGADMIN_DEFAULT_EMAIL=${{ vars.PGADMIN_DEFAULT_EMAIL }}
-        NGINX_HTTP_PORT=${{ vars.NGINX_HTTP_PORT }}
-        NGINX_HTTPS_PORT=${{ vars.NGINX_HTTPS_PORT }}
-        STATIC_FILES_PATH=${{ vars.STATIC_FILES_PATH }}
-        BETTERSTACK_SERVER_STATUS_KEY=${{ secrets.BETTERSTACK_SERVER_STATUS_KEY }}
-        EOF
+      - name: Create .env file
+        run: |
+          cat > .env <<EOF
+          POSTGRES_DB=${{ vars.POSTGRES_DB }}
+          POSTGRES_HOST=${{ vars.POSTGRES_HOST }}
+          POSTGRES_PORT=${{ vars.POSTGRES_PORT }}
+          POSTGRES_USER=${{ vars.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_MIN_CONN=${{ vars.POSTGRES_MIN_CONN }}
+          POSTGRES_MAX_CONN=${{ vars.POSTGRES_MAX_CONN }}
+          API_KEY=${{ secrets.API_KEY }}
+          APP_HOST=${{ vars.APP_HOST }}
+          APP_PORT=${{ vars.APP_PORT }}
+          APP_WORKERS=${{ vars.APP_WORKERS }}
+          CRYPTO_PASS=${{ secrets.CRYPTO_PASS }}
+          REDIS_HOST=${{ vars.REDIS_HOST }}
+          REDIS_PORT=${{ vars.REDIS_PORT }}
+          PGADMIN_DEFAULT_PASSWORD=${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
+          PGADMIN_DEFAULT_EMAIL=${{ vars.PGADMIN_DEFAULT_EMAIL }}
+          NGINX_HTTP_PORT=${{ vars.NGINX_HTTP_PORT }}
+          NGINX_HTTPS_PORT=${{ vars.NGINX_HTTPS_PORT }}
+          STATIC_FILES_PATH=${{ vars.STATIC_FILES_PATH }}
+          BETTERSTACK_SERVER_STATUS_KEY=${{ secrets.BETTERSTACK_SERVER_STATUS_KEY }}
+          EOF
 
-    - name: Ensure target directory exists
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        key: ${{ secrets.SSH_KEY }}
-        script: |
-          mkdir -p /var/www/ddoaudit-stage.com/app/
+      - name: Ensure target directory exists
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            mkdir -p /var/www/ddoaudit-stage.com/app/
 
-    - name: Copy docker-compose.yml to server
-      uses: appleboy/scp-action@master
-      with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        key: ${{ secrets.SSH_KEY }}
-        source: "./docker-compose.yml"
-        target: "/var/www/ddoaudit-stage.com/app/"
-    
-    - name: Copy .env to server
-      uses: appleboy/scp-action@master
-      with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        key: ${{ secrets.SSH_KEY }}
-        source: "./.env"
-        target: "/var/www/ddoaudit-stage.com/app/"
+      - name: Copy docker-compose.yml to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "./docker-compose.yml"
+          target: "/var/www/ddoaudit-stage.com/app/"
 
-    - name: Deploy to Stage
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        key: ${{ secrets.SSH_KEY }}
-        script: |
-          cd /var/www/ddoaudit-stage.com/app
-          docker compose --env-file .env -p ddoaudit-stage pull
-          docker compose --env-file .env -p ddoaudit-stage up -d
-    
-    - name: Prune unused Docker images
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        key: ${{ secrets.SSH_KEY }}
-        script: |
-          docker image prune -af
+      - name: Copy .env to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "./.env"
+          target: "/var/www/ddoaudit-stage.com/app/"
+
+      - name: Deploy to Stage
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /var/www/ddoaudit-stage.com/app
+            docker compose -p ddoaudit-stage pull
+            docker compose -p ddoaudit-stage up -d
+
+      - name: Prune unused Docker images
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            docker image prune -af
 
   deploy-prod:
     needs: deploy-stage
@@ -111,84 +111,77 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      
-    - name: Create .env file
-      run: |
-        cat > .env <<EOF
-        POSTGRES_DB=${{ vars.POSTGRES_DB }}
-        POSTGRES_HOST=${{ vars.POSTGRES_HOST }}
-        POSTGRES_PORT=${{ vars.POSTGRES_PORT }}
-        POSTGRES_USER=${{ vars.POSTGRES_USER }}
-        POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-        POSTGRES_MIN_CONN=${{ vars.POSTGRES_MIN_CONN }}
-        POSTGRES_MAX_CONN=${{ vars.POSTGRES_MAX_CONN }}
-        API_KEY=${{ secrets.API_KEY }}
-        APP_HOST=${{ vars.APP_HOST }}
-        APP_PORT=${{ vars.APP_PORT }}
-        APP_WORKERS=${{ vars.APP_WORKERS }}
-        CRYPTO_PASS=${{ secrets.CRYPTO_PASS }}
-        REDIS_HOST=${{ vars.REDIS_HOST }}
-        REDIS_PORT=${{ vars.REDIS_PORT }}
-        PGADMIN_DEFAULT_PASSWORD=${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
-        PGADMIN_DEFAULT_EMAIL=${{ vars.PGADMIN_DEFAULT_EMAIL }}
-        NGINX_HTTP_PORT=${{ vars.NGINX_HTTP_PORT }}
-        NGINX_HTTPS_PORT=${{ vars.NGINX_HTTPS_PORT }}
-        STATIC_FILES_PATH=${{ vars.STATIC_FILES_PATH }}
-        BETTERSTACK_SERVER_STATUS_KEY=${{ secrets.BETTERSTACK_SERVER_STATUS_KEY }}
-        EOF
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Ensure target directory exists
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        key: ${{ secrets.SSH_KEY }}
-        script: |
-          mkdir -p /var/www/ddoaudit.com/app/
+      - name: Create .env file
+        run: |
+          cat > .env <<EOF
+          POSTGRES_DB=${{ vars.POSTGRES_DB }}
+          POSTGRES_HOST=${{ vars.POSTGRES_HOST }}
+          POSTGRES_PORT=${{ vars.POSTGRES_PORT }}
+          POSTGRES_USER=${{ vars.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_MIN_CONN=${{ vars.POSTGRES_MIN_CONN }}
+          POSTGRES_MAX_CONN=${{ vars.POSTGRES_MAX_CONN }}
+          API_KEY=${{ secrets.API_KEY }}
+          APP_HOST=${{ vars.APP_HOST }}
+          APP_PORT=${{ vars.APP_PORT }}
+          APP_WORKERS=${{ vars.APP_WORKERS }}
+          CRYPTO_PASS=${{ secrets.CRYPTO_PASS }}
+          REDIS_HOST=${{ vars.REDIS_HOST }}
+          REDIS_PORT=${{ vars.REDIS_PORT }}
+          PGADMIN_DEFAULT_PASSWORD=${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
+          PGADMIN_DEFAULT_EMAIL=${{ vars.PGADMIN_DEFAULT_EMAIL }}
+          NGINX_HTTP_PORT=${{ vars.NGINX_HTTP_PORT }}
+          NGINX_HTTPS_PORT=${{ vars.NGINX_HTTPS_PORT }}
+          STATIC_FILES_PATH=${{ vars.STATIC_FILES_PATH }}
+          BETTERSTACK_SERVER_STATUS_KEY=${{ secrets.BETTERSTACK_SERVER_STATUS_KEY }}
+          EOF
 
-    - name: Copy docker-compose.yml to server
-      uses: appleboy/scp-action@master
-      with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        key: ${{ secrets.SSH_KEY }}
-        source: "./docker-compose.yml"
-        target: "/var/www/ddoaudit.com/app/"
-    
-    - name: Copy .env to server
-      uses: appleboy/scp-action@master
-      with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        key: ${{ secrets.SSH_KEY }}
-        source: "./.env"
-        target: "/var/www/ddoaudit.com/app/"
+      - name: Ensure target directory exists
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            mkdir -p /var/www/ddoaudit.com/app/
 
-    - name: Deploy to Production
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        key: ${{ secrets.SSH_KEY }}
-        script: |
-          cd /var/www/ddoaudit.com/app
-          echo "=== Environment Debug ==="
-          echo "Current directory: $(pwd)"
-          echo "Contents of .env file:"
-          cat .env | grep STATIC_FILES_PATH
-          echo "Docker Compose config (nginx volumes):"
-          docker compose --env-file .env config | grep -A3 -B3 "usr/share/nginx/html"
-          echo "========================="
-          docker compose --env-file .env -p ddoaudit pull
-          docker compose --env-file .env -p ddoaudit up -d
-    
-    - name: Prune unused Docker images
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        key: ${{ secrets.SSH_KEY }}
-        script: |
-          docker image prune -af
+      - name: Copy docker-compose.yml to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "./docker-compose.yml"
+          target: "/var/www/ddoaudit.com/app/"
+
+      - name: Copy .env to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "./.env"
+          target: "/var/www/ddoaudit.com/app/"
+
+      - name: Deploy to Production
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /var/www/ddoaudit.com/app
+            docker compose -p ddoaudit pull
+            docker compose -p ddoaudit up -d
+
+      - name: Prune unused Docker images
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            docker image prune -af

@@ -3,6 +3,7 @@ import os
 from endpoints.activity import activity_blueprint
 from endpoints.characters import character_blueprint
 from endpoints.game import game_blueprint
+from endpoints.population import population_blueprint
 from endpoints.health import health_blueprint
 from endpoints.lfms import lfm_blueprint
 from endpoints.service import service_blueprint
@@ -29,6 +30,7 @@ app.blueprint(
         activity_blueprint,
         health_blueprint,
         game_blueprint,
+        population_blueprint,
         service_blueprint,
         verification_blueprint,
         quest_blueprint,
