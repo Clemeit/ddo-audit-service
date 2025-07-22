@@ -3,7 +3,6 @@ LFM endpoints.
 """
 
 import services.redis as redis_client
-from services.betterstack import lfm_collections_heartbeat
 from models.api import LfmRequestApiModel, LfmRequestType
 from utils.validation import is_server_name_valid
 
@@ -100,11 +99,6 @@ async def set_lfms(request: Request):
         print(f"Error handling incoming LFMs: {e}")
         return json({"message": str(e)}, status=500)
 
-    try:
-        lfm_collections_heartbeat()
-    except Exception:
-        pass
-
     return json({"message": "success"})
 
 
@@ -138,11 +132,6 @@ async def update_lfms(request: Request):
         )
         print(f"Error handling incoming LFMs: {e}")
         return json({"message": str(e)}, status=500)
-
-    try:
-        lfm_collections_heartbeat()
-    except Exception:
-        pass
 
     return json({"message": "success"})
 

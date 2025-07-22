@@ -4,7 +4,6 @@ Character endpoints.
 
 import services.postgres as postgres_client
 import services.redis as redis_client
-from services.betterstack import character_collections_heartbeat
 from models.api import CharacterRequestApiModel, CharacterRequestType
 from utils.validation import is_server_name_valid, is_character_name_valid
 from business.characters import (
@@ -260,11 +259,6 @@ async def set_characters(request: Request):
         print(f"Error handling incoming characters: {e}")
         return json({"message": str(e)}, status=500)
 
-    try:
-        character_collections_heartbeat()
-    except Exception:
-        pass
-
     return json({"message": "success"})
 
 
@@ -297,11 +291,6 @@ async def update_characters(request: Request):
         )
         print(f"Error handling incoming characters: {e}")
         return json({"message": str(e)}, status=500)
-
-    try:
-        character_collections_heartbeat()
-    except Exception:
-        pass
 
     return json({"message": "success"})
 

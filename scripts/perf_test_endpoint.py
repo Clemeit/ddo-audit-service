@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 import json
 import math
 
-ENDPOINT = "https://api.ddoaudit.com/v1/game/server-info"
+ENDPOINT = "https://api.hcnxsryjficudzazjxty.com/v1/game/server-info"
 CALL_COUNT = 100
 DEFAULT_TIMEOUT = 30
 DEFAULT_THREADS = 1

@@ -3,7 +3,6 @@ Game endpoints.
 """
 
 import services.redis as redis_client
-from services.betterstack import server_info_heartbeat
 from models.redis import ServerInfo
 
 from sanic import Blueprint
@@ -90,11 +89,6 @@ async def patch_game_info(request: Request):
             },
         )
         return json({"message": str(e)}, status=500)
-
-    try:
-        server_info_heartbeat()
-    except Exception:
-        pass
 
     return json({"message": "success"})
 
