@@ -77,7 +77,7 @@ services:
   nginx:
     build:
       context: .
-      dockerfile: ./nginx/Dockerfile
+      dockerfile: ./nginx/Dockerfile.stage
     image: clemeit/ddoaudit-nginx:latest
     restart: always
     ports:
