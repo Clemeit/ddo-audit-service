@@ -106,7 +106,7 @@ jobs:
 
   deploy-prod:
     needs: deploy-stage
-    # if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch'
     environment: production
     runs-on: ubuntu-latest
 
