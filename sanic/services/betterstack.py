@@ -2,7 +2,6 @@ import requests
 import os
 import logging
 from datetime import datetime
-from typing import Dict, Optional
 from enum import Enum
 
 logger = logging.getLogger(__name__)
