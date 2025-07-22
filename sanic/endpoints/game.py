@@ -9,8 +9,8 @@ from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
 
-
 from utils.validation import is_server_name_valid
+from utils.log import logMessage
 
 game_blueprint = Blueprint("game", url_prefix="/game", version=1)
 
@@ -71,14 +71,23 @@ async def patch_game_info(request: Request):
     """
     # validate request body
     try:
-        body = ServerInfo(**request.json)
+        request_body = ServerInfo(**request.json)
     except Exception:
         return json({"message": "Invalid request body"}, status=400)
 
     # update in redis cache
     try:
-        redis_client.merge_server_info(body)
+        redis_client.merge_server_info(request_body)
     except Exception as e:
+        logMessage(
+            message="Error handling incoming game info",
+            level="error",
+            action="patch_game_info",
+            metadata={
+                "error": str(e),
+                "request_body": request_body.model_dump() if request_body else None,
+            },
+        )
         return json({"message": str(e)}, status=500)
 
     return json({"message": "success"})

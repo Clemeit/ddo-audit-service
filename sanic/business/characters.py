@@ -7,6 +7,7 @@ from models.character import CharacterActivity
 from models.redis import ServerCharacterData
 
 from utils.time import get_current_datetime_string
+from utils.log import logMessage
 
 
 def handle_incoming_characters(
@@ -117,7 +118,7 @@ def aggregate_character_activity_for_server(
     Handle character activity events for a single server at a time. Returns a
     list of character data dict.
     """
-    failed_count = 0
+    error_messages = []
 
     # For every previous character that is not in current, they logged off
     # For every current character that is not in previous, they logged on
@@ -194,11 +195,21 @@ def aggregate_character_activity_for_server(
                         },
                     )
                 )
-        except Exception:
-            failed_count += 1
+        except Exception as e:
+            print(f"Error processing character {character_id}: {e}")
+            error_messages.append(f"Error processing character {character_id}: {e}")
 
-    if failed_count > 0:
-        print(f"Error: {failed_count} failed activity check(s)")
+    if len(error_messages) > 0:
+        logMessage(
+            message="Failed to generate character activity",
+            level="error",
+            action="aggregate_character_activity_for_server",
+            metadata={
+                "error_messages": error_messages,
+                "failed_count": len(error_messages),
+            },
+        )
+        print(f"Error: {len(error_messages)} failed activity check(s)")
 
     return [data.model_dump() for data in character_activity]
 

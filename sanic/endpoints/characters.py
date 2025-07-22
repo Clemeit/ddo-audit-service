@@ -14,6 +14,8 @@ from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
 
+from utils.log import logMessage
+
 
 character_blueprint = Blueprint("character", url_prefix="/characters", version=1)
 
@@ -246,6 +248,14 @@ async def set_characters(request: Request):
     try:
         handle_incoming_characters(request_body, CharacterRequestType.set)
     except Exception as e:
+        logMessage(
+            message="Error handling incoming characters",
+            level="error",
+            action="set_characters",
+            metadata={
+                "error": str(e),
+            },
+        )
         print(f"Error handling incoming characters: {e}")
         return json({"message": str(e)}, status=500)
 
@@ -270,6 +280,15 @@ async def update_characters(request: Request):
     try:
         handle_incoming_characters(request_body, CharacterRequestType.update)
     except Exception as e:
+        logMessage(
+            message="Error handling incoming characters",
+            level="error",
+            action="update_characters",
+            metadata={
+                "error": str(e),
+                "request_body": request_body.model_dump() if request_body else None,
+            },
+        )
         print(f"Error handling incoming characters: {e}")
         return json({"message": str(e)}, status=500)
 

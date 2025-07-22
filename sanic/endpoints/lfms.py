@@ -11,6 +11,8 @@ from sanic.request import Request
 from sanic.response import json
 from business.lfms import handle_incoming_lfms
 
+from utils.log import logMessage
+
 lfm_blueprint = Blueprint("lfm", url_prefix="/lfms", version=1)
 
 
@@ -86,6 +88,14 @@ async def set_lfms(request: Request):
     try:
         handle_incoming_lfms(request_body, LfmRequestType.set)
     except Exception as e:
+        logMessage(
+            message="Error handling incoming LFMs",
+            level="error",
+            action="set_lfms",
+            metadata={
+                "error": str(e),
+            },
+        )
         print(f"Error handling incoming LFMs: {e}")
         return json({"message": str(e)}, status=500)
 
@@ -111,6 +121,15 @@ async def update_lfms(request: Request):
     try:
         handle_incoming_lfms(request_body, LfmRequestType.update)
     except Exception as e:
+        logMessage(
+            message="Error handling incoming LFMs",
+            level="error",
+            action="update_lfms",
+            metadata={
+                "error": str(e),
+                "request_body": request_body.model_dump() if request_body else None,
+            },
+        )
         print(f"Error handling incoming LFMs: {e}")
         return json({"message": str(e)}, status=500)
 

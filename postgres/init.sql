@@ -179,6 +179,7 @@ CREATE TABLE IF NOT EXISTS public."logs"
     route text,
     ip_address text,
     country text,
+    is_internal boolean,
     PRIMARY KEY (id)
 )
 

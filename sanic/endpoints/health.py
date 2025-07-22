@@ -14,7 +14,7 @@ async def health_check(request):
     Method: GET
 
     Route: /health
- 
+
     Description: Health check endpoint.
     """
-    return json({"health": "ok!"})
+    return json({"health": "ok"})

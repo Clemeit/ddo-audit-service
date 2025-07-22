@@ -43,7 +43,7 @@ class LogRequest(BaseModel):
     viewport_size: Optional[str] = None
 
     # Page/Application Context
-    url: str
+    url: Optional[str] = None
     page_title: Optional[str] = None
     referrer: Optional[str] = None
     route: Optional[str] = None
@@ -54,3 +54,8 @@ class LogRequest(BaseModel):
     # Network
     ip_address: Optional[str] = None
     country: Optional[str] = None
+
+    # Additional fields
+    is_internal: Optional[bool] = (
+        False  # Indicates if the log is from an internal service or user
+    )
