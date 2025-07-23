@@ -109,6 +109,21 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
 
+  monitoring:
+    build:
+      context: ./monitoring
+      dockerfile: Dockerfile
+    image: clemeit/ddoaudit-monitoring:latest
+    restart: always
+    environment:
+      - BETTERSTACK_SERVER_INFO_API_KEY=${BETTERSTACK_SERVER_INFO_API_KEY}
+      - BETTERSTACK_CHARACTER_API_KEY=${BETTERSTACK_CHARACTER_API_KEY}
+      - BETTERSTACK_LFM_API_KEY=${BETTERSTACK_LFM_API_KEY}
+    networks:
+      - backend
+    depends_on:
+      - sanic
+
 networks:
   backend:
     driver: bridge
