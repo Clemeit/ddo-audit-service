@@ -104,7 +104,7 @@ jobs:
             docker image prune -af
 
   deploy-prod:
-    needs: deploy-stage
+    needs: build-and-push-images
     if: github.event_name == 'workflow_dispatch'
     environment: production
     runs-on: ubuntu-latest
