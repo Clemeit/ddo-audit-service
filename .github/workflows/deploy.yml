@@ -24,7 +24,7 @@ jobs:
 
   deploy-stage:
     needs: build-and-push-images
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/master' && github.event_name != 'workflow_dispatch'
     environment: stage
     runs-on: ubuntu-latest
 
