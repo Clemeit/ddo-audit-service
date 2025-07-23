@@ -40,6 +40,7 @@ class ServerInfoCheck(Check):
                         "last_status_check", ""
                     )
                     last_data_fetch_iso_string = server_info.get("last_data_fetch", "")
+                    is_online = server_info.get("is_online", False)
 
                     if (
                         not last_status_check_iso_string
@@ -58,8 +59,10 @@ class ServerInfoCheck(Check):
                         last_status_check = datetime.fromisoformat(
                             last_status_check_iso_string
                         )
-                        last_data_fetch = datetime.fromisoformat(
-                            last_data_fetch_iso_string
+                        last_data_fetch = (
+                            datetime.fromisoformat(last_data_fetch_iso_string)
+                            if is_online
+                            else datetime.min
                         )
 
                         # Use UTC for comparison to avoid timezone issues
@@ -69,7 +72,11 @@ class ServerInfoCheck(Check):
                         status_check_fresh = now - last_status_check < timedelta(
                             minutes=1
                         )
-                        data_fetch_fresh = now - last_data_fetch < timedelta(minutes=1)
+                        data_fetch_fresh = (
+                            now - last_data_fetch < timedelta(minutes=1)
+                            if is_online
+                            else True
+                        )  # If server is offline, we don't check data fetch freshness
 
                         if status_check_fresh and data_fetch_fresh:
                             healthy_servers.append(
