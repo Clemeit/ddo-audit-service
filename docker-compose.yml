@@ -70,7 +70,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "python", "-c", "import urllib.request; exit(0) if urllib.request.urlopen('http://localhost:8000/health').status==200 else exit(1)" ]
+      test: [ "CMD", "python", "-c", "import urllib.request; exit(0) if urllib.request.urlopen('http://localhost:8000/health', timeout=5).status==200 else exit(1)" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -88,7 +88,8 @@ services:
     networks:
       - backend
     depends_on:
-      - sanic
+      sanic:
+        condition: service_healthy
     volumes:
       - /var/www/ddoaudit.com/html/client/build:/usr/share/nginx/html:ro
       - /var/www/ddoaudit.com/acme-challenge:/acme-challenge
@@ -121,7 +122,8 @@ services:
     networks:
       - backend
     depends_on:
-      - sanic
+      sanic:
+        condition: service_healthy
 
 networks:
   backend:
