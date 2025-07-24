@@ -342,23 +342,23 @@ class CharacterCheck(Check):
         self, character_id: str, character_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Validate that the character has been updated recently."""
-        last_updated_str = character_data.get("last_updated", "")
-        if not last_updated_str:
+        last_update_str = character_data.get("last_update", "")
+        if not last_update_str:
             return {
                 "success": False,
-                "error": f"Character {character_id} has no last_updated timestamp",
+                "error": f"Character {character_id} has no last_update timestamp",
             }
 
         try:
-            last_updated = datetime.fromisoformat(last_updated_str)
-            now = datetime.now(tz=last_updated.tzinfo)
-            age = now - last_updated
+            last_update = datetime.fromisoformat(last_update_str)
+            now = datetime.now(tz=last_update.tzinfo)
+            age = now - last_update
 
             if age < timedelta(minutes=self.character_update_threshold_minutes):
                 return {
                     "success": True,
                     "character_id": character_id,
-                    "last_updated": last_updated_str,
+                    "last_update": last_update_str,
                     "age_seconds": int(age.total_seconds()),
                     "betterstack_key": self.betterstack_key,
                 }
@@ -371,5 +371,5 @@ class CharacterCheck(Check):
         except (ValueError, TypeError) as e:
             return {
                 "success": False,
-                "error": f"Invalid last_updated timestamp format for character {character_id}: {str(e)}",
+                "error": f"Invalid last_update timestamp format for character {character_id}: {str(e)}",
             }
