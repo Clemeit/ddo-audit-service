@@ -17,7 +17,6 @@ challenge_words = [
     "tiefling",
     "orc",
     "bugbear",
-    "eladrin",
     "tabaxi",
 ]
 
