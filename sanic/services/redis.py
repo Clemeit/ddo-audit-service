@@ -788,7 +788,6 @@ def get_challenge_for_character_by_character_id(character_id: int) -> str | None
         challenges: dict[str, str] = client.json().get(
             RedisKeys.VERIFICATION_CHALLENGES.value, "challenges"
         )
-    print(challenges)
     return challenges.get(str(character_id))
 
 
