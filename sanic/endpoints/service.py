@@ -153,7 +153,11 @@ async def post_log(request: Request):
         return json({"message": "improperly formatted body"}, status=400)
 
     try:
-        ip_address = request.ip
+        ip_address = (
+            request.headers.get("x-real-ip")
+            or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+            or request.ip
+        )
         if ip_address:
             log.ip_address = ip_address
     except Exception:
