@@ -166,6 +166,7 @@ class CharacterCheck(Check):
         interval: int = 60,
         character_update_threshold_minutes: int = 5,
         request_timeout: int = 10,
+        percent_difference_threshold: int = 0.02,
     ):
         super().__init__("Character Check", interval)
         self.server_info_url = "http://sanic:8000/v1/game/server-info"
@@ -174,11 +175,14 @@ class CharacterCheck(Check):
         self.betterstack_key = betterstack_key
         self.character_update_threshold_minutes = character_update_threshold_minutes
         self.request_timeout = request_timeout
+        self.percent_difference_threshold = percent_difference_threshold
 
     def execute(self) -> Dict[str, Any]:
         """Execute the character check."""
+        server_info_data = self._get_server_info_data()
+
         # Step 1: Verify servers are online (prerequisite check)
-        server_check_result = self._check_servers_online()
+        server_check_result = self._check_servers_online(server_info_data)
         if not server_check_result["can_proceed"]:
             return server_check_result["result"]
 
@@ -188,24 +192,31 @@ class CharacterCheck(Check):
             return character_ids_result
 
         # Step 3: Test a random character
-        return self._check_random_character(character_ids_result["character_ids"])
+        character_result = self._check_random_character(
+            character_ids_result["character_ids"]
+        )
+        if not character_result["success"]:
+            return character_result
 
-    def _check_servers_online(self) -> Dict[str, Any]:
-        """Check if any servers are online. Returns dict with 'can_proceed' and 'result'."""
+        # Step 4: Check if population and character count has diverged
+        return self._check_population(
+            server_info_data, character_ids_result["character_ids"]
+        )
+
+    def _get_server_info_data(self) -> Dict[str, Any]:
         try:
             response = requests.get(self.server_info_url, timeout=self.request_timeout)
 
             if response.status_code != 200:
-                return {
-                    "can_proceed": False,
-                    "result": {
-                        "success": False,
-                        "error": f"Server info endpoint returned HTTP {response.status_code}: {response.text}",
-                    },
-                }
+                return None
+            return response.json()
+        except:
+            return None
 
-            data = response.json()
-            if not data:
+    def _check_servers_online(self, server_info_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Check if any servers are online. Returns dict with 'can_proceed' and 'result'."""
+        try:
+            if not server_info_data:
                 return {
                     "can_proceed": False,
                     "result": {
@@ -215,7 +226,9 @@ class CharacterCheck(Check):
                 }
 
             online_servers = [
-                server for server, info in data.items() if info.get("is_online", False)
+                server
+                for server, info in server_info_data.items()
+                if info.get("is_online", False)
             ]
 
             if not online_servers:
@@ -259,8 +272,8 @@ class CharacterCheck(Check):
                 }
 
             # Extract character IDs from the nested structure
-            character_ids = self._extract_character_ids(json_response)
-            if not character_ids:
+            character_ids_flat = self._extract_character_ids(json_response)
+            if not character_ids_flat:
                 return {
                     "success": False,
                     "error": "No character IDs found in API response",
@@ -268,7 +281,7 @@ class CharacterCheck(Check):
 
             return {
                 "success": True,
-                "character_ids": character_ids,
+                "character_ids_by_server": json_response.get("data", {}),
             }
 
         except requests.exceptions.RequestException as e:
@@ -372,4 +385,56 @@ class CharacterCheck(Check):
             return {
                 "success": False,
                 "error": f"Invalid last_update timestamp format for character {character_id}: {str(e)}",
+            }
+
+    def _check_population(
+        self,
+        server_info_data: Dict[str, Any],
+        character_ids_by_server: Dict[str, list[int]],
+    ) -> Dict[str, Any]:
+        """Validate that the population reported by the server-info endpoint aligns with the number of character IDs from the characters/ids endpoint."""
+        issues: list[str] = []
+        total_reported_character_count: int = (
+            0  # The number of characters reported by the server-info endpoint
+        )
+        total_actual_character_count: int = (
+            0  # The number of characters that would be returned by calling the character endpoints
+        )
+
+        for server_name, server_info in server_info_data.items():
+            if not character_ids_by_server.get(server_name):
+                issues.append(f"{server_name} not found in the character IDs dict")
+                continue
+
+            server_info_character_count = server_info["character_count"]
+            character_id_count = len(character_ids_by_server.get(server_name, []))
+            total_reported_character_count += server_info_character_count
+            total_actual_character_count += character_id_count
+            server_percent_difference = abs(
+                server_info_character_count - character_id_count
+            ) / ((server_info_character_count + character_id_count) / 2)
+            if server_percent_difference > self.percent_difference_threshold:
+                issues.append(
+                    f"{server_name} reports {server_info_character_count} characters online, but {character_id_count} were actually returned - {server_percent_difference * 100}% difference"
+                )
+
+        percent_difference = abs(
+            total_reported_character_count - total_actual_character_count
+        ) / ((total_reported_character_count + total_actual_character_count) / 2)
+        if len(issues) == 0:
+            return {
+                "success": True,
+                "total_reported_character_count": total_reported_character_count,
+                "total_actual_character_count": total_actual_character_count,
+                "percent_difference": percent_difference,
+                "percent_difference_threshold": self.percent_difference_threshold,
+            }
+        else:
+            return {
+                "success": False,
+                "total_reported_character_count": total_reported_character_count,
+                "total_actual_character_count": total_actual_character_count,
+                "percent_difference": percent_difference,
+                "percent_difference_threshold": self.percent_difference_threshold,
+                "errors": issues,
             }

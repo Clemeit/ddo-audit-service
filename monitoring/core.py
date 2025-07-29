@@ -7,7 +7,7 @@ import requests
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler()],
 )
@@ -39,11 +39,11 @@ class Check(ABC):
             return {"skipped": True, "reason": "interval not reached"}
 
         self.last_run = int(time.time())
-        logger.info(f"Executing check: {self.name}")
+        logger.debug(f"Executing check: {self.name}")
 
         try:
             result = self.execute()
-            logger.info(f"Check {self.name} completed: {result}")
+            logger.debug(f"Check {self.name} completed: {result}")
             return result
         except Exception as e:
             logger.error(f"Check {self.name} failed: {str(e)}")
@@ -65,7 +65,9 @@ class BetterStackNotifier:
         try:
             response = requests.post(f"{self.api_url}{heartbeat_key}", timeout=10)
             if response.status_code == 200:
-                logger.info(f"BetterStack heartbeat sent successfully for {check_name}")
+                logger.debug(
+                    f"BetterStack heartbeat sent successfully for {check_name}"
+                )
                 return True
             else:
                 logger.error(
@@ -89,7 +91,7 @@ class MonitoringService:
     def add_check(self, check: Check):
         """Add a check to the monitoring service."""
         self.checks.append(check)
-        logger.info(f"Added check: {check.name}")
+        logger.debug(f"Added check: {check.name}")
 
     def run_checks(self):
         """Run all registered checks."""
@@ -102,8 +104,8 @@ class MonitoringService:
 
     def start(self):
         """Start the monitoring service."""
-        logger.info("Starting monitoring service...")
-        logger.info(f"Registered {len(self.checks)} checks")
+        logger.debug("Starting monitoring service...")
+        logger.debug(f"Registered {len(self.checks)} checks")
 
         while True:
             try:
