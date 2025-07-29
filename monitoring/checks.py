@@ -204,7 +204,7 @@ class CharacterCheck(Check):
         # Step 3: Test a random character
         logger.debug("step 3")
         character_result = self._check_random_character(
-            character_ids_result["character_ids_by_server"]
+            character_ids_result["character_ids_flat"]
         )
         if not character_result["success"]:
             return character_result
@@ -293,6 +293,7 @@ class CharacterCheck(Check):
 
             return {
                 "success": True,
+                "character_ids_flat": character_ids_flat,
                 "character_ids_by_server": json_response.get("data", {}),
             }
 
@@ -317,7 +318,9 @@ class CharacterCheck(Check):
         except (ValueError, TypeError, AttributeError):
             return []
 
-    def _check_random_character(self, character_ids: list) -> Dict[str, Any]:
+    def _check_random_character(
+        self, character_ids: Dict[str, list[int]]
+    ) -> Dict[str, Any]:
         """Check a randomly selected character for recent updates."""
         if not character_ids:
             return {
