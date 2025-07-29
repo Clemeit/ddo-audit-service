@@ -405,46 +405,52 @@ class CharacterCheck(Check):
             0  # The number of characters that would be returned by calling the character endpoints
         )
 
-        for server_name, server_info in server_info_data.items():
-            print(server_name)
-            if not character_ids_by_server.get(server_name):
-                issues.append(f"{server_name} not found in the character IDs dict")
-                continue
+        try:
+            for server_name, server_info in server_info_data.items():
+                print(server_name)
+                if not character_ids_by_server.get(server_name):
+                    issues.append(f"{server_name} not found in the character IDs dict")
+                    continue
 
-            server_info_character_count = server_info["character_count"]
-            character_id_count = len(character_ids_by_server.get(server_name, []))
-            total_reported_character_count += server_info_character_count
-            total_actual_character_count += character_id_count
-            if (server_info_character_count + character_id_count) > 0:
-                server_percent_difference = abs(
-                    server_info_character_count - character_id_count
-                ) / ((server_info_character_count + character_id_count) / 2)
-                if server_percent_difference > self.percent_difference_threshold:
-                    issues.append(
-                        f"{server_name} reports {server_info_character_count} characters online, but {character_id_count} were actually returned - {server_percent_difference * 100}% difference"
-                    )
+                server_info_character_count = server_info["character_count"]
+                character_id_count = len(character_ids_by_server.get(server_name, []))
+                total_reported_character_count += server_info_character_count
+                total_actual_character_count += character_id_count
+                if (server_info_character_count + character_id_count) > 0:
+                    server_percent_difference = abs(
+                        server_info_character_count - character_id_count
+                    ) / ((server_info_character_count + character_id_count) / 2)
+                    if server_percent_difference > self.percent_difference_threshold:
+                        issues.append(
+                            f"{server_name} reports {server_info_character_count} characters online, but {character_id_count} were actually returned - {server_percent_difference * 100}% difference"
+                        )
 
-        total = total_reported_character_count + total_actual_character_count
-        percent_difference = (
-            abs(total_reported_character_count - total_actual_character_count)
-            / ((total_reported_character_count + total_actual_character_count) / 2)
-            if total > 0
-            else 0
-        )
-        if len(issues) == 0:
-            return {
-                "success": True,
-                "total_reported_character_count": total_reported_character_count,
-                "total_actual_character_count": total_actual_character_count,
-                "percent_difference": percent_difference,
-                "percent_difference_threshold": self.percent_difference_threshold,
-            }
-        else:
+            total = total_reported_character_count + total_actual_character_count
+            percent_difference = (
+                abs(total_reported_character_count - total_actual_character_count)
+                / ((total_reported_character_count + total_actual_character_count) / 2)
+                if total > 0
+                else 0
+            )
+            if len(issues) == 0:
+                return {
+                    "success": True,
+                    "total_reported_character_count": total_reported_character_count,
+                    "total_actual_character_count": total_actual_character_count,
+                    "percent_difference": percent_difference,
+                    "percent_difference_threshold": self.percent_difference_threshold,
+                }
+            else:
+                return {
+                    "success": False,
+                    "total_reported_character_count": total_reported_character_count,
+                    "total_actual_character_count": total_actual_character_count,
+                    "percent_difference": percent_difference,
+                    "percent_difference_threshold": self.percent_difference_threshold,
+                    "errors": issues,
+                }
+        except Exception as e:
             return {
                 "success": False,
-                "total_reported_character_count": total_reported_character_count,
-                "total_actual_character_count": total_actual_character_count,
-                "percent_difference": percent_difference,
-                "percent_difference_threshold": self.percent_difference_threshold,
-                "errors": issues,
+                "error": f"Exception thrown while checking population: {str(e)}",
             }
