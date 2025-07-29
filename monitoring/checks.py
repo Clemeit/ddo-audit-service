@@ -193,14 +193,14 @@ class CharacterCheck(Check):
 
         # Step 3: Test a random character
         character_result = self._check_random_character(
-            character_ids_result["character_ids"]
+            character_ids_result["character_ids_by_server"]
         )
         if not character_result["success"]:
             return character_result
 
         # Step 4: Check if population and character count has diverged
         return self._check_population(
-            server_info_data, character_ids_result["character_ids"]
+            server_info_data, character_ids_result["character_ids_by_server"]
         )
 
     def _get_server_info_data(self) -> Dict[str, Any]:
