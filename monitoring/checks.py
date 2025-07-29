@@ -1,17 +1,8 @@
-import logging
 import requests
 from typing import Dict, Any
 from core import Check
 from datetime import datetime, timedelta
 import random
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()],
-)
-
-logger = logging.getLogger(__name__)
 
 
 class ServerInfoCheck(Check):
@@ -190,19 +181,16 @@ class CharacterCheck(Check):
         server_info_data = self._get_server_info_data()
 
         # Step 1: Verify servers are online (prerequisite check)
-        logger.debug("step 1")
         server_check_result = self._check_servers_online(server_info_data)
         if not server_check_result["can_proceed"]:
             return server_check_result["result"]
 
         # Step 2: Get character IDs
-        logger.debug("step 2")
         character_ids_result = self._get_character_ids()
         if not character_ids_result["success"]:
             return character_ids_result
 
         # Step 3: Test a random character
-        logger.debug("step 3")
         character_result = self._check_random_character(
             character_ids_result["character_ids_flat"]
         )
@@ -210,7 +198,6 @@ class CharacterCheck(Check):
             return character_result
 
         # Step 4: Check if population and character count has diverged
-        logger.debug("step 4")
         return self._check_population(
             server_info_data, character_ids_result["character_ids_by_server"]
         )
@@ -418,7 +405,10 @@ class CharacterCheck(Check):
 
         try:
             for server_name, server_info in server_info_data.items():
-                logger.debug(server_name)
+                is_online = server_info.get("is_online", False)
+                if not is_online:
+                    continue
+
                 if not character_ids_by_server.get(server_name):
                     issues.append(f"{server_name} not found in the character IDs dict")
                     continue
