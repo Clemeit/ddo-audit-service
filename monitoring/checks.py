@@ -377,7 +377,6 @@ class CharacterCheck(Check):
                     "character_id": character_id,
                     "last_update": last_update_str,
                     "age_seconds": int(age.total_seconds()),
-                    "betterstack_key": self.betterstack_key,
                 }
             else:
                 return {
@@ -449,6 +448,7 @@ class CharacterCheck(Check):
                     "total_actual_character_count": total_actual_character_count,
                     "percent_difference": percent_difference,
                     "percent_difference_threshold": self.percent_difference_threshold,
+                    "betterstack_key": self.betterstack_key,
                 }
             else:
                 return {
