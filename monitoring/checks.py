@@ -1,9 +1,17 @@
-import os
+import logging
 import requests
 from typing import Dict, Any
 from core import Check
 from datetime import datetime, timedelta
 import random
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()],
+)
+
+logger = logging.getLogger(__name__)
 
 
 class ServerInfoCheck(Check):
