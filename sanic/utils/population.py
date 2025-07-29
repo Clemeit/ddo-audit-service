@@ -34,8 +34,8 @@ def get_game_population_1_day() -> list[dict]:
 
     def fetch_and_normalize_data():
         postgres_data = postgres_client.get_game_population_relative(1)
-        normalized_data = normalize_population_data(postgres_data)
-        return [datum.model_dump() for datum in normalized_data]
+        # normalized_data = normalize_population_data(postgres_data)
+        return [datum.model_dump() for datum in postgres_data]
 
     return get_cached_data_with_fallback(
         "game_population_1_day",
@@ -73,8 +73,8 @@ def get_game_population_1_week() -> list[dict]:
     def fetch_data():
         postgres_data = postgres_client.get_game_population_last_week()
         averaged_data = average_hourly_data(postgres_data)
-        normalized_data = normalize_population_data(averaged_data)
-        return [datum.model_dump() for datum in normalized_data]
+        # normalized_data = normalize_population_data(averaged_data)
+        return [datum.model_dump() for datum in averaged_data]
 
     return get_cached_data_with_fallback(
         "game_population_1_week",
@@ -112,8 +112,8 @@ def get_game_population_1_month() -> list[dict]:
     def fetch_data():
         postgres_data = postgres_client.get_game_population_last_month()
         averaged_data = average_daily_data(postgres_data)
-        normalized_data = normalize_population_data(averaged_data)
-        return [datum.model_dump() for datum in normalized_data]
+        # normalized_data = normalize_population_data(averaged_data)
+        return [datum.model_dump() for datum in averaged_data]
 
     return get_cached_data_with_fallback(
         "game_population_1_month",
@@ -151,8 +151,8 @@ def get_game_population_1_year() -> list[dict]:
     def fetch_data():
         postgres_data = postgres_client.get_game_population_last_year()
         averaged_data = average_daily_data(postgres_data)
-        normalized_data = normalize_population_data(averaged_data)
-        return [datum.model_dump() for datum in normalized_data]
+        # normalized_data = normalize_population_data(averaged_data)
+        return [datum.model_dump() for datum in averaged_data]
 
     return get_cached_data_with_fallback(
         "game_population_1_year",
