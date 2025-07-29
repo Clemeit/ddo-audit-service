@@ -182,16 +182,19 @@ class CharacterCheck(Check):
         server_info_data = self._get_server_info_data()
 
         # Step 1: Verify servers are online (prerequisite check)
+        print("step 1")
         server_check_result = self._check_servers_online(server_info_data)
         if not server_check_result["can_proceed"]:
             return server_check_result["result"]
 
         # Step 2: Get character IDs
+        print("step 2")
         character_ids_result = self._get_character_ids()
         if not character_ids_result["success"]:
             return character_ids_result
 
         # Step 3: Test a random character
+        print("step 3")
         character_result = self._check_random_character(
             character_ids_result["character_ids_by_server"]
         )
@@ -199,6 +202,7 @@ class CharacterCheck(Check):
             return character_result
 
         # Step 4: Check if population and character count has diverged
+        print("step 4")
         return self._check_population(
             server_info_data, character_ids_result["character_ids_by_server"]
         )
@@ -402,6 +406,7 @@ class CharacterCheck(Check):
         )
 
         for server_name, server_info in server_info_data.items():
+            print(server_name)
             if not character_ids_by_server.get(server_name):
                 issues.append(f"{server_name} not found in the character IDs dict")
                 continue
@@ -410,17 +415,22 @@ class CharacterCheck(Check):
             character_id_count = len(character_ids_by_server.get(server_name, []))
             total_reported_character_count += server_info_character_count
             total_actual_character_count += character_id_count
-            server_percent_difference = abs(
-                server_info_character_count - character_id_count
-            ) / ((server_info_character_count + character_id_count) / 2)
-            if server_percent_difference > self.percent_difference_threshold:
-                issues.append(
-                    f"{server_name} reports {server_info_character_count} characters online, but {character_id_count} were actually returned - {server_percent_difference * 100}% difference"
-                )
+            if (server_info_character_count + character_id_count) > 0:
+                server_percent_difference = abs(
+                    server_info_character_count - character_id_count
+                ) / ((server_info_character_count + character_id_count) / 2)
+                if server_percent_difference > self.percent_difference_threshold:
+                    issues.append(
+                        f"{server_name} reports {server_info_character_count} characters online, but {character_id_count} were actually returned - {server_percent_difference * 100}% difference"
+                    )
 
-        percent_difference = abs(
-            total_reported_character_count - total_actual_character_count
-        ) / ((total_reported_character_count + total_actual_character_count) / 2)
+        total = total_reported_character_count + total_actual_character_count
+        percent_difference = (
+            abs(total_reported_character_count - total_actual_character_count)
+            / ((total_reported_character_count + total_actual_character_count) / 2)
+            if total > 0
+            else 0
+        )
         if len(issues) == 0:
             return {
                 "success": True,
