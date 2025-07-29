@@ -102,7 +102,7 @@ class MonitoringService:
                 continue
 
             # If check was successful and has a BetterStack key, send heartbeat
-            if result.get("success") and result.get("betterstack_key"):
+            if not result.get("success") == False and result.get("betterstack_key"):
                 self.betterstack.send_heartbeat(result["betterstack_key"], check.name)
             elif not result.get("success"):
                 logger.error(result)

@@ -223,6 +223,7 @@ class CharacterCheck(Check):
                     "result": {
                         "success": None,  # Indeterminate
                         "error": "No server data available - cannot determine character health",
+                        "betterstack_key": self.betterstack_key,
                     },
                 }
 
@@ -241,7 +242,10 @@ class CharacterCheck(Check):
                     },
                 }
 
-            return {"can_proceed": True, "result": None}
+            return {
+                "can_proceed": True,
+                "result": None,
+            }
 
         except requests.exceptions.RequestException as e:
             return {
