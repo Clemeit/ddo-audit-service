@@ -166,6 +166,7 @@ class CharacterCheck(Check):
         character_update_threshold_minutes: int = 5,
         request_timeout: int = 10,
         percent_difference_threshold: int = 0.02,
+        absolute_difference_threshold: int = 5,
     ):
         super().__init__("Character Check", interval)
         self.server_info_url = "http://sanic:8000/v1/game/server-info"
@@ -175,6 +176,7 @@ class CharacterCheck(Check):
         self.character_update_threshold_minutes = character_update_threshold_minutes
         self.request_timeout = request_timeout
         self.percent_difference_threshold = percent_difference_threshold
+        self.absolute_difference_threshold = absolute_difference_threshold
 
     def execute(self) -> Dict[str, Any]:
         """Execute the character check."""
@@ -415,13 +417,20 @@ class CharacterCheck(Check):
 
                 server_info_character_count = server_info["character_count"]
                 character_id_count = len(character_ids_by_server.get(server_name, []))
+                character_count_abs_difference = abs(
+                    server_info_character_count - character_id_count
+                )
                 total_reported_character_count += server_info_character_count
                 total_actual_character_count += character_id_count
                 if (server_info_character_count + character_id_count) > 0:
-                    server_percent_difference = abs(
-                        server_info_character_count - character_id_count
-                    ) / ((server_info_character_count + character_id_count) / 2)
-                    if server_percent_difference > self.percent_difference_threshold:
+                    server_percent_difference = character_count_abs_difference / (
+                        (server_info_character_count + character_id_count) / 2
+                    )
+                    if (
+                        server_percent_difference > self.percent_difference_threshold
+                        and character_count_abs_difference
+                        > self.absolute_difference_threshold
+                    ):
                         issues.append(
                             f"{server_name} reports {server_info_character_count} characters online, but {character_id_count} were actually returned - {server_percent_difference * 100}% difference"
                         )
