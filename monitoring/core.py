@@ -7,7 +7,7 @@ import requests
 
 # Configure logging
 logging.basicConfig(
-    level=logging.WARNING,
+    level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler()],
 )
@@ -97,6 +97,9 @@ class MonitoringService:
         """Run all registered checks."""
         for check in self.checks:
             result = check.run()
+
+            if result.get("skipped"):
+                continue
 
             # If check was successful and has a BetterStack key, send heartbeat
             if result.get("success") and result.get("betterstack_key"):
