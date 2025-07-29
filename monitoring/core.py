@@ -7,7 +7,7 @@ import requests
 
 # Configure logging
 logging.basicConfig(
-    level=logging.WARNING,
+    level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler()],
 )
