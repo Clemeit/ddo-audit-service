@@ -190,19 +190,19 @@ class CharacterCheck(Check):
         server_info_data = self._get_server_info_data()
 
         # Step 1: Verify servers are online (prerequisite check)
-        print("step 1")
+        logger.debug("step 1")
         server_check_result = self._check_servers_online(server_info_data)
         if not server_check_result["can_proceed"]:
             return server_check_result["result"]
 
         # Step 2: Get character IDs
-        print("step 2")
+        logger.debug("step 2")
         character_ids_result = self._get_character_ids()
         if not character_ids_result["success"]:
             return character_ids_result
 
         # Step 3: Test a random character
-        print("step 3")
+        logger.debug("step 3")
         character_result = self._check_random_character(
             character_ids_result["character_ids_by_server"]
         )
@@ -210,7 +210,7 @@ class CharacterCheck(Check):
             return character_result
 
         # Step 4: Check if population and character count has diverged
-        print("step 4")
+        logger.debug("step 4")
         return self._check_population(
             server_info_data, character_ids_result["character_ids_by_server"]
         )
@@ -415,7 +415,7 @@ class CharacterCheck(Check):
 
         try:
             for server_name, server_info in server_info_data.items():
-                print(server_name)
+                logger.debug(server_name)
                 if not character_ids_by_server.get(server_name):
                     issues.append(f"{server_name} not found in the character IDs dict")
                     continue
