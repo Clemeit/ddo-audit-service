@@ -239,6 +239,7 @@ class CharacterCheck(Check):
                     "result": {
                         "success": None,  # Indeterminate
                         "error": "No servers are online - cannot determine character health",
+                        "betterstack_key": self.betterstack_key,
                     },
                 }
 
