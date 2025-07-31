@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS public."feedback"
     ticket text,
     user_id text,
     session_id text,
+    commit_hash text,
     response text,
     resolved boolean NOT NULL DEFAULT false,
     PRIMARY KEY (id)
@@ -183,6 +184,7 @@ CREATE TABLE IF NOT EXISTS public."logs"
     ip_address text,
     country text,
     is_internal boolean,
+    commit_hash text,
     PRIMARY KEY (id)
 )
 

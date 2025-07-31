@@ -24,6 +24,7 @@ class FeedbackRequest(BaseModel):
     metadata: Optional[dict] = None
     user_id: Optional[str] = None
     session_id: Optional[str] = None
+    commit_hash: Optional[str] = None
 
 
 class LogRequest(BaseModel):
@@ -35,6 +36,7 @@ class LogRequest(BaseModel):
     timestamp: Optional[str] = None  # ISO 8601 format
     session_id: Optional[str] = None
     user_id: Optional[str] = None
+    commit_hash: Optional[str] = None
 
     # Browser/Environment
     user_agent: Optional[str] = None
