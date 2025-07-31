@@ -23,6 +23,7 @@ class FeedbackRequest(BaseModel):
     contact: Optional[str] = None
     metadata: Optional[dict] = None
     user_id: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 class LogRequest(BaseModel):

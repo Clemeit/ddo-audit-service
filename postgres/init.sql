@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS public."feedback"
     contact text,
     ticket text,
     user_id text,
+    session_id text,
     response text,
     resolved boolean NOT NULL DEFAULT false,
     PRIMARY KEY (id)
