@@ -1647,20 +1647,17 @@ def post_feedback(feedback: FeedbackRequest, ticket: str):
     """Save feedback to the database."""
     feedbackMessage = feedback.message
     feedbackContact = feedback.contact
+    feedbackUserId = feedback.user_id if feedback.user_id else None
 
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             try:
                 cursor.execute(
                     """
-                    INSERT INTO public.feedback (message, contact, ticket)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO public.feedback (message, contact, ticket, user_id)
+                    VALUES (%s, %s, %s, %s)
                     """,
-                    (
-                        feedbackMessage,
-                        feedbackContact,
-                        ticket,
-                    ),
+                    (feedbackMessage, feedbackContact, ticket, feedbackUserId),
                 )
                 conn.commit()
             except Exception as e:
