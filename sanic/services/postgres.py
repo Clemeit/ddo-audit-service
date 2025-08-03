@@ -1000,6 +1000,106 @@ def get_recent_raid_activity_by_character_ids(
             return build_character_activity_from_rows(activities)
 
 
+def get_gender_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+    """
+    Get the gender distribution of characters in the database.
+    """
+    if lookback_in_days <= 0:
+        raise ValueError("lookback_in_days must be greater than 0")
+    if lookback_in_days > 180:
+        raise ValueError("lookback_in_days cannot exceed 365 days")
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT gender, COUNT(*) as count FROM public.characters
+                WHERE last_save > NOW() - (make_interval(days => %s))
+                GROUP BY gender
+                """,
+                (lookback_in_days,),
+            )
+            gender_distribution = cursor.fetchall()
+            if not gender_distribution:
+                return {}
+            return {str(gender): count for gender, count in gender_distribution}
+
+
+def get_race_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+    """
+    Get the race distribution of characters in the database.
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT race, COUNT(*) as count FROM public.characters
+                WHERE last_save > NOW() - (make_interval(days => %s))
+                GROUP BY race
+                """,
+                (lookback_in_days,),
+            )
+            race_distribution = cursor.fetchall()
+            if not race_distribution:
+                return {}
+            return {str(race): count for race, count in race_distribution}
+
+
+def get_total_level_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+    """
+    Get the total_level distribution of characters in the database.
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT total_level, COUNT(*) as count FROM public.characters
+                WHERE last_save > NOW() - (make_interval(days => %s))
+                GROUP BY total_level
+                """,
+                (lookback_in_days,),
+            )
+            total_level_distribution = cursor.fetchall()
+            if not total_level_distribution:
+                return {}
+            return {
+                str(total_level): count
+                for total_level, count in total_level_distribution
+            }
+
+
+def get_class_count_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+    """
+    Get the number of classes distribution of characters in the database.
+    i.e. The number of classes each character has, excluding "Legendary" and "Epic" (which are not playable classes).
+
+    'classes' is a jsonb field that contains an array of classes that looks like:
+    [{"name": "Fighter", "level": 20}, {"name": "Wizard", "level": 10}]
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT class_count, COUNT(*) as count
+                FROM (
+                    SELECT (
+                        SELECT COUNT(*)
+                        FROM jsonb_array_elements(classes) AS elem
+                        WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                    ) AS class_count
+                    FROM public.characters
+                    WHERE last_save > NOW() - (make_interval(days => %s))
+                ) AS sub
+                GROUP BY class_count
+                ORDER BY class_count
+                """,
+                (lookback_in_days,),
+            )
+            result = cursor.fetchall()
+            if not result:
+                return {}
+            return {str(class_count): count for class_count, count in result}
+
+
 def get_game_population_relative(days: int = 1) -> list[PopulationPointInTime]:
     """
     Get population info for a relative date range starting at some
