@@ -243,20 +243,29 @@ def hydrate_characters_with_activity(
             previous_character_events: list[dict] = previous_characters.get(
                 character_id, {}
             ).get("activity", [])
-            new_character_event = {
-                "timestamp": character.get("last_update"),
-                "events": [
-                    {
-                        "tag": event.get("activity_type"),
-                        "data": event.get("data"),
-                    }
-                    for event in character_activity.get(character_id, [])
-                ],
-            }
-            characters_with_activity[character_id] = {
-                **character,
-                "activity": previous_character_events + [new_character_event],
-            }
+            activity_events = character_activity.get(character_id, [])
+            if activity_events:
+                new_character_event = {
+                    "timestamp": character.get("last_update"),
+                    "events": [
+                        {
+                            "tag": event.get("activity_type"),
+                            "data": event.get("data"),
+                        }
+                        for event in activity_events
+                    ],
+                }
+                activity_list = previous_character_events.copy()
+                activity_list.append(new_character_event)
+                characters_with_activity[character_id] = {
+                    **character,
+                    "activity": activity_list,
+                }
+            else:
+                characters_with_activity[character_id] = {
+                    **character,
+                    "activity": previous_character_events,
+                }
 
         return characters_with_activity
     except Exception as e:
