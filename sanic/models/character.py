@@ -18,6 +18,16 @@ class CharacterLocation(BaseModel):
     is_public_space: Optional[bool] = None
 
 
+class RecentCharacterActivityEvent(BaseModel):
+    tag: Optional[str] = None
+    data: Optional[str] = None
+
+
+class RecentCharacterActivity(BaseModel):
+    timestamp: Optional[str] = None
+    events: Optional[list[RecentCharacterActivityEvent]] = None
+
+
 class Character(BaseModel):
     id: int
     name: Optional[str] = None
@@ -41,6 +51,7 @@ class Character(BaseModel):
     last_save: Optional[str] = (
         None  # the last time the character was persisted in the database
     )
+    activity: Optional[list[RecentCharacterActivity]] = None
 
 
 class CharacterActivity(BaseModel):

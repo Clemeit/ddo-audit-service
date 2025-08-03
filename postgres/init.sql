@@ -45,15 +45,15 @@ ALTER TABLE IF EXISTS public."areas"
 CREATE TABLE IF NOT EXISTS public."characters"
 (
     id bigint NOT NULL,
-    name character varying(25) COLLATE pg_catalog."default",
-    gender character varying(10) COLLATE pg_catalog."default",
-    race character varying(25) COLLATE pg_catalog."default" NOT NULL,
+    name text COLLATE pg_catalog."default",
+    gender text COLLATE pg_catalog."default",
+    race text COLLATE pg_catalog."default" NOT NULL,
     total_level smallint NOT NULL,
     classes jsonb NOT NULL,
     location_id integer REFERENCES public."areas"(id),
-    guild_name character varying(50) COLLATE pg_catalog."default",
-    server_name character varying(25) COLLATE pg_catalog."default" NOT NULL,
-    home_server_name character varying(25) COLLATE pg_catalog."default",
+    guild_name text COLLATE pg_catalog."default",
+    server_name text COLLATE pg_catalog."default" NOT NULL,
+    home_server_name text COLLATE pg_catalog."default",
     is_anonymous boolean NOT NULL,
     last_update timestamp with time zone NOT NULL,
     last_save timestamp with time zone NOT NULL DEFAULT current_timestamp,
@@ -81,7 +81,7 @@ ALTER TABLE IF EXISTS public."game_info"
 
 CREATE TABLE IF NOT EXISTS public."character_activity"
 (
-	timestamp with time zone NOT NULL,
+	"timestamp" timestamp with time zone NOT NULL,
 	character_id BIGINT NOT NULL,
 	activity_type TEXT,
 	data jsonb
@@ -93,7 +93,7 @@ SELECT create_hypertable('character_activity', 'timestamp');
 SELECT add_retention_policy('character_activity', INTERVAL '90 days');
 
 -- Add an index on the id column
-CREATE INDEX ON public."character_activity" (id);
+CREATE INDEX ON public."character_activity" (character_id);
 
 ALTER TABLE IF EXISTS public."character_activity"
     OWNER to pgadmin;
@@ -165,7 +165,7 @@ CREATE TABLE IF NOT EXISTS public."logs"
     id serial NOT NULL,
     message text NOT NULL,
     level text NOT NULL,
-    timestamp timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    "timestamp" timestamp with time zone NOT NULL DEFAULT current_timestamp,
     component text,
     action text,
     metadata jsonb,
@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS public."logs"
     os text,
     screen_resolution text,
     viewport_size text,
-    url text NOT NULL,
+    url text,
     page_title text,
     referrer text,
     route text,
