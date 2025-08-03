@@ -25,7 +25,7 @@ class RecentCharacterActivityEvent(BaseModel):
 
 class RecentCharacterActivity(BaseModel):
     timestamp: Optional[str] = None
-    events: Optional[list[RecentCharacterActivityEvent]] = []
+    events: Optional[list[RecentCharacterActivityEvent]] = None
 
 
 class Character(BaseModel):
