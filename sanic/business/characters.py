@@ -64,25 +64,24 @@ def handle_incoming_characters(
 
         # handle character activity
         # all character activity will be persisted to the database at the end
-        all_character_activity.extend(
-            aggregate_character_activity_for_server(
-                previous_characters,
-                incoming_characters,
-                previous_character_ids,
-                incoming_character_ids,
-                deleted_character_ids=character_ids_we_can_save,
-            )
+        character_activity = aggregate_character_activity_for_server(
+            previous_characters,
+            incoming_characters,
+            previous_character_ids,
+            incoming_character_ids,
+            deleted_character_ids=character_ids_we_can_save,
         )
+        hydrated_characters = hydrate_characters_with_activity(
+            incoming_characters, previous_characters, character_activity
+        )
+        for activites in character_activity.values():
+            all_character_activity.extend(activites)
 
-        # update the redis cache for this server
         if type == CharacterRequestType.set:
-            # if it's a set operation, just override the cache completely
-            redis_client.set_characters_by_server_name(incoming_characters, server_name)
+            redis_client.set_characters_by_server_name(hydrated_characters, server_name)
         elif type == CharacterRequestType.update:
-            # if it's an update operation, update the characters and delete
-            # any characters that logged off
             redis_client.update_characters_by_server_name(
-                incoming_characters, server_name
+                hydrated_characters, server_name
             )
             redis_client.delete_characters_by_id_and_server_name(
                 character_ids_we_can_save, server_name
@@ -113,7 +112,7 @@ def aggregate_character_activity_for_server(
     previous_character_ids: set[int],
     current_character_ids: set[int],
     deleted_character_ids: set[int],
-) -> list[dict]:
+) -> dict[int, list[dict]]:
     """
     Handle character activity events for a single server at a time. Returns a
     list of character data dict.
@@ -211,7 +210,14 @@ def aggregate_character_activity_for_server(
         )
         print(f"Error: {len(error_messages)} failed activity check(s)")
 
-    return [data.model_dump() for data in character_activity]
+    # return a dict of character_id to a list of activity events (dumped as dicts)
+    character_activity_by_id: dict[int, list[dict]] = {}
+    for activity in character_activity:
+        character_id = activity.character_id
+        if character_id not in character_activity_by_id:
+            character_activity_by_id[character_id] = []
+        character_activity_by_id[character_id].append(activity.model_dump())
+    return character_activity_by_id
 
 
 def persist_character_activity_to_db(
@@ -221,3 +227,40 @@ def persist_character_activity_to_db(
     Persist character activity events from all servers to the database.
     """
     postgres_client.add_character_activity(activity_events)
+
+
+def hydrate_characters_with_activity(
+    characters: dict[int, dict],
+    previous_characters: dict[int, dict],
+    character_activity: dict[int, list[dict]],
+) -> dict[int, dict]:
+    """
+    Hydrate characters with their activity events.
+    """
+    try:
+        characters_with_activity = {}
+        for character_id, character in characters.items():
+            new_character_events = [
+                {
+                    "timestamp": character.get("last_update"),
+                    "events": [
+                        {
+                            "tag": event.get("activity_type"),
+                            "data": event.get("data"),
+                        }
+                        for event in character_activity.get(character_id, [])
+                    ],
+                }
+            ]
+            previous_character_events: list[dict] = previous_characters.get(
+                character_id, {}
+            ).get("activity", [])
+            characters_with_activity[character_id] = {
+                **character,
+                "activity": previous_character_events + new_character_events,
+            }
+
+        return characters_with_activity
+    except Exception as e:
+        print(f"Error hydrating characters with activity: {e}")
+        return characters
