@@ -1012,16 +1012,22 @@ def get_gender_distribution(lookback_in_days: int = 90) -> dict[str, int]:
         with conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT gender, COUNT(*) as count FROM public.characters
+                SELECT server_name, gender, COUNT(*) as count FROM public.characters
                 WHERE last_save > NOW() - (make_interval(days => %s))
-                GROUP BY gender
+                GROUP BY gender, server_name
                 """,
                 (lookback_in_days,),
             )
             gender_distribution = cursor.fetchall()
             if not gender_distribution:
                 return {}
-            return {str(gender): count for gender, count in gender_distribution}
+            # Return as a nested dict: {server_name: {gender: count}}
+            output = {}
+            for server_name, gender, count in gender_distribution:
+                if server_name not in output:
+                    output[server_name] = {}
+                output[server_name][str(gender)] = count
+            return output
 
 
 def get_race_distribution(lookback_in_days: int = 90) -> dict[str, int]:
@@ -1032,16 +1038,22 @@ def get_race_distribution(lookback_in_days: int = 90) -> dict[str, int]:
         with conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT race, COUNT(*) as count FROM public.characters
+                SELECT server_name, race, COUNT(*) as count FROM public.characters
                 WHERE last_save > NOW() - (make_interval(days => %s))
-                GROUP BY race
+                GROUP BY race, server_name
                 """,
                 (lookback_in_days,),
             )
             race_distribution = cursor.fetchall()
             if not race_distribution:
                 return {}
-            return {str(race): count for race, count in race_distribution}
+            # Return as a nested dict: {server_name: {race: count}}
+            output = {}
+            for server_name, race, count in race_distribution:
+                if server_name not in output:
+                    output[server_name] = {}
+                output[server_name][str(race)] = count
+            return output
 
 
 def get_total_level_distribution(lookback_in_days: int = 90) -> dict[str, int]:
@@ -1052,19 +1064,21 @@ def get_total_level_distribution(lookback_in_days: int = 90) -> dict[str, int]:
         with conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT total_level, COUNT(*) as count FROM public.characters
+                SELECT server_name, total_level, COUNT(*) as count FROM public.characters
                 WHERE last_save > NOW() - (make_interval(days => %s))
-                GROUP BY total_level
+                GROUP BY total_level, server_name
                 """,
                 (lookback_in_days,),
             )
             total_level_distribution = cursor.fetchall()
             if not total_level_distribution:
                 return {}
-            return {
-                str(total_level): count
-                for total_level, count in total_level_distribution
-            }
+            # Return as a nested dict: {server_name: {total_level: count}}
+            output = {}
+            for server_name, total_level, count in total_level_distribution:
+                if server_name not in output:
+                    output[server_name] = {}
+                output[server_name][str(total_level)] = count
 
 
 def get_class_count_distribution(lookback_in_days: int = 90) -> dict[str, int]:
@@ -1079,25 +1093,32 @@ def get_class_count_distribution(lookback_in_days: int = 90) -> dict[str, int]:
         with conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT class_count, COUNT(*) as count
+                SELECT server_name, class_count, COUNT(*) as count
                 FROM (
-                    SELECT (
-                        SELECT COUNT(*)
-                        FROM jsonb_array_elements(classes) AS elem
-                        WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
-                    ) AS class_count
+                    SELECT server_name,
+                        (
+                            SELECT COUNT(*)
+                            FROM jsonb_array_elements(classes) AS elem
+                            WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                        ) AS class_count
                     FROM public.characters
                     WHERE last_save > NOW() - (make_interval(days => %s))
                 ) AS sub
-                GROUP BY class_count
-                ORDER BY class_count
+                GROUP BY server_name, class_count
+                ORDER BY server_name, class_count
                 """,
                 (lookback_in_days,),
             )
             result = cursor.fetchall()
             if not result:
                 return {}
-            return {str(class_count): count for class_count, count in result}
+            # Return as a nested dict: {server_name: {class_count: count}}
+            output = {}
+            for server_name, class_count, count in result:
+                if server_name not in output:
+                    output[server_name] = {}
+                output[server_name][str(class_count)] = count
+            return output
 
 
 def get_game_population_relative(days: int = 1) -> list[PopulationPointInTime]:
