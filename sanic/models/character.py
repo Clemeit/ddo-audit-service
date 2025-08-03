@@ -51,7 +51,7 @@ class Character(BaseModel):
     last_save: Optional[str] = (
         None  # the last time the character was persisted in the database
     )
-    activity: Optional[list[RecentCharacterActivity]] = []
+    activity: Optional[list[RecentCharacterActivity]] = None
 
 
 class CharacterActivity(BaseModel):
