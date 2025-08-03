@@ -240,6 +240,9 @@ def hydrate_characters_with_activity(
     try:
         characters_with_activity = {}
         for character_id, character in characters.items():
+            previous_character_events: list[dict] = previous_characters.get(
+                character_id, {}
+            ).get("activity", [])
             new_character_event = {
                 "timestamp": character.get("last_update"),
                 "events": [
@@ -250,13 +253,9 @@ def hydrate_characters_with_activity(
                     for event in character_activity.get(character_id, [])
                 ],
             }
-
-            previous_character_events: list[dict] = (
-                previous_characters.get(character_id, {}).get("activity", []) or []
-            )
             characters_with_activity[character_id] = {
                 **character,
-                "activity": previous_character_events.append(new_character_event),
+                "activity": previous_character_events + [new_character_event],
             }
 
         return characters_with_activity
