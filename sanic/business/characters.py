@@ -269,5 +269,11 @@ def hydrate_characters_with_activity(
 
         return characters_with_activity
     except Exception as e:
-        print(f"Error hydrating characters with activity: {e}")
+        logMessage(
+            f"Error hydrating characters with activity",
+            level="error",
+            metadata={
+                "error": str(e),
+            },
+        )
         return characters
