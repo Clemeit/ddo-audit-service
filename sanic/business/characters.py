@@ -74,8 +74,8 @@ def handle_incoming_characters(
         hydrated_characters = hydrate_characters_with_activity(
             incoming_characters, previous_characters, character_activity
         )
-        for activites in character_activity.values():
-            all_character_activity.extend(activites)
+        for activities in character_activity.values():
+            all_character_activity.extend(activities)
 
         if type == CharacterRequestType.set:
             redis_client.set_characters_by_server_name(hydrated_characters, server_name)
@@ -240,24 +240,23 @@ def hydrate_characters_with_activity(
     try:
         characters_with_activity = {}
         for character_id, character in characters.items():
-            new_character_events = [
-                {
-                    "timestamp": character.get("last_update"),
-                    "events": [
-                        {
-                            "tag": event.get("activity_type"),
-                            "data": event.get("data"),
-                        }
-                        for event in character_activity.get(character_id, [])
-                    ],
-                }
-            ]
-            previous_character_events: list[dict] = previous_characters.get(
-                character_id, {}
-            ).get("activity", [])
+            new_character_event = {
+                "timestamp": character.get("last_update"),
+                "events": [
+                    {
+                        "tag": event.get("activity_type"),
+                        "data": event.get("data"),
+                    }
+                    for event in character_activity.get(character_id, [])
+                ],
+            }
+
+            previous_character_events: list[dict] = (
+                previous_characters.get(character_id, {}).get("activity", []) or []
+            )
             characters_with_activity[character_id] = {
                 **character,
-                "activity": previous_character_events + new_character_events,
+                "activity": previous_character_events.append(new_character_event),
             }
 
         return characters_with_activity
