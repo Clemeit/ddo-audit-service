@@ -689,7 +689,6 @@ def add_or_update_characters(characters: list[dict]):
                 "is_recruiting",
                 "is_online",
                 "last_save",
-                "activity",
             ]
 
             # Process characters in batches for better performance
