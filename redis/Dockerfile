@@ -1,2 +1,7 @@
 FROM redis/redis-stack-server:latest
-CMD ["redis-stack-server"]
+
+# Copy custom Redis configuration
+COPY redis.conf /usr/local/etc/redis/redis.conf
+
+# Start Redis with custom configuration
+CMD ["redis-stack-server", "/usr/local/etc/redis/redis.conf"]
