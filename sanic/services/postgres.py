@@ -1175,7 +1175,9 @@ def get_primary_class_distribution(lookback_in_days: int = 90) -> dict[str, int]
             return output
 
 
-def get_average_population_by_server(lookback_in_days: int = 90) -> dict[str, float]:
+def get_average_population_by_server(
+    lookback_in_days: int = 90,
+) -> dict[str, Optional[float]]:
     """
     Get the average population per server for the provided lookback.
     """
