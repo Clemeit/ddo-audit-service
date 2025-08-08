@@ -1007,7 +1007,7 @@ def get_gender_distribution(lookback_in_days: int = 90) -> dict[str, int]:
     if lookback_in_days <= 0:
         raise ValueError("lookback_in_days must be greater than 0")
     if lookback_in_days > 180:
-        raise ValueError("lookback_in_days cannot exceed 365 days")
+        raise ValueError("lookback_in_days cannot exceed 180 days")
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
