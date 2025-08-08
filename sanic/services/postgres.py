@@ -1007,7 +1007,7 @@ def get_gender_distribution(lookback_in_days: int = 90) -> dict[str, int]:
     if lookback_in_days <= 0:
         raise ValueError("lookback_in_days must be greater than 0")
     if lookback_in_days > 180:
-        raise ValueError("lookback_in_days cannot exceed 365 days")
+        raise ValueError("lookback_in_days cannot exceed 180 days")
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -1033,6 +1033,10 @@ def get_race_distribution(lookback_in_days: int = 90) -> dict[str, int]:
     """
     Get the race distribution of characters in the database.
     """
+    if lookback_in_days <= 0:
+        raise ValueError("lookback_in_days must be greater than 0")
+    if lookback_in_days > 180:
+        raise ValueError("lookback_in_days cannot exceed 180 days")
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -1058,6 +1062,10 @@ def get_total_level_distribution(lookback_in_days: int = 90) -> dict[str, int]:
     """
     Get the total_level distribution of characters in the database.
     """
+    if lookback_in_days <= 0:
+        raise ValueError("lookback_in_days must be greater than 0")
+    if lookback_in_days > 180:
+        raise ValueError("lookback_in_days cannot exceed 180 days")
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -1086,6 +1094,10 @@ def get_class_count_distribution(lookback_in_days: int = 90) -> dict[str, int]:
     'classes' is a jsonb field that contains an array of classes that looks like:
     [{"name": "Fighter", "level": 20}, {"name": "Wizard", "level": 10}]
     """
+    if lookback_in_days <= 0:
+        raise ValueError("lookback_in_days must be greater than 0")
+    if lookback_in_days > 180:
+        raise ValueError("lookback_in_days cannot exceed 180 days")
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -1121,6 +1133,10 @@ def get_primary_class_distribution(lookback_in_days: int = 90) -> dict[str, int]
     """
     Get the primary class distribution of characters in the database.
     """
+    if lookback_in_days <= 0:
+        raise ValueError("lookback_in_days must be greater than 0")
+    if lookback_in_days > 180:
+        raise ValueError("lookback_in_days cannot exceed 180 days")
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -1162,6 +1178,10 @@ def get_average_population_by_server(lookback_in_days: int = 90) -> dict[str, fl
     """
     Get the average population per server for the provided lookback.
     """
+    if lookback_in_days <= 0:
+        raise ValueError("lookback_in_days must be greater than 0")
+    if lookback_in_days > 180:
+        raise ValueError("lookback_in_days cannot exceed 180 days")
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
