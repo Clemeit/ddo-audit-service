@@ -2,6 +2,7 @@ import services.redis as redis_client
 import services.postgres as postgres_client
 from models.game import PopulationPointInTime, PopulationDataPoint
 from utils.time import datetime_to_datetime_string
+from typing import Optional
 
 from constants.redis import (
     POPULATION_1_DAY_CACHE_TTL,
@@ -217,7 +218,7 @@ def get_character_activity_stats_quarter() -> dict:
     )
 
 
-def get_average_server_population_quarter() -> dict[str, float]:
+def get_average_server_population_quarter() -> dict[str, Optional[float]]:
     """
     Gets 90 days of average server population data.
     Checks cache then database.
@@ -228,7 +229,7 @@ def get_average_server_population_quarter() -> dict[str, float]:
     )
 
 
-def get_average_server_population_week() -> dict[str, float]:
+def get_average_server_population_week() -> dict[str, Optional[float]]:
     """
     Gets 7 days of average server population data.
     Checks cache then database.

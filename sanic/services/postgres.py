@@ -1,10 +1,10 @@
 import json
 import os
 import logging
-from contextlib import contextmanager, asynccontextmanager
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from time import time
-from typing import Optional, Generator, AsyncGenerator
+from typing import Optional, Generator
 
 from constants.activity import CharacterActivityType
 from models.character import (
