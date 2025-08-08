@@ -1084,6 +1084,7 @@ def get_total_level_distribution(lookback_in_days: int = 90) -> dict[str, int]:
                 if server_name not in output:
                     output[server_name] = {}
                 output[server_name][str(total_level)] = count
+            return output
 
 
 def get_class_count_distribution(lookback_in_days: int = 90) -> dict[str, int]:
