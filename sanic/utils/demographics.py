@@ -96,6 +96,28 @@ def get_class_count_demographics_week() -> dict[str, int]:
     )
 
 
+def get_primary_class_distribution_quarter() -> dict[str, int]:
+    """
+    Gets 90 days of primary class demographics data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_primary_class_demographics_quarter",
+        lambda: postgres_client.get_primary_class_distribution(90),
+    )
+
+
+def get_primary_class_distribution_week() -> dict[str, int]:
+    """
+    Gets 7 days of primary class demographics data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_primary_class_demographics_week",
+        lambda: postgres_client.get_primary_class_distribution(7),
+    )
+
+
 def get_cached_data_with_fallback(key: str, fallback_func) -> dict:
     """Get cached data, regenerate if expired."""
     cached_data = redis_client.get_by_key(key)

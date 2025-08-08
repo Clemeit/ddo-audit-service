@@ -27,10 +27,10 @@ async def get_population_timeseries(request: Request, period: str):
 
     # Map periods to their corresponding utility functions
     period_functions = {
-        "day": population_utils.get_game_population_1_day,
-        "week": population_utils.get_game_population_1_week,
-        "month": population_utils.get_game_population_1_month,
-        "year": population_utils.get_game_population_1_year,
+        "day": population_utils.get_game_population_day,
+        "week": population_utils.get_game_population_week,
+        "month": population_utils.get_game_population_month,
+        "year": population_utils.get_game_population_year,
     }
 
     if period not in period_functions:
@@ -64,10 +64,10 @@ async def get_population_totals(request: Request, period: str):
 
     # Map periods to their corresponding utility functions
     period_functions = {
-        "day": population_utils.get_game_population_totals_1_day,
-        "week": population_utils.get_game_population_totals_1_week,
-        "month": population_utils.get_game_population_totals_1_month,
-        "year": population_utils.get_game_population_totals_1_year,
+        "day": population_utils.get_game_population_totals_day,
+        "week": population_utils.get_game_population_totals_week,
+        "month": population_utils.get_game_population_totals_month,
+        "year": population_utils.get_game_population_totals_year,
     }
 
     if period not in period_functions:
@@ -101,8 +101,8 @@ async def get_unique_breakdown(request: Request, period: str):
 
     # Map periods to their corresponding utility functions
     period_functions = {
-        "month": population_utils.get_unique_character_and_guild_count_breakdown_1_month,
-        "quarter": population_utils.get_unique_character_and_guild_count_breakdown_1_quarter,
+        "month": population_utils.get_unique_character_and_guild_count_breakdown_month,
+        "quarter": population_utils.get_unique_character_and_guild_count_breakdown_quarter,
     }
 
     if period not in period_functions:
@@ -136,7 +136,41 @@ async def get_stats_breakdown(request: Request, period: str):
 
     # Map periods to their corresponding utility functions
     period_functions = {
-        "quarter": population_utils.get_character_activity_stats_1_quarter,
+        "quarter": population_utils.get_character_activity_stats_quarter,
+    }
+
+    if period not in period_functions:
+        return json(
+            {
+                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_functions.keys())}"
+            },
+            status=400,
+        )
+
+    try:
+        data = period_functions[period]()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@population_blueprint.get("/average/<period>")
+async def get_average_population(request: Request, period: str):
+    """
+    Method: GET
+
+    Route: /average/<period>
+
+    Description: Get the average server population for the specified time period.
+
+    Supported periods: week, quarter
+    """
+    period = period.lower()
+
+    period_functions = {
+        "week": population_utils.get_average_server_population_week,
+        "quarter": population_utils.get_average_server_population_quarter,
     }
 
     if period not in period_functions:

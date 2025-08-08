@@ -29,7 +29,7 @@ async def get_population_race(request: Request, period: str):
     # Map periods to their corresponding utility functions
     period_functions = {
         "week": demographics_utils.get_race_demographics_week,
-        "quarter": demographics_utils.get_race_demographics_week,
+        "quarter": demographics_utils.get_race_demographics_quarter,
     }
 
     if period not in period_functions:
@@ -64,7 +64,7 @@ async def get_population_gender(request: Request, period: str):
     # Map periods to their corresponding utility functions
     period_functions = {
         "week": demographics_utils.get_gender_demographics_week,
-        "quarter": demographics_utils.get_gender_demographics_week,
+        "quarter": demographics_utils.get_gender_demographics_quarter,
     }
 
     if period not in period_functions:
@@ -99,7 +99,7 @@ async def get_population_total_level(request: Request, period: str):
     # Map periods to their corresponding utility functions
     period_functions = {
         "week": demographics_utils.get_total_level_demographics_week,
-        "quarter": demographics_utils.get_total_level_demographics_week,
+        "quarter": demographics_utils.get_total_level_demographics_quarter,
     }
 
     if period not in period_functions:
@@ -134,7 +134,42 @@ async def get_population_class_count(request: Request, period: str):
     # Map periods to their corresponding utility functions
     period_functions = {
         "week": demographics_utils.get_class_count_demographics_week,
-        "quarter": demographics_utils.get_class_count_demographics_week,
+        "quarter": demographics_utils.get_class_count_demographics_quarter,
+    }
+
+    if period not in period_functions:
+        return json(
+            {
+                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_functions.keys())}"
+            },
+            status=400,
+        )
+
+    try:
+        data = period_functions[period]()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@demographics_blueprint.get("/primary-class/<period>")
+async def get_population_primary_class(request: Request, period: str):
+    """
+    Method: GET
+
+    Route: /primary-class/<period>
+
+    Description: Get the primary class demographics for the specified time period.
+
+    Supported periods: week, quarter
+    """
+    period = period.lower()
+
+    # Map periods to their corresponding utility functions
+    period_functions = {
+        "week": demographics_utils.get_primary_class_distribution_week,
+        "quarter": demographics_utils.get_primary_class_distribution_quarter,
     }
 
     if period not in period_functions:

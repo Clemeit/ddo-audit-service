@@ -1021,7 +1021,6 @@ def get_gender_distribution(lookback_in_days: int = 90) -> dict[str, int]:
             gender_distribution = cursor.fetchall()
             if not gender_distribution:
                 return {}
-            # Return as a nested dict: {server_name: {gender: count}}
             output = {}
             for server_name, gender, count in gender_distribution:
                 if server_name not in output:
@@ -1047,7 +1046,6 @@ def get_race_distribution(lookback_in_days: int = 90) -> dict[str, int]:
             race_distribution = cursor.fetchall()
             if not race_distribution:
                 return {}
-            # Return as a nested dict: {server_name: {race: count}}
             output = {}
             for server_name, race, count in race_distribution:
                 if server_name not in output:
@@ -1073,7 +1071,6 @@ def get_total_level_distribution(lookback_in_days: int = 90) -> dict[str, int]:
             total_level_distribution = cursor.fetchall()
             if not total_level_distribution:
                 return {}
-            # Return as a nested dict: {server_name: {total_level: count}}
             output = {}
             for server_name, total_level, count in total_level_distribution:
                 if server_name not in output:
@@ -1112,12 +1109,84 @@ def get_class_count_distribution(lookback_in_days: int = 90) -> dict[str, int]:
             result = cursor.fetchall()
             if not result:
                 return {}
-            # Return as a nested dict: {server_name: {class_count: count}}
             output = {}
             for server_name, class_count, count in result:
                 if server_name not in output:
                     output[server_name] = {}
                 output[server_name][str(class_count)] = count
+            return output
+
+
+def get_primary_class_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+    """
+    Get the primary class distribution of characters in the database.
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    server_name,
+                    primary_class,
+                    COUNT(*) as count
+                FROM (
+                    SELECT
+                        server_name,
+                        (
+                            SELECT elem->>'name'
+                            FROM jsonb_array_elements(classes) AS elem
+                            WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                            ORDER BY (elem->>'level')::int DESC
+                            LIMIT 1
+                        ) AS primary_class
+                    FROM public.characters
+                    WHERE last_save > NOW() - (make_interval(days => %s))
+                ) AS sub
+                GROUP BY server_name, primary_class
+                ORDER BY server_name, count DESC
+                """,
+                (lookback_in_days,),
+            )
+            result = cursor.fetchall()
+            if not result:
+                return {}
+            output = {}
+            for server_name, class_count, count in result:
+                if server_name not in output:
+                    output[server_name] = {}
+                output[server_name][str(class_count)] = count
+            return output
+
+
+def get_average_population_by_server(lookback_in_days: int = 90) -> dict[str, float]:
+    """
+    Get the average population per server for the provided lookback.
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    server_name,
+                    AVG(character_count) AS avg_population
+                FROM (
+                    SELECT
+                        jsonb_object_keys(data->'servers') AS server_name,
+                        (data->'servers'->jsonb_object_keys(data->'servers')->>'character_count')::int AS character_count
+                    FROM public.game_info
+                    WHERE "timestamp" > NOW() - (make_interval(days => %s))
+                ) AS sub
+                GROUP BY server_name
+                ORDER BY avg_population DESC
+                """,
+                (lookback_in_days,),
+            )
+            result = cursor.fetchall()
+            if not result:
+                return {}
+            output = {}
+            for server_name, avg_population in result:
+                output[server_name] = float(avg_population)
             return output
 
 

@@ -14,19 +14,19 @@ from constants.redis import (
 from datetime import datetime
 
 
-def sum_server_population(
-    first: PopulationPointInTime, second: PopulationPointInTime
-) -> PopulationPointInTime:
-    summed_data: list[dict[str, PopulationDataPoint]] = []
-    for first_data in first.data:
-        summed_data.append(first_data)
-    for second_data in second.data:
-        # if it exists in summed_data, add to it. Otherwise, append it.
-        pass
-    return PopulationPointInTime(timestamp=first.timestamp, data=summed_data)
+# def sum_server_population(
+#     first: PopulationPointInTime, second: PopulationPointInTime
+# ) -> PopulationPointInTime:
+#     summed_data: list[dict[str, PopulationDataPoint]] = []
+#     for first_data in first.data:
+#         summed_data.append(first_data)
+#     for second_data in second.data:
+#         # if it exists in summed_data, add to it. Otherwise, append it.
+#         pass
+#     return PopulationPointInTime(timestamp=first.timestamp, data=summed_data)
 
 
-def get_game_population_1_day() -> list[dict]:
+def get_game_population_day() -> list[dict]:
     """
     Gets 1 day of game population reported by the minute.
     Checks cache then database.
@@ -38,13 +38,13 @@ def get_game_population_1_day() -> list[dict]:
         return [datum.model_dump() for datum in postgres_data]
 
     return get_cached_data_with_fallback(
-        "game_population_1_day",
+        "get_game_population_day",
         fetch_and_normalize_data,
         POPULATION_1_DAY_CACHE_TTL,
     )
 
 
-def get_game_population_totals_1_day() -> list[dict]:
+def get_game_population_totals_day() -> list[dict]:
     """
     Gets 1 day of total game population per server.
     Checks cache then database.
@@ -58,13 +58,13 @@ def get_game_population_totals_1_day() -> list[dict]:
         }
 
     return get_cached_data_with_fallback(
-        "game_population_totals_1_day",
+        "get_game_population_totals_day",
         fetch_data,
         POPULATION_1_DAY_CACHE_TTL,
     )
 
 
-def get_game_population_1_week() -> list[dict]:
+def get_game_population_week() -> list[dict]:
     """
     Gets 1 week of game population reported as hourly averages.
     Checks cache then database.
@@ -77,13 +77,13 @@ def get_game_population_1_week() -> list[dict]:
         return [datum.model_dump() for datum in averaged_data]
 
     return get_cached_data_with_fallback(
-        "game_population_1_week",
+        "get_game_population_week",
         fetch_data,
         POPULATION_1_WEEK_CACHE_TTL,
     )
 
 
-def get_game_population_totals_1_week() -> list[dict]:
+def get_game_population_totals_week() -> list[dict]:
     """
     Gets 1 week of total game population per server.
     Checks cache then database.
@@ -97,13 +97,13 @@ def get_game_population_totals_1_week() -> list[dict]:
         }
 
     return get_cached_data_with_fallback(
-        "game_population_totals_1_week",
+        "get_game_population_totals_week",
         fetch_data,
         POPULATION_1_WEEK_CACHE_TTL,
     )
 
 
-def get_game_population_1_month() -> list[dict]:
+def get_game_population_month() -> list[dict]:
     """
     Gets 1 month of game population reported as daily averages.
     Checks cache then database.
@@ -116,13 +116,13 @@ def get_game_population_1_month() -> list[dict]:
         return [datum.model_dump() for datum in averaged_data]
 
     return get_cached_data_with_fallback(
-        "game_population_1_month",
+        "get_game_population_month",
         fetch_data,
         POPULATION_1_MONTH_CACHE_TTL,
     )
 
 
-def get_game_population_totals_1_month() -> list[dict]:
+def get_game_population_totals_month() -> list[dict]:
     """
     Gets 1 month of total game population per server.
     Checks cache then database.
@@ -136,13 +136,13 @@ def get_game_population_totals_1_month() -> list[dict]:
         }
 
     return get_cached_data_with_fallback(
-        "game_population_totals_1_month",
+        "get_game_population_totals_month",
         fetch_data,
         POPULATION_1_MONTH_CACHE_TTL,
     )
 
 
-def get_game_population_1_year() -> list[dict]:
+def get_game_population_year() -> list[dict]:
     """
     Gets 1 year of game population reported as daily averages.
     Checks cache then database.
@@ -155,13 +155,13 @@ def get_game_population_1_year() -> list[dict]:
         return [datum.model_dump() for datum in averaged_data]
 
     return get_cached_data_with_fallback(
-        "game_population_1_year",
+        "get_game_population_year",
         fetch_data,
         POPULATION_1_YEAR_CACHE_TTL,
     )
 
 
-def get_game_population_totals_1_year() -> list[dict]:
+def get_game_population_totals_year() -> list[dict]:
     """
     Gets 1 year of total game population per server.
     Checks cache then database.
@@ -175,45 +175,67 @@ def get_game_population_totals_1_year() -> list[dict]:
         }
 
     return get_cached_data_with_fallback(
-        "game_population_totals_1_year",
+        "get_game_population_totals_year",
         fetch_data,
         POPULATION_1_YEAR_CACHE_TTL,
     )
 
 
-def get_unique_character_and_guild_count_breakdown_1_month() -> dict:
+def get_unique_character_and_guild_count_breakdown_month() -> dict:
     """
     Gets a unique character and guild count breakdown for the last month.
     Checks cache then database.
     """
     return get_cached_data_with_fallback(
-        "unique_character_and_guild_count_breakdown_1_month",
+        "get_unique_character_and_guild_count_breakdown_month",
         lambda: postgres_client.get_unique_character_and_guild_count(30),
         POPULATION_1_QUARTER_CACHE_TTL,
     )
 
 
-def get_unique_character_and_guild_count_breakdown_1_quarter() -> dict:
+def get_unique_character_and_guild_count_breakdown_quarter() -> dict:
     """
     Gets a unique character and guild count breakdown for the last quarter.
     Checks cache then database.
     """
     return get_cached_data_with_fallback(
-        "unique_character_and_guild_count_breakdown_1_quarter",
+        "get_unique_character_and_guild_count_breakdown_quarter",
         lambda: postgres_client.get_unique_character_and_guild_count(90),
         POPULATION_1_QUARTER_CACHE_TTL,
     )
 
 
-def get_character_activity_stats_1_quarter() -> dict:
+def get_character_activity_stats_quarter() -> dict:
     """
     Gets character activity stats for the last quarter.
     Checks cache then database.
     """
     return get_cached_data_with_fallback(
-        "character_activity_stats_1_quarter",
+        "get_character_activity_stats_quarter",
         lambda: postgres_client.get_character_activity_stats(90),
         POPULATION_1_QUARTER_CACHE_TTL,
+    )
+
+
+def get_average_server_population_quarter() -> dict[str, float]:
+    """
+    Gets 90 days of average server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_average_server_population_quarter",
+        lambda: postgres_client.get_average_population_by_server(90),
+    )
+
+
+def get_average_server_population_week() -> dict[str, float]:
+    """
+    Gets 7 days of average server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_average_server_population_week",
+        lambda: postgres_client.get_average_population_by_server(7),
     )
 
 
