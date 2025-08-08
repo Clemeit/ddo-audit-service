@@ -1000,6 +1000,217 @@ def get_recent_raid_activity_by_character_ids(
             return build_character_activity_from_rows(activities)
 
 
+def get_gender_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+    """
+    Get the gender distribution of characters in the database.
+    """
+    if lookback_in_days <= 0:
+        raise ValueError("lookback_in_days must be greater than 0")
+    if lookback_in_days > 180:
+        raise ValueError("lookback_in_days cannot exceed 180 days")
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT server_name, gender, COUNT(*) as count FROM public.characters
+                WHERE last_save > NOW() - (make_interval(days => %s))
+                GROUP BY gender, server_name
+                """,
+                (lookback_in_days,),
+            )
+            gender_distribution = cursor.fetchall()
+            if not gender_distribution:
+                return {}
+            output = {}
+            for server_name, gender, count in gender_distribution:
+                if server_name not in output:
+                    output[server_name] = {}
+                output[server_name][str(gender)] = count
+            return output
+
+
+def get_race_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+    """
+    Get the race distribution of characters in the database.
+    """
+    if lookback_in_days <= 0:
+        raise ValueError("lookback_in_days must be greater than 0")
+    if lookback_in_days > 180:
+        raise ValueError("lookback_in_days cannot exceed 180 days")
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT server_name, race, COUNT(*) as count FROM public.characters
+                WHERE last_save > NOW() - (make_interval(days => %s))
+                GROUP BY race, server_name
+                """,
+                (lookback_in_days,),
+            )
+            race_distribution = cursor.fetchall()
+            if not race_distribution:
+                return {}
+            output = {}
+            for server_name, race, count in race_distribution:
+                if server_name not in output:
+                    output[server_name] = {}
+                output[server_name][str(race)] = count
+            return output
+
+
+def get_total_level_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+    """
+    Get the total_level distribution of characters in the database.
+    """
+    if lookback_in_days <= 0:
+        raise ValueError("lookback_in_days must be greater than 0")
+    if lookback_in_days > 180:
+        raise ValueError("lookback_in_days cannot exceed 180 days")
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT server_name, total_level, COUNT(*) as count FROM public.characters
+                WHERE last_save > NOW() - (make_interval(days => %s))
+                GROUP BY total_level, server_name
+                """,
+                (lookback_in_days,),
+            )
+            total_level_distribution = cursor.fetchall()
+            if not total_level_distribution:
+                return {}
+            output = {}
+            for server_name, total_level, count in total_level_distribution:
+                if server_name not in output:
+                    output[server_name] = {}
+                output[server_name][str(total_level)] = count
+            return output
+
+
+def get_class_count_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+    """
+    Get the number of classes distribution of characters in the database.
+    i.e. The number of classes each character has, excluding "Legendary" and "Epic" (which are not playable classes).
+
+    'classes' is a jsonb field that contains an array of classes that looks like:
+    [{"name": "Fighter", "level": 20}, {"name": "Wizard", "level": 10}]
+    """
+    if lookback_in_days <= 0:
+        raise ValueError("lookback_in_days must be greater than 0")
+    if lookback_in_days > 180:
+        raise ValueError("lookback_in_days cannot exceed 180 days")
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT server_name, class_count, COUNT(*) as count
+                FROM (
+                    SELECT server_name,
+                        (
+                            SELECT COUNT(*)
+                            FROM jsonb_array_elements(classes) AS elem
+                            WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                        ) AS class_count
+                    FROM public.characters
+                    WHERE last_save > NOW() - (make_interval(days => %s))
+                ) AS sub
+                GROUP BY server_name, class_count
+                ORDER BY server_name, class_count
+                """,
+                (lookback_in_days,),
+            )
+            result = cursor.fetchall()
+            if not result:
+                return {}
+            output = {}
+            for server_name, class_count, count in result:
+                if server_name not in output:
+                    output[server_name] = {}
+                output[server_name][str(class_count)] = count
+            return output
+
+
+def get_primary_class_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+    """
+    Get the primary class distribution of characters in the database.
+    """
+    if lookback_in_days <= 0:
+        raise ValueError("lookback_in_days must be greater than 0")
+    if lookback_in_days > 180:
+        raise ValueError("lookback_in_days cannot exceed 180 days")
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    server_name,
+                    primary_class,
+                    COUNT(*) as count
+                FROM (
+                    SELECT
+                        server_name,
+                        (
+                            SELECT elem->>'name'
+                            FROM jsonb_array_elements(classes) AS elem
+                            WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                            ORDER BY (elem->>'level')::int DESC
+                            LIMIT 1
+                        ) AS primary_class
+                    FROM public.characters
+                    WHERE last_save > NOW() - (make_interval(days => %s))
+                ) AS sub
+                GROUP BY server_name, primary_class
+                ORDER BY server_name, count DESC
+                """,
+                (lookback_in_days,),
+            )
+            result = cursor.fetchall()
+            if not result:
+                return {}
+            output = {}
+            for server_name, class_count, count in result:
+                if server_name not in output:
+                    output[server_name] = {}
+                output[server_name][str(class_count)] = count
+            return output
+
+
+def get_average_population_by_server(lookback_in_days: int = 90) -> dict[str, float]:
+    """
+    Get the average population per server for the provided lookback.
+    """
+    if lookback_in_days <= 0:
+        raise ValueError("lookback_in_days must be greater than 0")
+    if lookback_in_days > 180:
+        raise ValueError("lookback_in_days cannot exceed 180 days")
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    server_name,
+                    AVG(character_count) AS avg_population
+                FROM (
+                    SELECT
+                        jsonb_object_keys(data->'servers') AS server_name,
+                        (data->'servers'->jsonb_object_keys(data->'servers')->>'character_count')::int AS character_count
+                    FROM public.game_info
+                    WHERE "timestamp" > NOW() - (make_interval(days => %s))
+                ) AS sub
+                GROUP BY server_name
+                ORDER BY avg_population DESC
+                """,
+                (lookback_in_days,),
+            )
+            result = cursor.fetchall()
+            if not result:
+                return {}
+            output = {}
+            for server_name, avg_population in result:
+                output[server_name] = float(avg_population)
+            return output
+
+
 def get_game_population_relative(days: int = 1) -> list[PopulationPointInTime]:
     """
     Get population info for a relative date range starting at some
