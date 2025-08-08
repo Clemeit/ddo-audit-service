@@ -1209,7 +1209,10 @@ def get_average_population_by_server(
                 return {}
             output = {}
             for server_name, avg_population in result:
-                output[server_name] = float(avg_population)
+                if avg_population is not None:
+                    output[server_name] = float(avg_population)
+                else:
+                    output[server_name] = None
             return output
 
 
