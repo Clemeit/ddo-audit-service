@@ -113,5 +113,11 @@ networks:
 
 volumes:
   postgres_data:
+    external: true
+    name: ddoaudit_stage_postgres_data
   redis_data:
+    external: true
+    name: ddoaudit_stage_redis_data
   pgadmin_data:
+    external: true
+    name: ddoaudit_stage_pgadmin_data
