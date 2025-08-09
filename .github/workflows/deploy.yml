@@ -93,9 +93,9 @@ jobs:
             cd /var/www/ddoaudit-stage.com/app
 
             # Create external volumes if they don't exist
-            docker volume create ddoaudit_stage_postgres_data 2>/dev/null || true
-            docker volume create ddoaudit_stage_redis_data 2>/dev/null || true
-            docker volume create ddoaudit_stage_pgadmin_data 2>/dev/null || true
+            docker volume create ddoaudit-stage_postgres_data 2>/dev/null || true
+            docker volume create ddoaudit-stage_redis_data 2>/dev/null || true
+            docker volume create ddoaudit-stage_pgadmin_data 2>/dev/null || true
 
             docker compose -f docker-compose.stage.yml -p ddoaudit-stage pull
             docker compose -f docker-compose.stage.yml -p ddoaudit-stage up -d
