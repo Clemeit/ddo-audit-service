@@ -1,7 +1,11 @@
 FROM redis/redis-stack-server:latest
 
-# Copy custom Redis configuration
-COPY redis.conf /usr/local/etc/redis/redis.conf
-
-# Start Redis with custom configuration
-CMD ["redis-stack-server", "/usr/local/etc/redis/redis.conf"]
+# Start Redis with AOF configuration and correct data directory
+CMD ["redis-stack-server", \
+    "--appendonly", "yes", \
+    "--appendfsync", "everysec", \
+    "--dir", "/data", \
+    "--aof-use-rdb-preamble", "yes", \
+    "--auto-aof-rewrite-percentage", "100", \
+    "--auto-aof-rewrite-min-size", "64mb", \
+    "--appendfilename", "appendonly.aof"]
