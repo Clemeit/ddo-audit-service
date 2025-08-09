@@ -110,23 +110,26 @@ class RedisConnectionManager:
 
         try:
             with self.get_sync_client() as client:
-                client.flushall()
+                # Don't flush all data - preserve existing cache data
+                # client.flushall()  # Commented out to preserve AOF persistence
 
-                # Initialize cache with keys from mapping
+                # Initialize cache with keys from mapping - only if they don't exist
                 for key, value in REDIS_KEY_TYPE_MAPPING.items():
                     key = key.value if isinstance(key, RedisKeys) else key
 
-                    # value is a class type, so we need to instantiate it if it's a BaseModel
-                    if isinstance(value, type) and issubclass(value, BaseModel):
-                        value = value()
+                    # Check if key already exists before setting
+                    if not client.exists(key):
+                        # value is a class type, so we need to instantiate it if it's a BaseModel
+                        if isinstance(value, type) and issubclass(value, BaseModel):
+                            value = value()
 
-                    # model_dump if inherits from BaseModel, else just value
-                    if hasattr(value, "model_dump"):
-                        client.json().set(key, path="$", obj=value.model_dump())
-                    elif isinstance(value, dict):
-                        client.json().set(key, path="$", obj=value)
-                    else:
-                        client.json().set(key, path="$", obj=value)
+                        # model_dump if inherits from BaseModel, else just value
+                        if hasattr(value, "model_dump"):
+                            client.json().set(key, path="$", obj=value.model_dump())
+                        elif isinstance(value, dict):
+                            client.json().set(key, path="$", obj=value)
+                        else:
+                            client.json().set(key, path="$", obj=value)
 
             logger.info("Redis cache initialized successfully")
 
