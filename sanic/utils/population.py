@@ -182,6 +182,18 @@ def get_game_population_totals_year() -> list[dict]:
     )
 
 
+def get_unique_character_and_guild_count_breakdown_week() -> dict:
+    """
+    Gets a unique character and guild count breakdown for the last week.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_unique_character_and_guild_count_breakdown_week",
+        lambda: postgres_client.get_unique_character_and_guild_count(7),
+        POPULATION_1_WEEK_CACHE_TTL,
+    )
+
+
 def get_unique_character_and_guild_count_breakdown_month() -> dict:
     """
     Gets a unique character and guild count breakdown for the last month.
@@ -190,7 +202,7 @@ def get_unique_character_and_guild_count_breakdown_month() -> dict:
     return get_cached_data_with_fallback(
         "get_unique_character_and_guild_count_breakdown_month",
         lambda: postgres_client.get_unique_character_and_guild_count(30),
-        POPULATION_1_QUARTER_CACHE_TTL,
+        POPULATION_1_MONTH_CACHE_TTL,
     )
 
 
@@ -218,14 +230,15 @@ def get_character_activity_stats_quarter() -> dict:
     )
 
 
-def get_average_server_population_quarter() -> dict[str, Optional[float]]:
+def get_average_server_population_day() -> dict[str, Optional[float]]:
     """
-    Gets 90 days of average server population data.
+    Gets 1 day of average server population data.
     Checks cache then database.
     """
     return get_cached_data_with_fallback(
-        "get_average_server_population_quarter",
-        lambda: postgres_client.get_average_population_by_server(90),
+        "get_average_server_population_day",
+        lambda: postgres_client.get_average_population_by_server(1),
+        POPULATION_1_DAY_CACHE_TTL,
     )
 
 
@@ -237,6 +250,163 @@ def get_average_server_population_week() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_average_server_population_week",
         lambda: postgres_client.get_average_population_by_server(7),
+        POPULATION_1_WEEK_CACHE_TTL,
+    )
+
+
+def get_average_server_population_month() -> dict[str, Optional[float]]:
+    """
+    Gets 28 days of average server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_average_server_population_month",
+        lambda: postgres_client.get_average_population_by_server(28),
+        POPULATION_1_MONTH_CACHE_TTL,
+    )
+
+
+def get_average_server_population_quarter() -> dict[str, Optional[float]]:
+    """
+    Gets 90 days of average server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_average_server_population_quarter",
+        lambda: postgres_client.get_average_population_by_server(90),
+        POPULATION_1_QUARTER_CACHE_TTL,
+    )
+
+
+def get_average_server_population_year() -> dict[str, Optional[float]]:
+    """
+    Gets 365 days of average server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_average_server_population_year",
+        lambda: postgres_client.get_average_population_by_server(365),
+        POPULATION_1_YEAR_CACHE_TTL,
+    )
+
+
+def get_hourly_server_population_day() -> dict[str, Optional[float]]:
+    """
+    Gets 1 day of average hourly server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_hourly_server_population_day",
+        lambda: postgres_client.get_average_population_by_hour_per_server(1),
+        POPULATION_1_DAY_CACHE_TTL,
+    )
+
+
+def get_hourly_server_population_week() -> dict[str, Optional[float]]:
+    """
+    Gets 7 days of average hourly server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_hourly_server_population_week",
+        lambda: postgres_client.get_average_population_by_hour_per_server(7),
+        POPULATION_1_WEEK_CACHE_TTL,
+    )
+
+
+def get_hourly_server_population_month() -> dict[str, Optional[float]]:
+    """
+    Gets 28 days of average hourly server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_hourly_server_population_month",
+        lambda: postgres_client.get_average_population_by_hour_per_server(28),
+        POPULATION_1_MONTH_CACHE_TTL,
+    )
+
+
+def get_hourly_server_population_quarter() -> dict[str, Optional[float]]:
+    """
+    Gets 90 days of average hourly server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_hourly_server_population_quarter",
+        lambda: postgres_client.get_average_population_by_hour_per_server(90),
+        POPULATION_1_QUARTER_CACHE_TTL,
+    )
+
+
+def get_hourly_server_population_year() -> dict[str, Optional[float]]:
+    """
+    Gets 365 days of average hourly server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_hourly_server_population_year",
+        lambda: postgres_client.get_average_population_by_hour_per_server(365),
+        POPULATION_1_YEAR_CACHE_TTL,
+    )
+
+
+def get_daily_server_population_day() -> dict[str, Optional[float]]:
+    """
+    Gets 1 day of average daily server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_daily_server_population_day",
+        lambda: postgres_client.get_average_population_by_day_of_week_per_server(1),
+        POPULATION_1_DAY_CACHE_TTL,
+    )
+
+
+def get_daily_server_population_week() -> dict[str, Optional[float]]:
+    """
+    Gets 7 days of average daily server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_daily_server_population_week",
+        lambda: postgres_client.get_average_population_by_day_of_week_per_server(7),
+        POPULATION_1_WEEK_CACHE_TTL,
+    )
+
+
+def get_daily_server_population_month() -> dict[str, Optional[float]]:
+    """
+    Gets 28 days of average daily server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_daily_server_population_month",
+        lambda: postgres_client.get_average_population_by_day_of_week_per_server(28),
+        POPULATION_1_MONTH_CACHE_TTL,
+    )
+
+
+def get_daily_server_population_quarter() -> dict[str, Optional[float]]:
+    """
+    Gets 90 days of average daily server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_daily_server_population_quarter",
+        lambda: postgres_client.get_average_population_by_day_of_week_per_server(90),
+        POPULATION_1_QUARTER_CACHE_TTL,
+    )
+
+
+def get_daily_server_population_year() -> dict[str, Optional[float]]:
+    """
+    Gets 365 days of average daily server population data.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_daily_server_population_year",
+        lambda: postgres_client.get_average_population_by_day_of_week_per_server(365),
+        POPULATION_1_YEAR_CACHE_TTL,
     )
 
 
