@@ -1000,14 +1000,22 @@ def get_recent_raid_activity_by_character_ids(
             return build_character_activity_from_rows(activities)
 
 
+def validate_lookback(lookback: int) -> None:
+    """
+    Validate the lookback period for queries.
+    Raises ValueError if lookback is not within the allowed range.
+    """
+    if lookback <= 0:
+        raise ValueError("lookback must be greater than 0")
+    if lookback > 365:
+        raise ValueError("lookback cannot exceed 365 days")
+
+
 def get_gender_distribution(lookback_in_days: int = 90) -> dict[str, int]:
     """
     Get the gender distribution of characters in the database.
     """
-    if lookback_in_days <= 0:
-        raise ValueError("lookback_in_days must be greater than 0")
-    if lookback_in_days > 180:
-        raise ValueError("lookback_in_days cannot exceed 180 days")
+    validate_lookback(lookback_in_days)
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -1033,10 +1041,7 @@ def get_race_distribution(lookback_in_days: int = 90) -> dict[str, int]:
     """
     Get the race distribution of characters in the database.
     """
-    if lookback_in_days <= 0:
-        raise ValueError("lookback_in_days must be greater than 0")
-    if lookback_in_days > 180:
-        raise ValueError("lookback_in_days cannot exceed 180 days")
+    validate_lookback(lookback_in_days)
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -1062,10 +1067,7 @@ def get_total_level_distribution(lookback_in_days: int = 90) -> dict[str, int]:
     """
     Get the total_level distribution of characters in the database.
     """
-    if lookback_in_days <= 0:
-        raise ValueError("lookback_in_days must be greater than 0")
-    if lookback_in_days > 180:
-        raise ValueError("lookback_in_days cannot exceed 180 days")
+    validate_lookback(lookback_in_days)
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -1095,10 +1097,7 @@ def get_class_count_distribution(lookback_in_days: int = 90) -> dict[str, int]:
     'classes' is a jsonb field that contains an array of classes that looks like:
     [{"name": "Fighter", "level": 20}, {"name": "Wizard", "level": 10}]
     """
-    if lookback_in_days <= 0:
-        raise ValueError("lookback_in_days must be greater than 0")
-    if lookback_in_days > 180:
-        raise ValueError("lookback_in_days cannot exceed 180 days")
+    validate_lookback(lookback_in_days)
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -1134,10 +1133,7 @@ def get_primary_class_distribution(lookback_in_days: int = 90) -> dict[str, int]
     """
     Get the primary class distribution of characters in the database.
     """
-    if lookback_in_days <= 0:
-        raise ValueError("lookback_in_days must be greater than 0")
-    if lookback_in_days > 180:
-        raise ValueError("lookback_in_days cannot exceed 180 days")
+    validate_lookback(lookback_in_days)
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -1181,10 +1177,7 @@ def get_average_population_by_server(
     """
     Get the average population per server for the provided lookback.
     """
-    if lookback_in_days <= 0:
-        raise ValueError("lookback_in_days must be greater than 0")
-    if lookback_in_days > 180:
-        raise ValueError("lookback_in_days cannot exceed 180 days")
+    validate_lookback(lookback_in_days)
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -1222,10 +1215,7 @@ def get_average_population_by_hour_per_server(
     """
     Gets the average population by hour of the day (0-23) per server for the provided lookback.
     """
-    if lookback_in_days <= 0:
-        raise ValueError("lookback_in_days must be greater than 0")
-    if lookback_in_days > 365:
-        raise ValueError("lookback_in_days cannot exceed 365 days")
+    validate_lookback(lookback_in_days)
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -1266,10 +1256,7 @@ def get_average_population_by_day_of_week_per_server(
     """
     Gets the average population by day of the week (0-6, where 0 is Sunday) per server for the provided lookback.
     """
-    if lookback_in_days <= 0:
-        raise ValueError("lookback_in_days must be greater than 0")
-    if lookback_in_days > 365:
-        raise ValueError("lookback_in_days cannot exceed 365 days")
+    validate_lookback(lookback_in_days)
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
