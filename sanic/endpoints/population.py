@@ -192,7 +192,7 @@ async def get_average_population(request: Request, period: str):
 
 
 @population_blueprint.get("/by-hour/<period>")
-async def get_hourly_population(request: Request, period: str):
+async def get_population_by_hour(request: Request, period: str):
     """
     Method: GET
 
@@ -229,7 +229,7 @@ async def get_hourly_population(request: Request, period: str):
 
 
 @population_blueprint.get("/by-day-of-week/<period>")
-async def get_hourly_population(request: Request, period: str):
+async def get_population_by_day_of_week(request: Request, period: str):
     """
     Method: GET
 
