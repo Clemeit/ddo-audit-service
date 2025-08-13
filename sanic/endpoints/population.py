@@ -95,12 +95,12 @@ async def get_unique_breakdown(request: Request, period: str):
 
     Description: Get the unique character count breakdown for the specified time period.
 
-    Supported periods: month, quarter
+    Supported periods: week, month, quarter
     """
     period = period.lower()
 
-    # Map periods to their corresponding utility functions
     period_functions = {
+        "week": population_utils.get_unique_character_and_guild_count_breakdown_week,
         "month": population_utils.get_unique_character_and_guild_count_breakdown_month,
         "quarter": population_utils.get_unique_character_and_guild_count_breakdown_quarter,
     }
@@ -134,7 +134,6 @@ async def get_stats_breakdown(request: Request, period: str):
     """
     period = period.lower()
 
-    # Map periods to their corresponding utility functions
     period_functions = {
         "quarter": population_utils.get_character_activity_stats_quarter,
     }
@@ -164,13 +163,90 @@ async def get_average_population(request: Request, period: str):
 
     Description: Get the average server population for the specified time period.
 
-    Supported periods: week, quarter
+    Supported periods: day, week, month, quarter, year
     """
     period = period.lower()
 
     period_functions = {
+        "day": population_utils.get_average_server_population_day,
         "week": population_utils.get_average_server_population_week,
+        "month": population_utils.get_average_server_population_month,
         "quarter": population_utils.get_average_server_population_quarter,
+        "year": population_utils.get_average_server_population_year,
+    }
+
+    if period not in period_functions:
+        return json(
+            {
+                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_functions.keys())}"
+            },
+            status=400,
+        )
+
+    try:
+        data = period_functions[period]()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@population_blueprint.get("/by-hour/<period>")
+async def get_hourly_population(request: Request, period: str):
+    """
+    Method: GET
+
+    Route: /by-hour/<period>
+
+    Description: Get the average server population per hour for the specified time period.
+
+    Supported periods: day, week, month, quarter, year
+    """
+    period = period.lower()
+
+    period_functions = {
+        "day": population_utils.get_hourly_server_population_day,
+        "week": population_utils.get_hourly_server_population_week,
+        "month": population_utils.get_hourly_server_population_month,
+        "quarter": population_utils.get_hourly_server_population_quarter,
+        "year": population_utils.get_hourly_server_population_year,
+    }
+
+    if period not in period_functions:
+        return json(
+            {
+                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_functions.keys())}"
+            },
+            status=400,
+        )
+
+    try:
+        data = period_functions[period]()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@population_blueprint.get("/by-day-of-week/<period>")
+async def get_hourly_population(request: Request, period: str):
+    """
+    Method: GET
+
+    Route: /by-day-of-week/<period>
+
+    Description: Get the average server population per day of the week for the specified time period.
+
+    Supported periods: day, week, month, quarter, year
+    """
+    period = period.lower()
+
+    period_functions = {
+        "day": population_utils.get_daily_server_population_day,
+        "week": population_utils.get_daily_server_population_week,
+        "month": population_utils.get_daily_server_population_month,
+        "quarter": population_utils.get_daily_server_population_quarter,
+        "year": population_utils.get_daily_server_population_year,
     }
 
     if period not in period_functions:
