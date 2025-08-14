@@ -1,7 +1,7 @@
 import requests
 from typing import Dict, Any
 from core import Check
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 
 
@@ -54,18 +54,26 @@ class ServerInfoCheck(Check):
                         continue
 
                     try:
-                        # Parse timestamps with proper error handling
+                        # Parse timestamps and ensure all are timezone-aware (UTC)
                         last_status_check = datetime.fromisoformat(
                             last_status_check_iso_string
                         )
+                        if last_status_check.tzinfo is None:
+                            last_status_check = last_status_check.replace(
+                                tzinfo=timezone.utc
+                            )
                         last_data_fetch = (
                             datetime.fromisoformat(last_data_fetch_iso_string)
                             if is_online
-                            else datetime.min
+                            else datetime.min.replace(tzinfo=timezone.utc)
                         )
+                        if last_data_fetch.tzinfo is None:
+                            last_data_fetch = last_data_fetch.replace(
+                                tzinfo=timezone.utc
+                            )
 
                         # Use UTC for comparison to avoid timezone issues
-                        now = datetime.now(tz=last_status_check.tzinfo)
+                        now = datetime.now(timezone.utc)
 
                         # Check if both timestamps are within the last minute
                         status_check_fresh = now - last_status_check < timedelta(
