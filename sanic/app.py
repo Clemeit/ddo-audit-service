@@ -11,6 +11,7 @@ from endpoints.verification import verification_blueprint
 from endpoints.quests import quest_blueprint
 from endpoints.areas import area_blueprint
 from endpoints.demographics import demographics_blueprint
+from endpoints.guilds import guild_blueprint
 from reports.server_status import get_game_info_scheduler
 from services.redis import close_redis_async, initialize_redis
 from services.postgres import initialize_postgres, close_postgres_client
@@ -37,6 +38,7 @@ app.blueprint(
         quest_blueprint,
         area_blueprint,
         demographics_blueprint,
+        guild_blueprint,
     ]
 )
 
