@@ -2317,7 +2317,7 @@ def get_character_activity_stats(days: int = 90, server_name: str = None) -> dic
 
 def get_guilds_by_name(guild_name: str) -> list[dict]:
     """
-    Gets the guild_name, server_name, and the character count for a partial guild name.
+    Gets the guild name, server name, character count, and average last update time for the top 10% of characters in a guild.
     """
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
