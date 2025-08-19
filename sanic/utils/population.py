@@ -570,6 +570,15 @@ def average_daily_data(
             )
         )
 
+    print(f"average_hourly_data: output count = {len(daily_averaged_data)}")
+    if len(daily_averaged_data) > 0:
+        print(
+            f"average_hourly_data: first output timestamp = {daily_averaged_data[0].timestamp}"
+        )
+        print(
+            f"average_hourly_data: last output timestamp = {daily_averaged_data[-1].timestamp}"
+        )
+
     return daily_averaged_data
 
 
