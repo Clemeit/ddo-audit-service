@@ -3,6 +3,7 @@ Guild endpoints.
 """
 
 import services.postgres as postgres_client
+from urllib.parse import unquote
 
 from sanic import Blueprint
 from sanic.request import Request
@@ -24,6 +25,10 @@ async def get_guilds_by_name(request: Request, guild_name: str):
 
     Description: Get guilds by name.
     """
+    try:
+        guild_name = unquote(guild_name)
+    except Exception as e:
+        return json({"message": "Invalid guild name."}, status=400)
 
     if not guild_name or len(guild_name) > GUILD_NAME_MAX_LENGTH:
         return json({"message": "Invalid guild name."}, status=400)

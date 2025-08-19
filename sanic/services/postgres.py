@@ -2323,13 +2323,12 @@ def get_guilds_by_name(guild_name: str) -> list[dict]:
         with conn.cursor() as cursor:
             # Use exact match for short guild names, partial match otherwise
             if len(guild_name) <= 3:
-                match_clause = "guild_name = %s"
                 match_value = guild_name
             else:
-                match_clause = "guild_name ILIKE %s"
                 match_value = f"%{guild_name}%"
 
-            query = f"""
+            cursor.execute(
+                """
                 WITH ranked_characters AS (
                     SELECT 
                         guild_name, 
@@ -2339,7 +2338,7 @@ def get_guilds_by_name(guild_name: str) -> list[dict]:
                         ROW_NUMBER() OVER (PARTITION BY guild_name, server_name ORDER BY last_update DESC) AS rn,
                         COUNT(*) OVER (PARTITION BY guild_name, server_name) AS total_count
                     FROM public.characters
-                    WHERE {match_clause}
+                    WHERE guild_name ILIKE %s
                 ), top_10_percent AS (
                     SELECT 
                         guild_name, 
@@ -2358,8 +2357,9 @@ def get_guilds_by_name(guild_name: str) -> list[dict]:
                 GROUP BY guild_name, server_name
                 ORDER BY character_count DESC
                 LIMIT 20
-            """
-            cursor.execute(query, (match_value,))
+            """,
+                (match_value,),
+            )
             guilds = cursor.fetchall()
             if not guilds:
                 return []
