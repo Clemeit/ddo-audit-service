@@ -2315,6 +2315,58 @@ def get_character_activity_stats(days: int = 90, server_name: str = None) -> dic
         }
 
 
+def get_guilds_by_name(guild_name: str) -> list[dict]:
+    """
+    Gets the guild name, server name, character count, and average last update time for the top 10% of characters in a guild.
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                WITH ranked_characters AS (
+                    SELECT 
+                        guild_name, 
+                        server_name, 
+                        last_update,
+                        EXTRACT(EPOCH FROM last_update) AS last_update_epoch,
+                        ROW_NUMBER() OVER (PARTITION BY guild_name, server_name ORDER BY last_update DESC) AS rn,
+                        COUNT(*) OVER (PARTITION BY guild_name, server_name) AS total_count
+                    FROM public.characters
+                    WHERE guild_name ILIKE %s
+                ), top_10_percent AS (
+                    SELECT 
+                        guild_name, 
+                        server_name,
+                        last_update_epoch,
+                        total_count
+                    FROM ranked_characters
+                    WHERE rn <= GREATEST(1, CEIL(total_count * 0.1))
+                )
+                SELECT 
+                    guild_name, 
+                    server_name, 
+                    MAX(total_count) as character_count,
+                    AVG(last_update_epoch) as avg_top_10_percent_last_update_epoch
+                FROM top_10_percent
+                GROUP BY guild_name, server_name
+                ORDER BY character_count DESC
+                """,
+                (f"%{guild_name}%",),
+            )
+            guilds = cursor.fetchall()
+            if not guilds:
+                return []
+            return [
+                {
+                    "guild_name": row[0],
+                    "server_name": row[1],
+                    "character_count": row[2],
+                    "avg_top_10_percent_last_update_epoch": row[3],
+                }
+                for row in guilds
+            ]
+
+
 def get_config() -> dict:
     """
     Get all configuration settings from the database.
