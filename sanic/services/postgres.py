@@ -2350,6 +2350,7 @@ def get_guilds_by_name(guild_name: str) -> list[dict]:
                 FROM top_10_percent
                 GROUP BY guild_name, server_name
                 ORDER BY character_count DESC
+                LIMIT 20
                 """,
                 (f"%{guild_name}%",),
             )
