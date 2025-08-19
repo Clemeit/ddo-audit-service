@@ -80,7 +80,7 @@ def get_game_population_week() -> list[dict]:
     return get_cached_data_with_fallback(
         "get_game_population_week",
         fetch_data,
-        POPULATION_1_WEEK_CACHE_TTL,
+        1,
     )
 
 
@@ -429,6 +429,7 @@ def average_hourly_data(
     input_data: list[PopulationPointInTime],
 ) -> list[PopulationPointInTime]:
     if len(input_data) == 0:
+        print("average_hourly_data: input_data is empty")
         return []
 
     hourly_averaged_data: list[PopulationPointInTime] = []
@@ -437,13 +438,17 @@ def average_hourly_data(
     def get_date_hour(dt: datetime):
         return (dt.date(), dt.hour)
 
+    print(f"average_hourly_data: first timestamp = {input_data[0].timestamp}")
+    print(f"average_hourly_data: last timestamp = {input_data[-1].timestamp}")
     current_dt = datetime.fromisoformat(input_data[0].timestamp)
     current_group = get_date_hour(current_dt)
     current_data_points: list[PopulationPointInTime] = []
 
-    for data_point in input_data:
+    for i, data_point in enumerate(input_data):
         data_point_datetime = datetime.fromisoformat(data_point.timestamp)
         group = get_date_hour(data_point_datetime)
+        if i == 0 or i == len(input_data) - 1:
+            print(f"average_hourly_data: index {i}, timestamp = {data_point.timestamp}")
 
         if group == current_group:
             current_data_points.append(data_point)
@@ -487,6 +492,15 @@ def average_hourly_data(
                 timestamp=timestamp_string,
                 data=averaged_data_points,
             )
+        )
+
+    print(f"average_hourly_data: output count = {len(hourly_averaged_data)}")
+    if len(hourly_averaged_data) > 0:
+        print(
+            f"average_hourly_data: first output timestamp = {hourly_averaged_data[0].timestamp}"
+        )
+        print(
+            f"average_hourly_data: last output timestamp = {hourly_averaged_data[-1].timestamp}"
         )
 
     return hourly_averaged_data
