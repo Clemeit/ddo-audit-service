@@ -2345,7 +2345,7 @@ def get_guilds_by_name(guild_name: str) -> list[dict]:
                 SELECT 
                     guild_name, 
                     server_name, 
-                    COUNT(*) as character_count,
+                    MAX(total_count) as character_count,
                     AVG(last_update_epoch) as avg_top_10_percent_last_update_epoch
                 FROM top_10_percent
                 GROUP BY guild_name, server_name
