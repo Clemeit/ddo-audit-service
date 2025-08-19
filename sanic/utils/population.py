@@ -433,21 +433,32 @@ def average_hourly_data(
 
     hourly_averaged_data: list[PopulationPointInTime] = []
 
-    current_hour = datetime.fromisoformat(input_data[0].timestamp).hour
+    # Use (date, hour) tuple for grouping
+    def get_date_hour(dt: datetime):
+        return (dt.date(), dt.hour)
+
+    current_dt = datetime.fromisoformat(input_data[0].timestamp)
+    current_group = get_date_hour(current_dt)
     current_data_points: list[PopulationPointInTime] = []
 
     for data_point in input_data:
         data_point_datetime = datetime.fromisoformat(data_point.timestamp)
-        data_point_hour = data_point_datetime.hour
+        group = get_date_hour(data_point_datetime)
 
-        if data_point_hour == current_hour:
+        if group == current_group:
             current_data_points.append(data_point)
         else:
             averaged_data_points = averaged_population_data_points(current_data_points)
             if len(current_data_points) > 0:
                 timestamp_string = datetime_to_datetime_string(
-                    datetime.fromisoformat(current_data_points[0].timestamp).replace(
-                        hour=current_hour, minute=0, second=0, microsecond=0
+                    data_point_datetime.replace(
+                        year=current_group[0].year,
+                        month=current_group[0].month,
+                        day=current_group[0].day,
+                        hour=current_group[1],
+                        minute=0,
+                        second=0,
+                        microsecond=0,
                     )
                 )
                 hourly_averaged_data.append(
@@ -456,8 +467,27 @@ def average_hourly_data(
                         data=averaged_data_points,
                     )
                 )
-            current_hour = data_point_hour
+            current_group = group
             current_data_points = [data_point]
+
+    # Process the last batch
+    if len(current_data_points) > 0:
+        last_dt = datetime.fromisoformat(current_data_points[0].timestamp)
+        timestamp_string = datetime_to_datetime_string(
+            last_dt.replace(
+                hour=current_group[1],
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+        )
+        averaged_data_points = averaged_population_data_points(current_data_points)
+        hourly_averaged_data.append(
+            PopulationPointInTime(
+                timestamp=timestamp_string,
+                data=averaged_data_points,
+            )
+        )
 
     return hourly_averaged_data
 
@@ -468,35 +498,65 @@ def average_daily_data(
     if len(input_data) == 0:
         return []
 
-    hourly_averaged_data: list[PopulationPointInTime] = []
+    daily_averaged_data: list[PopulationPointInTime] = []
 
-    current_day = datetime.fromisoformat(input_data[0].timestamp).day
+    # Use date object for grouping
+    def get_date(dt: datetime):
+        return dt.date()
+
+    current_dt = datetime.fromisoformat(input_data[0].timestamp)
+    current_group = get_date(current_dt)
     current_data_points: list[PopulationPointInTime] = []
 
     for data_point in input_data:
         data_point_datetime = datetime.fromisoformat(data_point.timestamp)
-        data_point_day = data_point_datetime.day
+        group = get_date(data_point_datetime)
 
-        if data_point_day == current_day:
+        if group == current_group:
             current_data_points.append(data_point)
         else:
             averaged_data_points = averaged_population_data_points(current_data_points)
             if len(current_data_points) > 0:
                 timestamp_string = datetime_to_datetime_string(
-                    datetime.fromisoformat(current_data_points[0].timestamp).replace(
-                        day=current_day, hour=0, minute=0, second=0, microsecond=0
+                    data_point_datetime.replace(
+                        year=current_group.year,
+                        month=current_group.month,
+                        day=current_group.day,
+                        hour=0,
+                        minute=0,
+                        second=0,
+                        microsecond=0,
                     )
                 )
-                hourly_averaged_data.append(
+                daily_averaged_data.append(
                     PopulationPointInTime(
                         timestamp=timestamp_string,
                         data=averaged_data_points,
                     )
                 )
-            current_day = data_point_day
+            current_group = group
             current_data_points = [data_point]
 
-    return hourly_averaged_data
+    # Process the last batch
+    if len(current_data_points) > 0:
+        last_dt = datetime.fromisoformat(current_data_points[0].timestamp)
+        timestamp_string = datetime_to_datetime_string(
+            last_dt.replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+        )
+        averaged_data_points = averaged_population_data_points(current_data_points)
+        daily_averaged_data.append(
+            PopulationPointInTime(
+                timestamp=timestamp_string,
+                data=averaged_data_points,
+            )
+        )
+
+    return daily_averaged_data
 
 
 def summed_population_data_points(
