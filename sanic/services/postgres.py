@@ -2063,26 +2063,29 @@ def get_game_population_yesterday() -> list[PopulationPointInTime]:
 
 def get_game_population_last_week() -> list[PopulationPointInTime]:
     """Get population data for the last week (full days)."""
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    yesterday_start = today - timedelta(days=7)
-    yesterday_end = today
-    return get_game_population(start_date=yesterday_start, end_date=yesterday_end)
+    # End at the start of the current hour
+    now = datetime.now()
+    end_of_range = now.replace(minute=0, second=0, microsecond=0)
+    start_of_range = end_of_range - timedelta(days=7)
+    return get_game_population(start_date=start_of_range, end_date=end_of_range)
 
 
 def get_game_population_last_month() -> list[PopulationPointInTime]:
     """Get population data for the last week (full days)."""
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    yesterday_start = today - timedelta(days=28)
-    yesterday_end = today
-    return get_game_population(start_date=yesterday_start, end_date=yesterday_end)
+    # End at the start of the current day
+    now = datetime.now()
+    end_of_range = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_range = end_of_range - timedelta(days=28)
+    return get_game_population(start_date=start_of_range, end_date=end_of_range)
 
 
 def get_game_population_last_year() -> list[PopulationPointInTime]:
     """Get population data for the last week (full days)."""
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    yesterday_start = today - timedelta(days=365)
-    yesterday_end = today
-    return get_game_population(start_date=yesterday_start, end_date=yesterday_end)
+    # End at the start of the current day
+    now = datetime.now()
+    end_of_range = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_range = end_of_range - timedelta(days=365)
+    return get_game_population(start_date=start_of_range, end_date=end_of_range)
 
 
 def get_unique_character_and_guild_count(
