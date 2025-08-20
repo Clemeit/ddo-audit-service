@@ -80,7 +80,7 @@ def get_game_population_week() -> list[dict]:
     return get_cached_data_with_fallback(
         "get_game_population_week",
         fetch_data,
-        1,
+        POPULATION_1_WEEK_CACHE_TTL,
     )
 
 
