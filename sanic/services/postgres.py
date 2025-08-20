@@ -2062,7 +2062,7 @@ def get_game_population_yesterday() -> list[PopulationPointInTime]:
 
 
 def get_game_population_last_week() -> list[PopulationPointInTime]:
-    """Get population data for the last week (full days)."""
+    """Get population data for the last week (full hours)."""
     # End at the start of the current hour
     now = datetime.now()
     end_of_range = now.replace(minute=0, second=0, microsecond=0)
@@ -2071,7 +2071,7 @@ def get_game_population_last_week() -> list[PopulationPointInTime]:
 
 
 def get_game_population_last_month() -> list[PopulationPointInTime]:
-    """Get population data for the last week (full days)."""
+    """Get population data for the last 28 days (full days)."""
     # End at the start of the current day
     now = datetime.now()
     end_of_range = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -2080,7 +2080,7 @@ def get_game_population_last_month() -> list[PopulationPointInTime]:
 
 
 def get_game_population_last_year() -> list[PopulationPointInTime]:
-    """Get population data for the last week (full days)."""
+    """Get population data for the last year (full days)."""
     # End at the start of the current day
     now = datetime.now()
     end_of_range = now.replace(hour=0, minute=0, second=0, microsecond=0)
