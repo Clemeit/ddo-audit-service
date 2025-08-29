@@ -236,10 +236,16 @@ async def delete_cache_key(request: Request, key: str):
 
     Description: Expire a Redis cache key immediately.
     """
+
+    if not key:
+        raise ValueError("Redis key must not be None or empty.")
+
     try:
         redis_client.expire_key_immediately(key)
     except Exception as e:
-        return json({"message": str(e)}, status=500)
+        return json(
+            {"message": "A failure occurred expiring the Redis key."}, status=500
+        )
     return empty()
 
 
