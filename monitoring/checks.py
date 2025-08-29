@@ -79,11 +79,7 @@ class ServerInfoCheck(Check):
                         status_check_fresh = now - last_status_check < timedelta(
                             minutes=1
                         )
-                        data_fetch_fresh = (
-                            now - last_data_fetch < timedelta(minutes=1)
-                            if is_online
-                            else True
-                        )  # If server is offline, we don't check data fetch freshness
+                        data_fetch_fresh = now - last_data_fetch < timedelta(minutes=1)
 
                         has_online_characters = (
                             server_info.get("character_count", 0) > 0
@@ -100,7 +96,7 @@ class ServerInfoCheck(Check):
                             )
                             continue
 
-                        if status_check_fresh and data_fetch_fresh:
+                        if status_check_fresh and (data_fetch_fresh or not is_online):
                             healthy_servers.append(
                                 {
                                     "server": server_name,

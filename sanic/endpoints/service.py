@@ -227,4 +227,26 @@ async def post_page_message(request: Request):
     return json({"data": added_page_message.model_dump()})
 
 
+@service_blueprint.delete("/cache/<key:str>")
+async def delete_cache_key(request: Request, key: str):
+    """
+    Method: DELETE
+
+    Route: /service/cache/<key>
+
+    Description: Expire a Redis cache key immediately.
+    """
+
+    if not key:
+        raise ValueError("Redis key must not be None or empty.")
+
+    try:
+        redis_client.expire_key_immediately(key)
+    except Exception as e:
+        return json(
+            {"message": "A failure occurred expiring the Redis key."}, status=500
+        )
+    return empty()
+
+
 # ===================================

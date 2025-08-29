@@ -947,4 +947,10 @@ def set_by_key(key: str, data: dict, ttl: int = None):
             client.expire(key, ttl)  # Set TTL if provided
 
 
+def expire_key_immediately(key: str):
+    """Expire a Redis key immediately (force removal from cache)."""
+    with get_redis_client() as client:
+        client.expire(key, 0)
+
+
 # ======= Game Population ========
