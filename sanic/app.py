@@ -25,7 +25,7 @@ APP_HOST = os.getenv("APP_HOST")
 APP_PORT = int(os.getenv("APP_PORT"))
 
 app = Sanic("ddo-audit-server")
-app.config.REQUEST_MAX_SIZE = 209715200  # 200 MB
+app.config.REQUEST_MAX_SIZE = 500 * 1024 * 1024  # 500 MB
 app.blueprint(
     [
         character_blueprint,
