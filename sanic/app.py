@@ -24,7 +24,7 @@ API_KEY = os.getenv("API_KEY")
 APP_HOST = os.getenv("APP_HOST")
 APP_PORT = int(os.getenv("APP_PORT"))
 
-app = Sanic("ddo-audit-server")
+app = Sanic("ddo-audit-server", config={"REQUEST_MAX_SIZE": 209_715_200})
 app.blueprint(
     [
         character_blueprint,
