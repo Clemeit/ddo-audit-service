@@ -1184,16 +1184,17 @@ def get_average_population_by_server(
                 """
                 SELECT
                     server_name,
-                    AVG(character_count) AS avg_population
+                    AVG(character_count) AS avg_character_count,
+                    AVG(lfm_count) AS avg_lfm_count
                 FROM (
                     SELECT
                         jsonb_object_keys(data->'servers') AS server_name,
-                        (data->'servers'->jsonb_object_keys(data->'servers')->>'character_count')::int AS character_count
+                        (data->'servers'->jsonb_object_keys(data->'servers')->>'character_count')::int AS character_count,
+                        (data->'servers'->jsonb_object_keys(data->'servers')->>'lfm_count')::int AS lfm_count
                     FROM public.game_info
                     WHERE "timestamp" > NOW() - (make_interval(days => %s))
                 ) AS sub
                 GROUP BY server_name
-                ORDER BY avg_population DESC
                 """,
                 (lookback_in_days,),
             )
@@ -1201,11 +1202,17 @@ def get_average_population_by_server(
             if not result:
                 return {}
             output = {}
-            for server_name, avg_population in result:
-                if avg_population is not None:
-                    output[server_name] = float(avg_population)
-                else:
-                    output[server_name] = None
+            for server_name, avg_character_count, avg_lfm_count in result:
+                output[server_name] = {
+                    "avg_character_count": (
+                        float(avg_character_count)
+                        if avg_character_count is not None
+                        else None
+                    ),
+                    "avg_lfm_count": (
+                        float(avg_lfm_count) if avg_lfm_count is not None else None
+                    ),
+                }
             return output
 
 
@@ -1223,11 +1230,13 @@ def get_average_population_by_hour_per_server(
                 SELECT
                     server_name,
                     EXTRACT(HOUR FROM "timestamp") AS hour,
-                    AVG(character_count) AS avg_population
+                    AVG(character_count) AS avg_character_count,
+                    AVG(lfm_count) AS avg_lfm_count
                 FROM (
                     SELECT
                         jsonb_object_keys(data->'servers') AS server_name,
                         (data->'servers'->jsonb_object_keys(data->'servers')->>'character_count')::int AS character_count,
+                        (data->'servers'->jsonb_object_keys(data->'servers')->>'lfm_count')::int AS lfm_count,
                         "timestamp"
                     FROM public.game_info
                     WHERE "timestamp" > NOW() - (make_interval(days => %s))
@@ -1241,12 +1250,19 @@ def get_average_population_by_hour_per_server(
             if not result:
                 return {}
             output = {}
-            for server_name, hour, avg_population in result:
+            for server_name, hour, avg_character_count, avg_lfm_count in result:
                 if server_name not in output:
                     output[server_name] = {}
-                output[server_name][int(hour)] = (
-                    float(avg_population) if avg_population is not None else None
-                )
+                output[server_name][int(hour)] = {
+                    "avg_character_count": (
+                        float(avg_character_count)
+                        if avg_character_count is not None
+                        else None
+                    ),
+                    "avg_lfm_count": (
+                        float(avg_lfm_count) if avg_lfm_count is not None else None
+                    ),
+                }
             return output
 
 
@@ -1264,11 +1280,13 @@ def get_average_population_by_day_of_week_per_server(
                 SELECT
                     server_name,
                     EXTRACT(DOW FROM "timestamp") AS day_of_week,
-                    AVG(character_count) AS avg_population
+                    AVG(character_count) AS avg_character_count,
+                    AVG(lfm_count) AS avg_lfm_count
                 FROM (
                     SELECT
                         jsonb_object_keys(data->'servers') AS server_name,
                         (data->'servers'->jsonb_object_keys(data->'servers')->>'character_count')::int AS character_count,
+                        (data->'servers'->jsonb_object_keys(data->'servers')->>'lfm_count')::int AS lfm_count,
                         "timestamp"
                     FROM public.game_info
                     WHERE "timestamp" > NOW() - (make_interval(days => %s))
@@ -1282,12 +1300,19 @@ def get_average_population_by_day_of_week_per_server(
             if not result:
                 return {}
             output = {}
-            for server_name, day_of_week, avg_population in result:
+            for server_name, day_of_week, avg_character_count, avg_lfm_count in result:
                 if server_name not in output:
                     output[server_name] = {}
-                output[server_name][int(day_of_week)] = (
-                    float(avg_population) if avg_population is not None else None
-                )
+                output[server_name][int(day_of_week)] = {
+                    "avg_character_count": (
+                        float(avg_character_count)
+                        if avg_character_count is not None
+                        else None
+                    ),
+                    "avg_lfm_count": (
+                        float(avg_lfm_count) if avg_lfm_count is not None else None
+                    ),
+                }
             return output
 
 
@@ -2076,6 +2101,15 @@ def get_game_population_last_month() -> list[PopulationPointInTime]:
     now = datetime.now()
     end_of_range = now.replace(hour=0, minute=0, second=0, microsecond=0)
     start_of_range = end_of_range - timedelta(days=28)
+    return get_game_population(start_date=start_of_range, end_date=end_of_range)
+
+
+def get_game_population_last_quarter() -> list[PopulationPointInTime]:
+    """Get population data for the last 90 days (full days)."""
+    # End at the start of the current day
+    now = datetime.now()
+    end_of_range = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_range = end_of_range - timedelta(days=90)
     return get_game_population(start_date=start_of_range, end_date=end_of_range)
 
 

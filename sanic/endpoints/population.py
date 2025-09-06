@@ -30,6 +30,7 @@ async def get_population_timeseries(request: Request, period: str):
         "day": population_utils.get_game_population_day,
         "week": population_utils.get_game_population_week,
         "month": population_utils.get_game_population_month,
+        "quarter": population_utils.get_game_population_quarter,
         "year": population_utils.get_game_population_year,
     }
 
@@ -67,6 +68,7 @@ async def get_population_totals(request: Request, period: str):
         "day": population_utils.get_game_population_totals_day,
         "week": population_utils.get_game_population_totals_week,
         "month": population_utils.get_game_population_totals_month,
+        "quarter": population_utils.get_game_population_totals_quarter,
         "year": population_utils.get_game_population_totals_year,
     }
 
@@ -100,9 +102,11 @@ async def get_unique_breakdown(request: Request, period: str):
     period = period.lower()
 
     period_functions = {
+        "day": population_utils.get_unique_character_and_guild_count_breakdown_day,
         "week": population_utils.get_unique_character_and_guild_count_breakdown_week,
         "month": population_utils.get_unique_character_and_guild_count_breakdown_month,
         "quarter": population_utils.get_unique_character_and_guild_count_breakdown_quarter,
+        "year": population_utils.get_unique_character_and_guild_count_breakdown_year,
     }
 
     if period not in period_functions:
