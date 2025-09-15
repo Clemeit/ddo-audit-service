@@ -229,7 +229,7 @@ def get_unique_character_and_guild_count_breakdown_day() -> dict:
     return get_cached_data_with_fallback(
         "get_unique_character_and_guild_count_breakdown_day",
         lambda: postgres_client.get_unique_character_and_guild_count(1),
-        POPULATION_1_WEEK_CACHE_TTL,
+        POPULATION_1_DAY_CACHE_TTL,
     )
 
 

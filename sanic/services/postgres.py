@@ -1195,6 +1195,7 @@ def get_average_population_by_server(
                     WHERE "timestamp" > NOW() - (make_interval(days => %s))
                 ) AS sub
                 GROUP BY server_name
+                ORDER BY server_name
                 """,
                 (lookback_in_days,),
             )
