@@ -37,6 +37,7 @@ def get_quests() -> tuple[list[dict], str, str]:
             )
         database_quests = postgres_client.get_all_quests()
         if not database_quests:
+            print("No quests found in the database.")
             return ([], None, None)
         redis_client.set_known_quests(database_quests)
         return (
