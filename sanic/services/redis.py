@@ -827,7 +827,7 @@ def set_known_areas(areas: list[Area]):
 def get_known_quests() -> dict:
     """Get all quests from the cache."""
     with get_redis_client() as client:
-        return client.json().get("known_quests")
+        return client.json().get("known_quests") or {}
 
 
 def set_known_quests(quests: list[Quest]):
