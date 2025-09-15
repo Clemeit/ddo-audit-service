@@ -123,6 +123,25 @@ def get_game_population_month() -> list[dict]:
     )
 
 
+def get_game_population_quarter() -> list[dict]:
+    """
+    Gets 1 quarter of game population reported as daily averages.
+    Checks cache then database.
+    """
+
+    def fetch_data():
+        postgres_data = postgres_client.get_game_population_last_quarter()
+        averaged_data = average_daily_data(postgres_data)
+        # normalized_data = normalize_population_data(averaged_data)
+        return [datum.model_dump() for datum in averaged_data]
+
+    return get_cached_data_with_fallback(
+        "get_game_population_quarter",
+        fetch_data,
+        POPULATION_1_QUARTER_CACHE_TTL,
+    )
+
+
 def get_game_population_totals_month() -> list[dict]:
     """
     Gets 1 month of total game population per server.
@@ -140,6 +159,26 @@ def get_game_population_totals_month() -> list[dict]:
         "get_game_population_totals_month",
         fetch_data,
         POPULATION_1_MONTH_CACHE_TTL,
+    )
+
+
+def get_game_population_totals_quarter() -> list[dict]:
+    """
+    Gets 1 quarter of total game population per server.
+    Checks cache then database.
+    """
+
+    def fetch_data():
+        postgres_data = postgres_client.get_game_population_last_quarter()
+        _, total_data = summed_population_data_points(postgres_data)
+        return {
+            serverName: datum.model_dump() for serverName, datum in total_data.items()
+        }
+
+    return get_cached_data_with_fallback(
+        "get_game_population_totals_quarter",
+        fetch_data,
+        POPULATION_1_QUARTER_CACHE_TTL,
     )
 
 
@@ -182,6 +221,18 @@ def get_game_population_totals_year() -> list[dict]:
     )
 
 
+def get_unique_character_and_guild_count_breakdown_day() -> dict:
+    """
+    Gets a unique character and guild count breakdown for the last day.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_unique_character_and_guild_count_breakdown_day",
+        lambda: postgres_client.get_unique_character_and_guild_count(1),
+        POPULATION_1_DAY_CACHE_TTL,
+    )
+
+
 def get_unique_character_and_guild_count_breakdown_week() -> dict:
     """
     Gets a unique character and guild count breakdown for the last week.
@@ -215,6 +266,18 @@ def get_unique_character_and_guild_count_breakdown_quarter() -> dict:
         "get_unique_character_and_guild_count_breakdown_quarter",
         lambda: postgres_client.get_unique_character_and_guild_count(90),
         POPULATION_1_QUARTER_CACHE_TTL,
+    )
+
+
+def get_unique_character_and_guild_count_breakdown_year() -> dict:
+    """
+    Gets a unique character and guild count breakdown for the last year.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_unique_character_and_guild_count_breakdown_year",
+        lambda: postgres_client.get_unique_character_and_guild_count(365),
+        POPULATION_1_YEAR_CACHE_TTL,
     )
 
 
