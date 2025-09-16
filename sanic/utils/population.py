@@ -473,7 +473,9 @@ def get_daily_server_population_year() -> dict[str, Optional[float]]:
     )
 
 
-def get_by_hour_and_day_of_week_server_population_week() -> dict[str, Optional[float]]:
+def get_by_hour_and_day_of_week_server_population_week() -> (
+    dict[str, dict[int, dict[int, dict[str, Optional[float]]]]]
+):
     """
     Gets 7 days of average hourly server population data broken down by day of week.
     Checks cache then database.
@@ -487,7 +489,9 @@ def get_by_hour_and_day_of_week_server_population_week() -> dict[str, Optional[f
     )
 
 
-def get_by_hour_and_day_of_week_server_population_month() -> dict[str, Optional[float]]:
+def get_by_hour_and_day_of_week_server_population_month() -> (
+    dict[str, dict[int, dict[int, dict[str, Optional[float]]]]]
+):
     """
     Gets 28 days of average hourly server population data broken down by day of week.
     Checks cache then database.
@@ -502,7 +506,7 @@ def get_by_hour_and_day_of_week_server_population_month() -> dict[str, Optional[
 
 
 def get_by_hour_and_day_of_week_server_population_quarter() -> (
-    dict[str, Optional[float]]
+    dict[str, dict[int, dict[int, dict[str, Optional[float]]]]]
 ):
     """
     Gets 90 days of average hourly server population data broken down by day of week.
@@ -517,7 +521,9 @@ def get_by_hour_and_day_of_week_server_population_quarter() -> (
     )
 
 
-def get_by_hour_and_day_of_week_server_population_year() -> dict[str, Optional[float]]:
+def get_by_hour_and_day_of_week_server_population_year() -> (
+    dict[str, dict[int, dict[int, dict[str, Optional[float]]]]]
+):
     """
     Gets 365 days of average hourly server population data broken down by day of week.
     Checks cache then database.
