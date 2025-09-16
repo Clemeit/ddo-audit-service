@@ -15,7 +15,7 @@ area_blueprint = Blueprint("areas", url_prefix="/areas", version=1)
 
 
 @area_blueprint.get("")
-async def get_all_areas(request: Request):
+async def get_all_areas(request: Request, force: bool = False):
     """
     Method: GET
 
@@ -25,7 +25,7 @@ async def get_all_areas(request: Request):
     """
 
     try:
-        areas_list, source, timestamp = get_areas()
+        areas_list, source, timestamp = get_areas(skip_cache=force)
         if not areas_list:
             return json({"message": "no areas found"}, status=404)
     except Exception as e:
@@ -90,13 +90,15 @@ async def update_areas(request: Request):
         areas_list: list[Area] = []
         for area in raw_areas_list:
             area: dict
-            areas_list.append(Area(
-                id=int(area.get("areaid", 0)),
-                name=area.get("name", ""),
-                is_public=True if area.get("ispublicspace") == "1" else False,
-                region=area.get("region", ""),
-                is_wilderness=False
-            ))
+            areas_list.append(
+                Area(
+                    id=int(area.get("areaid", 0)),
+                    name=area.get("name", ""),
+                    is_public=True if area.get("ispublicspace") == "1" else False,
+                    region=area.get("region", ""),
+                    is_wilderness=False,
+                )
+            )
 
         postgres_client.update_areas(areas_list)
     except Exception as e:

@@ -811,7 +811,7 @@ def set_challenge_for_character_by_character_id(character_id: int, challenge_wor
 def get_known_areas() -> dict:
     """Get all areas from the cache."""
     with get_redis_client() as client:
-        return client.json().get("known_areas")
+        return client.json().get("known_areas") or {}
 
 
 def set_known_areas(areas: list[Area]):

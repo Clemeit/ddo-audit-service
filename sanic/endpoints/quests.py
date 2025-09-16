@@ -54,7 +54,7 @@ async def get_quest_by_id(request: Request, quest_id: int):
 
 
 @quest_blueprint.get("")
-async def get_quests_endpoint(request: Request):
+async def get_all_quests(request: Request, force: bool = False):
     """
     Method: GET
 
@@ -64,7 +64,7 @@ async def get_quests_endpoint(request: Request):
     """
 
     try:
-        quest_list, source, timestamp = get_quests()
+        quest_list, source, timestamp = get_quests(skip_cache=force)
         if not quest_list:
             return json({"message": "no quests found"}, status=404)
     except Exception as e:

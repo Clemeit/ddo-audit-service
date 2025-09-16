@@ -20,23 +20,25 @@ def get_valid_area_ids() -> tuple[list[int], str, str]:
         return ([], None, None)
 
 
-def get_areas() -> tuple[list[dict], str, str]:
+def get_areas(skip_cache: bool = False) -> tuple[list[dict], str, str]:
     """
     Get all areas from the cache. If the cache is empty, fetch from the database
     and update the cache.
     """
     try:
-        known_areas_cached_data = redis_client.get_known_areas()
-        cached_areas = known_areas_cached_data.get("areas")
-        cached_timestamp: float = known_areas_cached_data.get("timestamp")
-        if cached_areas and time() - cached_timestamp < VALID_AREA_CACHE_TTL:
-            return (
-                cached_areas,
-                "cache",
-                timestamp_to_datetime_string(cached_timestamp),
-            )
+        if not skip_cache:
+            known_areas_cached_data = redis_client.get_known_areas()
+            cached_areas = known_areas_cached_data.get("areas")
+            cached_timestamp: float = known_areas_cached_data.get("timestamp")
+            if cached_areas and time() - cached_timestamp < VALID_AREA_CACHE_TTL:
+                return (
+                    cached_areas,
+                    "cache",
+                    timestamp_to_datetime_string(cached_timestamp),
+                )
         database_areas = postgres_client.get_all_areas()
         if not database_areas:
+            print("No areas found in the database.")
             return ([], None, None)
         redis_client.set_known_areas(database_areas)
         return (
