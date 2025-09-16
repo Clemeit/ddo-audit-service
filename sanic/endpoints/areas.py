@@ -15,7 +15,7 @@ area_blueprint = Blueprint("areas", url_prefix="/areas", version=1)
 
 
 @area_blueprint.get("")
-async def get_all_areas(request: Request, force: bool = False):
+async def get_all_areas(request: Request):
     """
     Method: GET
 
@@ -25,6 +25,7 @@ async def get_all_areas(request: Request, force: bool = False):
     """
 
     try:
+        force = request.args.get("force", "false").lower() == "true"
         areas_list, source, timestamp = get_areas(skip_cache=force)
         if not areas_list:
             return json({"message": "no areas found"}, status=404)
