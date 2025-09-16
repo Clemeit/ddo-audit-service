@@ -1317,6 +1317,66 @@ def get_average_population_by_day_of_week_per_server(
             return output
 
 
+def get_average_population_by_hour_and_day_of_week_per_server(
+    lookback_in_days: int = 90,
+) -> dict[str, dict[int, dict[int, dict[str, Optional[float]]]]]:
+    """
+    Gets the average population by hour of the day (0-23) and day of week (0-6, where 0 is Sunday) per server for the provided lookback.
+    Returns a nested dict: {server_name: {day_of_week: {hour: {...}}}}
+    """
+    validate_lookback(lookback_in_days)
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    server_name,
+                    EXTRACT(DOW FROM "timestamp") AS day_of_week,
+                    EXTRACT(HOUR FROM "timestamp") AS hour,
+                    AVG(character_count) AS avg_character_count,
+                    AVG(lfm_count) AS avg_lfm_count
+                FROM (
+                    SELECT
+                        jsonb_object_keys(data->'servers') AS server_name,
+                        (data->'servers'->jsonb_object_keys(data->'servers')->>'character_count')::int AS character_count,
+                        (data->'servers'->jsonb_object_keys(data->'servers')->>'lfm_count')::int AS lfm_count,
+                        "timestamp"
+                    FROM public.game_info
+                    WHERE "timestamp" > NOW() - (make_interval(days => %s))
+                ) AS sub
+                GROUP BY server_name, day_of_week, hour
+                ORDER BY server_name, day_of_week, hour
+                """,
+                (lookback_in_days,),
+            )
+            result = cursor.fetchall()
+            if not result:
+                return {}
+            output = {}
+            for (
+                server_name,
+                day_of_week,
+                hour,
+                avg_character_count,
+                avg_lfm_count,
+            ) in result:
+                if server_name not in output:
+                    output[server_name] = {}
+                if int(day_of_week) not in output[server_name]:
+                    output[server_name][int(day_of_week)] = {}
+                output[server_name][int(day_of_week)][int(hour)] = {
+                    "avg_character_count": (
+                        float(avg_character_count)
+                        if avg_character_count is not None
+                        else None
+                    ),
+                    "avg_lfm_count": (
+                        float(avg_lfm_count) if avg_lfm_count is not None else None
+                    ),
+                }
+            return output
+
+
 def get_game_population_relative(days: int = 1) -> list[PopulationPointInTime]:
     """
     Get population info for a relative date range starting at some

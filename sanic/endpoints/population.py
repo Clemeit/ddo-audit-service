@@ -267,3 +267,39 @@ async def get_population_by_day_of_week(request: Request, period: str):
         return json({"message": str(e)}, status=500)
 
     return json({"data": data})
+
+
+@population_blueprint.get("/by-hour-and-day-of-week/<period>")
+async def get_population_by_hour_and_day_of_week(request: Request, period: str):
+    """
+    Method: GET
+
+    Route: /by-hour-and-day-of-week/<period>
+
+    Description: Get the average server population per hour and by day of week for the specified time period.
+
+    Supported periods: week, month, quarter, year
+    """
+    period = period.lower()
+
+    period_functions = {
+        "week": population_utils.get_by_hour_and_day_of_week_server_population_week,
+        "month": population_utils.get_by_hour_and_day_of_week_server_population_month,
+        "quarter": population_utils.get_by_hour_and_day_of_week_server_population_quarter,
+        "year": population_utils.get_by_hour_and_day_of_week_server_population_year,
+    }
+
+    if period not in period_functions:
+        return json(
+            {
+                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_functions.keys())}"
+            },
+            status=400,
+        )
+
+    try:
+        data = period_functions[period]()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})

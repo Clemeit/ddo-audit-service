@@ -473,6 +473,64 @@ def get_daily_server_population_year() -> dict[str, Optional[float]]:
     )
 
 
+def get_by_hour_and_day_of_week_server_population_week() -> dict[str, Optional[float]]:
+    """
+    Gets 7 days of average hourly server population data broken down by day of week.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_by_hour_and_day_of_week_server_population_week",
+        lambda: postgres_client.get_average_population_by_hour_and_day_of_week_per_server(
+            7
+        ),
+        POPULATION_1_WEEK_CACHE_TTL,
+    )
+
+
+def get_by_hour_and_day_of_week_server_population_month() -> dict[str, Optional[float]]:
+    """
+    Gets 28 days of average hourly server population data broken down by day of week.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_by_hour_and_day_of_week_server_population_month",
+        lambda: postgres_client.get_average_population_by_hour_and_day_of_week_per_server(
+            28
+        ),
+        POPULATION_1_MONTH_CACHE_TTL,
+    )
+
+
+def get_by_hour_and_day_of_week_server_population_quarter() -> (
+    dict[str, Optional[float]]
+):
+    """
+    Gets 90 days of average hourly server population data broken down by day of week.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_by_hour_and_day_of_week_server_population_quarter",
+        lambda: postgres_client.get_average_population_by_hour_and_day_of_week_per_server(
+            90
+        ),
+        POPULATION_1_QUARTER_CACHE_TTL,
+    )
+
+
+def get_by_hour_and_day_of_week_server_population_year() -> dict[str, Optional[float]]:
+    """
+    Gets 365 days of average hourly server population data broken down by day of week.
+    Checks cache then database.
+    """
+    return get_cached_data_with_fallback(
+        "get_by_hour_and_day_of_week_server_population_year",
+        lambda: postgres_client.get_average_population_by_hour_and_day_of_week_per_server(
+            365
+        ),
+        POPULATION_1_YEAR_CACHE_TTL,
+    )
+
+
 # ===== HELPER FUNCTIONS =====
 
 
