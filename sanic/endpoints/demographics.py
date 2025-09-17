@@ -7,6 +7,7 @@ from sanic.request import Request
 from sanic.response import json
 
 import utils.demographics as demographics_utils
+from utils.demographics import ReportLookback
 
 demographics_blueprint = Blueprint(
     "demographics", url_prefix="/demographics", version=1
@@ -26,10 +27,14 @@ async def get_population_race(request: Request, period: str):
     """
     period = period.lower()
 
-    # Map periods to their corresponding utility functions
     period_functions = {
-        "week": demographics_utils.get_race_demographics_week,
-        "quarter": demographics_utils.get_race_demographics_quarter,
+        "day": lambda: demographics_utils.get_race_distribution(ReportLookback.day),
+        "week": lambda: demographics_utils.get_race_distribution(ReportLookback.week),
+        "month": lambda: demographics_utils.get_race_distribution(ReportLookback.month),
+        "quarter": lambda: demographics_utils.get_race_distribution(
+            ReportLookback.quarter
+        ),
+        "year": lambda: demographics_utils.get_race_distribution(ReportLookback.year),
     }
 
     if period not in period_functions:
@@ -61,10 +66,16 @@ async def get_population_gender(request: Request, period: str):
     """
     period = period.lower()
 
-    # Map periods to their corresponding utility functions
     period_functions = {
-        "week": demographics_utils.get_gender_demographics_week,
-        "quarter": demographics_utils.get_gender_demographics_quarter,
+        "day": lambda: demographics_utils.get_gender_distribution(ReportLookback.day),
+        "week": lambda: demographics_utils.get_gender_distribution(ReportLookback.week),
+        "month": lambda: demographics_utils.get_gender_distribution(
+            ReportLookback.month
+        ),
+        "quarter": lambda: demographics_utils.get_gender_distribution(
+            ReportLookback.quarter
+        ),
+        "year": lambda: demographics_utils.get_gender_distribution(ReportLookback.year),
     }
 
     if period not in period_functions:
@@ -96,10 +107,22 @@ async def get_population_total_level(request: Request, period: str):
     """
     period = period.lower()
 
-    # Map periods to their corresponding utility functions
     period_functions = {
-        "week": demographics_utils.get_total_level_demographics_week,
-        "quarter": demographics_utils.get_total_level_demographics_quarter,
+        "day": lambda: demographics_utils.get_total_level_distribution(
+            ReportLookback.day
+        ),
+        "week": lambda: demographics_utils.get_total_level_distribution(
+            ReportLookback.week
+        ),
+        "month": lambda: demographics_utils.get_total_level_distribution(
+            ReportLookback.month
+        ),
+        "quarter": lambda: demographics_utils.get_total_level_distribution(
+            ReportLookback.quarter
+        ),
+        "year": lambda: demographics_utils.get_total_level_distribution(
+            ReportLookback.year
+        ),
     }
 
     if period not in period_functions:
@@ -131,10 +154,22 @@ async def get_population_class_count(request: Request, period: str):
     """
     period = period.lower()
 
-    # Map periods to their corresponding utility functions
     period_functions = {
-        "week": demographics_utils.get_class_count_demographics_week,
-        "quarter": demographics_utils.get_class_count_demographics_quarter,
+        "day": lambda: demographics_utils.get_class_count_distribution(
+            ReportLookback.day
+        ),
+        "week": lambda: demographics_utils.get_class_count_distribution(
+            ReportLookback.week
+        ),
+        "month": lambda: demographics_utils.get_class_count_distribution(
+            ReportLookback.month
+        ),
+        "quarter": lambda: demographics_utils.get_class_count_distribution(
+            ReportLookback.quarter
+        ),
+        "year": lambda: demographics_utils.get_class_count_distribution(
+            ReportLookback.year
+        ),
     }
 
     if period not in period_functions:
@@ -166,10 +201,22 @@ async def get_population_primary_class(request: Request, period: str):
     """
     period = period.lower()
 
-    # Map periods to their corresponding utility functions
     period_functions = {
-        "week": demographics_utils.get_primary_class_distribution_week,
-        "quarter": demographics_utils.get_primary_class_distribution_quarter,
+        "day": lambda: demographics_utils.get_primary_class_distribution(
+            ReportLookback.day
+        ),
+        "week": lambda: demographics_utils.get_primary_class_distribution(
+            ReportLookback.week
+        ),
+        "month": lambda: demographics_utils.get_primary_class_distribution(
+            ReportLookback.month
+        ),
+        "quarter": lambda: demographics_utils.get_primary_class_distribution(
+            ReportLookback.quarter
+        ),
+        "year": lambda: demographics_utils.get_primary_class_distribution(
+            ReportLookback.year
+        ),
     }
 
     if period not in period_functions:

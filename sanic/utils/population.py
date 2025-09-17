@@ -5,11 +5,11 @@ from utils.time import datetime_to_datetime_string
 from typing import Optional
 
 from constants.redis import (
-    POPULATION_1_DAY_CACHE_TTL,
-    POPULATION_1_WEEK_CACHE_TTL,
-    POPULATION_1_MONTH_CACHE_TTL,
-    POPULATION_1_YEAR_CACHE_TTL,
-    POPULATION_1_QUARTER_CACHE_TTL,
+    REPORT_1_DAY_CACHE_TTL,
+    REPORT_1_WEEK_CACHE_TTL,
+    REPORT_1_MONTH_CACHE_TTL,
+    REPORT_1_YEAR_CACHE_TTL,
+    REPORT_1_QUARTER_CACHE_TTL,
 )
 
 from datetime import datetime
@@ -41,7 +41,7 @@ def get_game_population_day() -> list[dict]:
     return get_cached_data_with_fallback(
         "get_game_population_day",
         fetch_and_normalize_data,
-        POPULATION_1_DAY_CACHE_TTL,
+        REPORT_1_DAY_CACHE_TTL,
     )
 
 
@@ -61,7 +61,7 @@ def get_game_population_totals_day() -> list[dict]:
     return get_cached_data_with_fallback(
         "get_game_population_totals_day",
         fetch_data,
-        POPULATION_1_DAY_CACHE_TTL,
+        REPORT_1_DAY_CACHE_TTL,
     )
 
 
@@ -80,7 +80,7 @@ def get_game_population_week() -> list[dict]:
     return get_cached_data_with_fallback(
         "get_game_population_week",
         fetch_data,
-        POPULATION_1_WEEK_CACHE_TTL,
+        REPORT_1_WEEK_CACHE_TTL,
     )
 
 
@@ -100,7 +100,7 @@ def get_game_population_totals_week() -> list[dict]:
     return get_cached_data_with_fallback(
         "get_game_population_totals_week",
         fetch_data,
-        POPULATION_1_WEEK_CACHE_TTL,
+        REPORT_1_WEEK_CACHE_TTL,
     )
 
 
@@ -119,7 +119,7 @@ def get_game_population_month() -> list[dict]:
     return get_cached_data_with_fallback(
         "get_game_population_month",
         fetch_data,
-        POPULATION_1_MONTH_CACHE_TTL,
+        REPORT_1_MONTH_CACHE_TTL,
     )
 
 
@@ -138,7 +138,7 @@ def get_game_population_quarter() -> list[dict]:
     return get_cached_data_with_fallback(
         "get_game_population_quarter",
         fetch_data,
-        POPULATION_1_QUARTER_CACHE_TTL,
+        REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
@@ -158,7 +158,7 @@ def get_game_population_totals_month() -> list[dict]:
     return get_cached_data_with_fallback(
         "get_game_population_totals_month",
         fetch_data,
-        POPULATION_1_MONTH_CACHE_TTL,
+        REPORT_1_MONTH_CACHE_TTL,
     )
 
 
@@ -178,7 +178,7 @@ def get_game_population_totals_quarter() -> list[dict]:
     return get_cached_data_with_fallback(
         "get_game_population_totals_quarter",
         fetch_data,
-        POPULATION_1_QUARTER_CACHE_TTL,
+        REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
@@ -197,7 +197,7 @@ def get_game_population_year() -> list[dict]:
     return get_cached_data_with_fallback(
         "get_game_population_year",
         fetch_data,
-        POPULATION_1_YEAR_CACHE_TTL,
+        REPORT_1_YEAR_CACHE_TTL,
     )
 
 
@@ -217,7 +217,7 @@ def get_game_population_totals_year() -> list[dict]:
     return get_cached_data_with_fallback(
         "get_game_population_totals_year",
         fetch_data,
-        POPULATION_1_YEAR_CACHE_TTL,
+        REPORT_1_YEAR_CACHE_TTL,
     )
 
 
@@ -229,7 +229,7 @@ def get_unique_character_and_guild_count_breakdown_day() -> dict:
     return get_cached_data_with_fallback(
         "get_unique_character_and_guild_count_breakdown_day",
         lambda: postgres_client.get_unique_character_and_guild_count(1),
-        POPULATION_1_DAY_CACHE_TTL,
+        REPORT_1_DAY_CACHE_TTL,
     )
 
 
@@ -241,7 +241,7 @@ def get_unique_character_and_guild_count_breakdown_week() -> dict:
     return get_cached_data_with_fallback(
         "get_unique_character_and_guild_count_breakdown_week",
         lambda: postgres_client.get_unique_character_and_guild_count(7),
-        POPULATION_1_WEEK_CACHE_TTL,
+        REPORT_1_WEEK_CACHE_TTL,
     )
 
 
@@ -253,7 +253,7 @@ def get_unique_character_and_guild_count_breakdown_month() -> dict:
     return get_cached_data_with_fallback(
         "get_unique_character_and_guild_count_breakdown_month",
         lambda: postgres_client.get_unique_character_and_guild_count(30),
-        POPULATION_1_MONTH_CACHE_TTL,
+        REPORT_1_MONTH_CACHE_TTL,
     )
 
 
@@ -265,7 +265,7 @@ def get_unique_character_and_guild_count_breakdown_quarter() -> dict:
     return get_cached_data_with_fallback(
         "get_unique_character_and_guild_count_breakdown_quarter",
         lambda: postgres_client.get_unique_character_and_guild_count(90),
-        POPULATION_1_QUARTER_CACHE_TTL,
+        REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
@@ -277,7 +277,7 @@ def get_unique_character_and_guild_count_breakdown_year() -> dict:
     return get_cached_data_with_fallback(
         "get_unique_character_and_guild_count_breakdown_year",
         lambda: postgres_client.get_unique_character_and_guild_count(365),
-        POPULATION_1_YEAR_CACHE_TTL,
+        REPORT_1_YEAR_CACHE_TTL,
     )
 
 
@@ -289,7 +289,7 @@ def get_character_activity_stats_quarter() -> dict:
     return get_cached_data_with_fallback(
         "get_character_activity_stats_quarter",
         lambda: postgres_client.get_character_activity_stats(90),
-        POPULATION_1_QUARTER_CACHE_TTL,
+        REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
@@ -301,7 +301,7 @@ def get_average_server_population_day() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_average_server_population_day",
         lambda: postgres_client.get_average_population_by_server(1),
-        POPULATION_1_DAY_CACHE_TTL,
+        REPORT_1_DAY_CACHE_TTL,
     )
 
 
@@ -313,7 +313,7 @@ def get_average_server_population_week() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_average_server_population_week",
         lambda: postgres_client.get_average_population_by_server(7),
-        POPULATION_1_WEEK_CACHE_TTL,
+        REPORT_1_WEEK_CACHE_TTL,
     )
 
 
@@ -325,7 +325,7 @@ def get_average_server_population_month() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_average_server_population_month",
         lambda: postgres_client.get_average_population_by_server(28),
-        POPULATION_1_MONTH_CACHE_TTL,
+        REPORT_1_MONTH_CACHE_TTL,
     )
 
 
@@ -337,7 +337,7 @@ def get_average_server_population_quarter() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_average_server_population_quarter",
         lambda: postgres_client.get_average_population_by_server(90),
-        POPULATION_1_QUARTER_CACHE_TTL,
+        REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
@@ -349,7 +349,7 @@ def get_average_server_population_year() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_average_server_population_year",
         lambda: postgres_client.get_average_population_by_server(365),
-        POPULATION_1_YEAR_CACHE_TTL,
+        REPORT_1_YEAR_CACHE_TTL,
     )
 
 
@@ -361,7 +361,7 @@ def get_hourly_server_population_day() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_hourly_server_population_day",
         lambda: postgres_client.get_average_population_by_hour_per_server(1),
-        POPULATION_1_DAY_CACHE_TTL,
+        REPORT_1_DAY_CACHE_TTL,
     )
 
 
@@ -373,7 +373,7 @@ def get_hourly_server_population_week() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_hourly_server_population_week",
         lambda: postgres_client.get_average_population_by_hour_per_server(7),
-        POPULATION_1_WEEK_CACHE_TTL,
+        REPORT_1_WEEK_CACHE_TTL,
     )
 
 
@@ -385,7 +385,7 @@ def get_hourly_server_population_month() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_hourly_server_population_month",
         lambda: postgres_client.get_average_population_by_hour_per_server(28),
-        POPULATION_1_MONTH_CACHE_TTL,
+        REPORT_1_MONTH_CACHE_TTL,
     )
 
 
@@ -397,7 +397,7 @@ def get_hourly_server_population_quarter() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_hourly_server_population_quarter",
         lambda: postgres_client.get_average_population_by_hour_per_server(90),
-        POPULATION_1_QUARTER_CACHE_TTL,
+        REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
@@ -409,7 +409,7 @@ def get_hourly_server_population_year() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_hourly_server_population_year",
         lambda: postgres_client.get_average_population_by_hour_per_server(365),
-        POPULATION_1_YEAR_CACHE_TTL,
+        REPORT_1_YEAR_CACHE_TTL,
     )
 
 
@@ -421,7 +421,7 @@ def get_daily_server_population_day() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_daily_server_population_day",
         lambda: postgres_client.get_average_population_by_day_of_week_per_server(1),
-        POPULATION_1_DAY_CACHE_TTL,
+        REPORT_1_DAY_CACHE_TTL,
     )
 
 
@@ -433,7 +433,7 @@ def get_daily_server_population_week() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_daily_server_population_week",
         lambda: postgres_client.get_average_population_by_day_of_week_per_server(7),
-        POPULATION_1_WEEK_CACHE_TTL,
+        REPORT_1_WEEK_CACHE_TTL,
     )
 
 
@@ -445,7 +445,7 @@ def get_daily_server_population_month() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_daily_server_population_month",
         lambda: postgres_client.get_average_population_by_day_of_week_per_server(28),
-        POPULATION_1_MONTH_CACHE_TTL,
+        REPORT_1_MONTH_CACHE_TTL,
     )
 
 
@@ -457,7 +457,7 @@ def get_daily_server_population_quarter() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_daily_server_population_quarter",
         lambda: postgres_client.get_average_population_by_day_of_week_per_server(90),
-        POPULATION_1_QUARTER_CACHE_TTL,
+        REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
@@ -469,7 +469,7 @@ def get_daily_server_population_year() -> dict[str, Optional[float]]:
     return get_cached_data_with_fallback(
         "get_daily_server_population_year",
         lambda: postgres_client.get_average_population_by_day_of_week_per_server(365),
-        POPULATION_1_YEAR_CACHE_TTL,
+        REPORT_1_YEAR_CACHE_TTL,
     )
 
 
@@ -485,7 +485,7 @@ def get_by_hour_and_day_of_week_server_population_week() -> (
         lambda: postgres_client.get_average_population_by_hour_and_day_of_week_per_server(
             7
         ),
-        POPULATION_1_WEEK_CACHE_TTL,
+        REPORT_1_WEEK_CACHE_TTL,
     )
 
 
@@ -501,7 +501,7 @@ def get_by_hour_and_day_of_week_server_population_month() -> (
         lambda: postgres_client.get_average_population_by_hour_and_day_of_week_per_server(
             28
         ),
-        POPULATION_1_MONTH_CACHE_TTL,
+        REPORT_1_MONTH_CACHE_TTL,
     )
 
 
@@ -517,7 +517,7 @@ def get_by_hour_and_day_of_week_server_population_quarter() -> (
         lambda: postgres_client.get_average_population_by_hour_and_day_of_week_per_server(
             90
         ),
-        POPULATION_1_QUARTER_CACHE_TTL,
+        REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
@@ -533,7 +533,7 @@ def get_by_hour_and_day_of_week_server_population_year() -> (
         lambda: postgres_client.get_average_population_by_hour_and_day_of_week_per_server(
             365
         ),
-        POPULATION_1_YEAR_CACHE_TTL,
+        REPORT_1_YEAR_CACHE_TTL,
     )
 
 

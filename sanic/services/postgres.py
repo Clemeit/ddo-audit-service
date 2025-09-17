@@ -1031,9 +1031,10 @@ def get_gender_distribution(lookback_in_days: int = 90) -> dict[str, int]:
                 return {}
             output = {}
             for server_name, gender, count in gender_distribution:
-                if server_name not in output:
-                    output[server_name] = {}
-                output[server_name][str(gender)] = count
+                server_name_lower = str(server_name).lower()
+                if server_name_lower not in output:
+                    output[server_name_lower] = {}
+                output[server_name_lower][str(gender)] = count
             return output
 
 
@@ -1057,9 +1058,10 @@ def get_race_distribution(lookback_in_days: int = 90) -> dict[str, int]:
                 return {}
             output = {}
             for server_name, race, count in race_distribution:
-                if server_name not in output:
-                    output[server_name] = {}
-                output[server_name][str(race)] = count
+                server_name_lower = str(server_name).lower()
+                if server_name_lower not in output:
+                    output[server_name_lower] = {}
+                output[server_name_lower][str(race)] = count
             return output
 
 
@@ -1083,9 +1085,10 @@ def get_total_level_distribution(lookback_in_days: int = 90) -> dict[str, int]:
                 return {}
             output = {}
             for server_name, total_level, count in total_level_distribution:
-                if server_name not in output:
-                    output[server_name] = {}
-                output[server_name][str(total_level)] = count
+                server_name_lower = str(server_name).lower()
+                if server_name_lower not in output:
+                    output[server_name_lower] = {}
+                output[server_name_lower][str(total_level)] = count
             return output
 
 
@@ -1123,9 +1126,10 @@ def get_class_count_distribution(lookback_in_days: int = 90) -> dict[str, int]:
                 return {}
             output = {}
             for server_name, class_count, count in result:
-                if server_name not in output:
-                    output[server_name] = {}
-                output[server_name][str(class_count)] = count
+                server_name_lower = str(server_name).lower()
+                if server_name_lower not in output:
+                    output[server_name_lower] = {}
+                output[server_name_lower][str(class_count)] = count
             return output
 
 
@@ -1165,9 +1169,10 @@ def get_primary_class_distribution(lookback_in_days: int = 90) -> dict[str, int]
                 return {}
             output = {}
             for server_name, class_count, count in result:
-                if server_name not in output:
-                    output[server_name] = {}
-                output[server_name][str(class_count)] = count
+                server_name_lower = str(server_name).lower()
+                if server_name_lower not in output:
+                    output[server_name_lower] = {}
+                output[server_name_lower][str(class_count)] = count
             return output
 
 

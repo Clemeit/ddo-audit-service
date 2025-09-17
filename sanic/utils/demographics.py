@@ -1,130 +1,155 @@
+from enum import Enum
 import services.redis as redis_client
 import services.postgres as postgres_client
 
 from constants.redis import (
-    DEMOGRAPHICS_CACHE_TTL,
+    REPORT_1_DAY_CACHE_TTL,
+    REPORT_1_WEEK_CACHE_TTL,
+    REPORT_1_MONTH_CACHE_TTL,
+    REPORT_1_QUARTER_CACHE_TTL,
+    REPORT_1_YEAR_CACHE_TTL,
 )
 
 
-def get_race_demographics_quarter() -> dict[str, int]:
+class ReportLookback(str, Enum):
+    day = "day"
+    week = "week"
+    month = "month"
+    quarter = "quarter"
+    year = "year"
+
+
+report_lookback_map = {
+    ReportLookback.day: {
+        "days": 1,
+        "cache_ttl": REPORT_1_DAY_CACHE_TTL,
+    },
+    ReportLookback.week: {
+        "days": 7,
+        "cache_ttl": REPORT_1_WEEK_CACHE_TTL,
+    },
+    ReportLookback.month: {
+        "days": 28,
+        "cache_ttl": REPORT_1_MONTH_CACHE_TTL,
+    },
+    ReportLookback.quarter: {
+        "days": 90,
+        "cache_ttl": REPORT_1_QUARTER_CACHE_TTL,
+    },
+    ReportLookback.year: {
+        "days": 365,
+        "cache_ttl": REPORT_1_YEAR_CACHE_TTL,
+    },
+}
+
+
+def get_race_distribution(period: ReportLookback) -> dict[str, int]:
     """
-    Gets 90 days of race demographics data.
+    Gets race demographics data for the specified period.
     Checks cache then database.
     """
+    if period not in report_lookback_map:
+        raise ValueError(
+            f"Invalid period '{period}'. Supported periods: {', '.join(report_lookback_map.keys())}"
+        )
+
+    days = report_lookback_map[period]["days"]
+    cache_ttl = report_lookback_map[period]["cache_ttl"]
 
     return get_cached_data_with_fallback(
-        "get_race_demographics_quarter",
-        lambda: postgres_client.get_race_distribution(90),
+        f"race_distribution_{period}",
+        lambda: postgres_client.get_race_distribution(days),
+        cache_ttl,
     )
 
 
-def get_race_demographics_week() -> dict[str, int]:
+def get_gender_distribution(period: ReportLookback) -> dict[str, int]:
     """
-    Gets 7 days of race demographics data.
+    Gets gender demographics data for the specified period.
     Checks cache then database.
     """
+    if period not in report_lookback_map:
+        raise ValueError(
+            f"Invalid period '{period}'. Supported periods: {', '.join(report_lookback_map.keys())}"
+        )
+
+    days = report_lookback_map[period]["days"]
+    cache_ttl = report_lookback_map[period]["cache_ttl"]
 
     return get_cached_data_with_fallback(
-        "get_race_demographics_week",
-        lambda: postgres_client.get_race_distribution(7),
+        f"gender_distribution_{period}",
+        lambda: postgres_client.get_gender_distribution(days),
+        cache_ttl,
     )
 
 
-def get_gender_demographics_quarter() -> dict[str, int]:
+def get_total_level_distribution(period: ReportLookback) -> dict[str, int]:
     """
-    Gets 90 days of gender demographics data.
+    Gets total level demographics data for the specified period.
     Checks cache then database.
     """
+    if period not in report_lookback_map:
+        raise ValueError(
+            f"Invalid period '{period}'. Supported periods: {', '.join(report_lookback_map.keys())}"
+        )
+
+    days = report_lookback_map[period]["days"]
+    cache_ttl = report_lookback_map[period]["cache_ttl"]
+
     return get_cached_data_with_fallback(
-        "get_gender_demographics_quarter",
-        lambda: postgres_client.get_gender_distribution(90),
+        f"total_level_distribution_{period}",
+        lambda: postgres_client.get_total_level_distribution(days),
+        cache_ttl,
     )
 
 
-def get_gender_demographics_week() -> dict[str, int]:
+def get_class_count_distribution(period: ReportLookback) -> dict[str, int]:
     """
-    Gets 7 days of gender demographics data.
+    Gets class count demographics data for the specified period.
     Checks cache then database.
     """
+    if period not in report_lookback_map:
+        raise ValueError(
+            f"Invalid period '{period}'. Supported periods: {', '.join(report_lookback_map.keys())}"
+        )
+
+    days = report_lookback_map[period]["days"]
+    cache_ttl = report_lookback_map[period]["cache_ttl"]
+
     return get_cached_data_with_fallback(
-        "get_gender_demographics_week",
-        lambda: postgres_client.get_gender_distribution(7),
+        f"class_count_distribution_{period}",
+        lambda: postgres_client.get_class_count_distribution(days),
+        cache_ttl,
     )
 
 
-def get_total_level_demographics_quarter() -> dict[str, int]:
+def get_primary_class_distribution(period: ReportLookback) -> dict[str, int]:
     """
-    Gets 90 days of total level demographics data.
+    Gets primary class demographics data for the specified period.
     Checks cache then database.
     """
+    if period not in report_lookback_map:
+        raise ValueError(
+            f"Invalid period '{period}'. Supported periods: {', '.join(report_lookback_map.keys())}"
+        )
+
+    days = report_lookback_map[period]["days"]
+    cache_ttl = report_lookback_map[period]["cache_ttl"]
+
     return get_cached_data_with_fallback(
-        "get_total_level_demographics_quarter",
-        lambda: postgres_client.get_total_level_distribution(90),
+        f"primary_class_distribution_{period}",
+        lambda: postgres_client.get_primary_class_distribution(days),
+        cache_ttl,
     )
 
 
-def get_total_level_demographics_week() -> dict[str, int]:
-    """
-    Gets 7 days of total level demographics data.
-    Checks cache then database.
-    """
-    return get_cached_data_with_fallback(
-        "get_total_level_demographics_week",
-        lambda: postgres_client.get_total_level_distribution(7),
-    )
-
-
-def get_class_count_demographics_quarter() -> dict[str, int]:
-    """
-    Gets 90 days of class count demographics data.
-    Checks cache then database.
-    """
-    return get_cached_data_with_fallback(
-        "get_class_count_demographics_quarter",
-        lambda: postgres_client.get_class_count_distribution(90),
-    )
-
-
-def get_class_count_demographics_week() -> dict[str, int]:
-    """
-    Gets 7 days of class count demographics data.
-    Checks cache then database.
-    """
-    return get_cached_data_with_fallback(
-        "get_class_count_demographics_week",
-        lambda: postgres_client.get_class_count_distribution(7),
-    )
-
-
-def get_primary_class_distribution_quarter() -> dict[str, int]:
-    """
-    Gets 90 days of primary class demographics data.
-    Checks cache then database.
-    """
-    return get_cached_data_with_fallback(
-        "get_primary_class_demographics_quarter",
-        lambda: postgres_client.get_primary_class_distribution(90),
-    )
-
-
-def get_primary_class_distribution_week() -> dict[str, int]:
-    """
-    Gets 7 days of primary class demographics data.
-    Checks cache then database.
-    """
-    return get_cached_data_with_fallback(
-        "get_primary_class_demographics_week",
-        lambda: postgres_client.get_primary_class_distribution(7),
-    )
-
-
-def get_cached_data_with_fallback(key: str, fallback_func) -> dict:
+def get_cached_data_with_fallback(key: str, fallback_func, cache_ttl: int) -> dict:
     """Get cached data, regenerate if expired."""
     cached_data = redis_client.get_by_key(key)
 
     if not cached_data:
         fresh_data = fallback_func()
-        redis_client.set_by_key(key, fresh_data, ttl=DEMOGRAPHICS_CACHE_TTL)
+        redis_client.set_by_key(key, fresh_data, ttl=cache_ttl)
         return fresh_data
 
     return cached_data
