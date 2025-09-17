@@ -1077,6 +1077,7 @@ def get_total_level_distribution(lookback_in_days: int = 90) -> dict[str, int]:
                 SELECT server_name, total_level, COUNT(*) as count FROM public.characters
                 WHERE last_save > NOW() - (make_interval(days => %s))
                 GROUP BY total_level, server_name
+                ORDER BY server_name, total_level
                 """,
                 (lookback_in_days,),
             )
