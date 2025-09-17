@@ -1177,6 +1177,36 @@ def get_primary_class_distribution(lookback_in_days: int = 90) -> dict[str, int]
             return output
 
 
+def get_guild_affiliation_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+    """
+    Gets the distribution of characters in a guild and not in a guild.
+    """
+    validate_lookback(lookback_in_days)
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT server_name,
+                    SUM(CASE WHEN guild_name IS NOT NULL AND guild_name <> '' THEN 1 ELSE 0 END) AS in_guild,
+                    SUM(CASE WHEN guild_name IS NULL OR guild_name = '' THEN 1 ELSE 0 END) AS not_in_guild
+                FROM public.characters
+                WHERE last_save > NOW() - (make_interval(days => %s))
+                GROUP BY server_name
+                """,
+                (lookback_in_days,),
+            )
+            result = cursor.fetchall()
+            if not result:
+                return {}
+            output = {}
+            for server_name, in_guild, not_in_guild in result:
+                output[str(server_name).lower()] = {
+                    "in_guild": in_guild,
+                    "not_in_guild": not_in_guild,
+                }
+            return output
+
+
 def get_average_population_by_server(
     lookback_in_days: int = 90,
 ) -> dict[str, Optional[float]]:

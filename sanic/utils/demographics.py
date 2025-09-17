@@ -143,6 +143,26 @@ def get_primary_class_distribution(period: ReportLookback) -> dict[str, int]:
     )
 
 
+def get_guild_affiliation_distribution(period: ReportLookback) -> dict[str, int]:
+    """
+    Gets guild affiliation demographics data for the specified period.
+    Checks cache then database.
+    """
+    if period not in report_lookback_map:
+        raise ValueError(
+            f"Invalid period '{period}'. Supported periods: {', '.join(report_lookback_map.keys())}"
+        )
+
+    days = report_lookback_map[period]["days"]
+    cache_ttl = report_lookback_map[period]["cache_ttl"]
+
+    return get_cached_data_with_fallback(
+        f"guild_affiliation_distribution_{period}",
+        lambda: postgres_client.get_guild_affiliation_distribution(days),
+        cache_ttl,
+    )
+
+
 def get_cached_data_with_fallback(key: str, fallback_func, cache_ttl: int) -> dict:
     """Get cached data, regenerate if expired."""
     cached_data = redis_client.get_by_key(key)
