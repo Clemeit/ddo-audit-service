@@ -143,7 +143,9 @@ def get_primary_class_distribution(period: ReportLookback) -> dict[str, int]:
     )
 
 
-def get_guild_affiliation_distribution(period: ReportLookback) -> dict[str, int]:
+def get_guild_affiliation_distribution(
+    period: ReportLookback,
+) -> dict[str, dict[str, int]]:
     """
     Gets guild affiliation demographics data for the specified period.
     Checks cache then database.

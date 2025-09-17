@@ -1177,7 +1177,7 @@ def get_primary_class_distribution(lookback_in_days: int = 90) -> dict[str, int]
             return output
 
 
-def get_guild_affiliation_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+def get_guild_affiliation_distribution(lookback_in_days: int = 90) -> dict[str, dict[str, int]]:
     """
     Gets the distribution of characters in a guild and not in a guild.
     """
