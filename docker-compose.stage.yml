@@ -20,6 +20,18 @@ services:
       retries: 3
       start_period: 60s
 
+  prerender:
+    image: lune/prerender:latest
+    restart: unless-stopped
+    environment:
+      PRERENDER_NUM_WORKERS: 2
+      PRERENDER_CONCURRENCY: 5
+      PAGE_TTL: 600
+      LOG_REQUESTS: "true"
+      CHROME_FLAGS: --no-sandbox,--disable-dev-shm-usage
+    networks:
+      - backend
+
   redis:
     build:
       context: ./redis
@@ -29,6 +41,8 @@ services:
     networks:
       - backend
     depends_on:
+      prerender:
+        condition: service_started
       postgres:
         condition: service_healthy
     healthcheck:
