@@ -28,7 +28,7 @@ services:
       PRERENDER_CONCURRENCY: 5
       PAGE_TTL: 600
       LOG_REQUESTS: "true"
-      CHROME_FLAGS: --no-sandbox,--disable-dev-shm-usage
+      CHROME_FLAGS: --no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-software-rasterizer,--disable-setuid-sandbox
     networks:
       - backend
 
