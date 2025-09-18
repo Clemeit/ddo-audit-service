@@ -23,6 +23,9 @@ services:
   prerender:
     image: lune/prerender:latest
     restart: unless-stopped
+    shm_size: "512m"
+    security_opt:
+      - seccomp=unconfined
     environment:
       PRERENDER_NUM_WORKERS: 2
       PRERENDER_CONCURRENCY: 5
