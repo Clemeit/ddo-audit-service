@@ -14,8 +14,10 @@ from business.characters import (
 from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
+from urllib.parse import unquote
 
 from utils.log import logMessage
+from constants.guilds import GUILD_NAME_MAX_LENGTH
 
 
 character_blueprint = Blueprint("character", url_prefix="/characters", version=1)
@@ -78,8 +80,19 @@ async def get_online_characters_by_guild_name(request: Request, guild_name: str)
 
     Description: Get all online characters in a specific guild from the Redis cache.
     """
-    if not guild_name or len(guild_name) > 50:
-        return json({"message": "Invalid guild name"}, status=400)
+
+    try:
+        guild_name = unquote(guild_name)
+    except Exception as e:
+        return json({"message": "Invalid guild name."}, status=400)
+
+    if not guild_name or len(guild_name) > GUILD_NAME_MAX_LENGTH:
+        return json({"message": "Invalid guild name."}, status=400)
+    if not all(c.isalnum() or c.isspace() or c == "-" for c in guild_name):
+        return json(
+            {"message": "Guild name must be alphanumeric, spaces, or hyphens."},
+            status=400,
+        )
 
     try:
         return json(
