@@ -819,8 +819,6 @@ def get_character_by_name_and_server(
 def get_characters_by_name(character_name: str) -> list[Character]:
     """
     Gets all characters (the most recent 10) from the database that match the given name.
-
-    THIS IS EXPENSIVE! Don't use this unless there's a good reason to.
     """
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
@@ -1177,7 +1175,9 @@ def get_primary_class_distribution(lookback_in_days: int = 90) -> dict[str, int]
             return output
 
 
-def get_guild_affiliation_distribution(lookback_in_days: int = 90) -> dict[str, dict[str, int]]:
+def get_guild_affiliation_distribution(
+    lookback_in_days: int = 90,
+) -> dict[str, dict[str, int]]:
     """
     Gets the distribution of characters in a guild and not in a guild.
     """

@@ -553,6 +553,46 @@ def get_characters_by_name(character_name: str) -> dict[int, Character]:
     }
 
 
+def get_characters_by_guild_name_as_dict(
+    guild_name: str, exact_match: bool = False
+) -> dict[int, dict]:
+    """Get all character dicts matching a guild name"""
+    guild_name_lower = guild_name.lower()
+    characters: dict[int, dict] = {}
+    for server_name in SERVER_NAMES_LOWERCASE:
+        server_characters = get_characters_by_server_name_as_dict(server_name)
+        if exact_match:
+            matching_characters = [
+                character
+                for character in server_characters.values()
+                if character
+                and character.get("guild_name")
+                and character.get("guild_name").lower() == guild_name_lower
+            ]
+        else:
+            matching_characters = [
+                character
+                for character in server_characters.values()
+                if character
+                and character.get("guild_name")
+                and guild_name_lower in character.get("guild_name").lower()
+            ]
+        for matching_character in matching_characters:
+            characters[matching_character.get("id")] = matching_character
+    return characters
+
+
+def get_characters_by_guild_name(
+    guild_name: str, exact_match: bool = False
+) -> dict[int, Character]:
+    """Get all character objects matching a guild name"""
+    characters = get_characters_by_guild_name_as_dict(guild_name, exact_match)
+    return {
+        character_id: Character(**character)
+        for [character_id, character] in characters.items()
+    }
+
+
 def set_characters_by_server_name(server_characters: dict[int, dict], server_name: str):
     """Set all character objects by server name"""
     with get_redis_client() as client:
