@@ -593,6 +593,32 @@ def get_characters_by_guild_name(
     }
 
 
+def get_characters_by_group_id_as_dict(group_id: int) -> dict[int, dict]:
+    """Get all character dicts matching a group ID"""
+    if group_id <= 0:
+        return {}
+    characters: dict[int, dict] = {}
+    for server_name in SERVER_NAMES_LOWERCASE:
+        server_characters = get_characters_by_server_name_as_dict(server_name)
+        matching_characters = [
+            character
+            for character in server_characters.values()
+            if character and character.get("group_id") == group_id
+        ]
+        for matching_character in matching_characters:
+            characters[matching_character.get("id")] = matching_character
+    return characters
+
+
+def get_characters_by_group_id(group_id: int) -> dict[int, Character]:
+    """Get all character objects matching a group ID"""
+    characters = get_characters_by_group_id_as_dict(group_id)
+    return {
+        character_id: Character(**character)
+        for [character_id, character] in characters.items()
+    }
+
+
 def set_characters_by_server_name(server_characters: dict[int, dict], server_name: str):
     """Set all character objects by server name"""
     with get_redis_client() as client:
