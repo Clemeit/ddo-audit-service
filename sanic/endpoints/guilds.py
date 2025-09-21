@@ -80,6 +80,7 @@ async def get_all_guilds(request: Request):
                 "data": paged_data,
                 "page": page,
                 "page_length": GUILD_PAGE_LENGTH,
+                "filtered_length": len(paged_data),
                 "total": len(guild_data),
             }
         )
