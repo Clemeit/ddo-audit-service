@@ -2508,6 +2508,37 @@ def get_guilds_by_name(guild_name: str) -> list[dict]:
             ]
 
 
+def get_all_guilds() -> list[dict]:
+    """
+    Get all unique guilds, including server name and the total number of characters in each guild.
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT 
+                    guild_name, 
+                    server_name, 
+                    COUNT(*) as character_count
+                FROM public.characters
+                WHERE guild_name IS NOT NULL AND guild_name != ''
+                GROUP BY guild_name, server_name
+                ORDER BY character_count DESC
+            """
+            )
+            guilds = cursor.fetchall()
+            if not guilds:
+                return []
+            return [
+                {
+                    "guild_name": row[0],
+                    "server_name": row[1],
+                    "character_count": row[2],
+                }
+                for row in guilds
+            ]
+
+
 def get_config() -> dict:
     """
     Get all configuration settings from the database.
