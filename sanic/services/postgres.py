@@ -2510,7 +2510,7 @@ def get_guilds_by_name(guild_name: str) -> list[dict]:
 
 def get_all_guilds() -> list[dict]:
     """
-    Get a all unique guild names by server, including the number of characters in each guild.
+    Get all unique guilds, including server name and the total number of characters in each guild.
     """
     with get_db_connection() as conn:
         with conn.cursor() as cursor:

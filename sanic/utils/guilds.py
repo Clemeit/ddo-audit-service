@@ -1,5 +1,6 @@
 import services.redis as redis_client
 import services.postgres as postgres_client
+from typing import Any
 
 from constants.redis import (
     UNIQUE_GUILDS_CACHE_TTL,
@@ -14,7 +15,7 @@ def get_all_guilds() -> list[dict]:
     )
 
 
-def get_cached_data_with_fallback(key: str, fallback_func, ttl: int = 60 * 60) -> dict:
+def get_cached_data_with_fallback(key: str, fallback_func, ttl: int = 60 * 60) -> Any:
     """Get cached data, regenerate if expired."""
     cached_data = redis_client.get_by_key(key)
 
