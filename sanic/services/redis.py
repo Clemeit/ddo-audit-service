@@ -553,49 +553,23 @@ def get_characters_by_name(character_name: str) -> dict[int, Character]:
     }
 
 
-def get_characters_by_guild_name_as_dict(
-    guild_name: str, server_name: str = None, exact_match: bool = False
+def get_online_characters_by_server_and_guild_name_as_dict(
+    server_name: str, guild_name: str
 ) -> dict[int, dict]:
-    """Get all character dicts matching a guild name"""
+    """Get all character dicts matching a guild name on a specific server"""
     guild_name_lower = guild_name.lower()
     characters: dict[int, dict] = {}
-    for server_name in SERVER_NAMES_LOWERCASE:
-        # Note: not the most efficient
-        if server_name and server_name.lower() != server_name:
-            continue
-        server_characters = get_characters_by_server_name_as_dict(server_name)
-        if exact_match:
-            matching_characters = [
-                character
-                for character in server_characters.values()
-                if character
-                and character.get("guild_name")
-                and character.get("guild_name").lower() == guild_name_lower
-            ]
-        else:
-            matching_characters = [
-                character
-                for character in server_characters.values()
-                if character
-                and character.get("guild_name")
-                and guild_name_lower in character.get("guild_name").lower()
-            ]
-        for matching_character in matching_characters:
-            characters[matching_character.get("id")] = matching_character
+    server_characters = get_characters_by_server_name_as_dict(server_name)
+    matching_characters = [
+        character
+        for character in server_characters.values()
+        if character
+        and character.get("guild_name")
+        and character.get("guild_name").lower() == guild_name_lower
+    ]
+    for matching_character in matching_characters:
+        characters[matching_character.get("id")] = matching_character
     return characters
-
-
-def get_characters_by_guild_name(
-    guild_name: str, server_name: str = None, exact_match: bool = False
-) -> dict[int, Character]:
-    """Get all character objects matching a guild name"""
-    characters = get_characters_by_guild_name_as_dict(
-        guild_name, server_name, exact_match
-    )
-    return {
-        character_id: Character(**character)
-        for [character_id, character] in characters.items()
-    }
 
 
 def get_characters_by_group_id_as_dict(group_id: int) -> dict[int, dict]:
