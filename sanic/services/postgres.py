@@ -801,16 +801,32 @@ def get_characters_by_ids(character_ids: list[int]) -> list[Character]:
 
 
 def get_character_ids_by_server_and_guild(
-    server_name: str, guild_name: str, page: int = 1, page_size: int = 20
+    server_name: str,
+    guild_name: str,
+    page: int = 1,
+    page_size: int = 20,
+    sort_by: str = "last_save",
 ) -> list[int]:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             offset = (page - 1) * page_size
-            cursor.execute(
-                """SELECT id FROM public.characters
+
+            # Whitelist allowed columns
+            allowed_sort_cols = {"last_save", "id", "name", "total_level"}
+            if sort_by not in allowed_sort_cols:
+                sort_by = "last_save"
+
+            query = psycopg2.sql.SQL(
+                """
+                SELECT id FROM public.characters
                 WHERE LOWER(server_name) = %s AND LOWER(guild_name) = %s
-                ORDER BY last_save DESC
-                LIMIT %s OFFSET %s""",
+                ORDER BY {col} DESC
+                LIMIT %s OFFSET %s
+                """
+            ).format(col=psycopg2.sql.Identifier(sort_by))
+
+            cursor.execute(
+                query,
                 (server_name.lower(), guild_name.lower(), page_size, offset),
             )
             character_ids = cursor.fetchall()
