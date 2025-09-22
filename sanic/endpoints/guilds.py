@@ -129,7 +129,7 @@ async def get_guild_by_server_name_and_guild_name(
             server_name, guild_name
         )
         if not guild_data:
-            return json({"data": {}})
+            return json({"data": None}, status=404)
         online_characters = redis_client.get_characters_by_guild_name_as_dict(
             guild_name, server_name, True
         )
@@ -153,7 +153,9 @@ async def get_guild_by_server_name_and_guild_name(
             return json({"data": guild_data})
         # Ensure the verified character is actually in the requested guild
         if (
-            not verified_character.guild_name.strip()
+            verified_character.guild_name is None
+            or verified_character.server_name is None
+            or not verified_character.guild_name.strip()
             or not verified_character.server_name.strip()
             or verified_character.server_name.lower() != server_name.lower()
             or verified_character.guild_name.lower() != guild_name.lower()
