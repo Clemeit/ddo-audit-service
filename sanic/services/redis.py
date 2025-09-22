@@ -554,7 +554,7 @@ def get_characters_by_name(character_name: str) -> dict[int, Character]:
 
 
 def get_online_characters_by_server_and_guild_name_as_dict(
-    guild_name: str, server_name: str
+    server_name: str, guild_name: str
 ) -> dict[int, dict]:
     """Get all character dicts matching a guild name on a specific server"""
     guild_name_lower = guild_name.lower()

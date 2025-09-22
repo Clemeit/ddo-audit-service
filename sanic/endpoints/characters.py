@@ -80,7 +80,7 @@ async def get_online_characters_by_guild_name(
     """
     Method: GET
 
-    Route: /characters/by-guild-name/<guild_name:str>
+    Route: /characters/by-server-and-guild-name/<server_name:str>/<guild_name:str>
 
     Description: Get all online characters in a specific guild from the Redis cache.
     """
