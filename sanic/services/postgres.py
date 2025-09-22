@@ -809,7 +809,7 @@ def get_character_ids_by_server_and_guild(
             cursor.execute(
                 """SELECT id FROM public.characters
                 WHERE LOWER(server_name) = %s AND LOWER(guild_name) = %s
-                ORDER BY name
+                ORDER BY last_save DESC
                 LIMIT %s OFFSET %s""",
                 (server_name.lower(), guild_name.lower(), page_size, offset),
             )
