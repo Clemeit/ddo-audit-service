@@ -133,8 +133,8 @@ async def get_guilds_by_name(request: Request, guild_name: str):
         )
         if not verified_character:
             return json({"data": guild_data})
-        verified_guild_name = verified_character.get("guild_name")
-        verified_server_name = verified_character.get("server_name")
+        verified_guild_name = verified_character.guild_name
+        verified_server_name = verified_character.server_name
         if not verified_guild_name or not verified_server_name:
             return json({"data": guild_data})
         for guild in guild_data:
