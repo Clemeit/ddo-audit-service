@@ -800,6 +800,25 @@ def get_characters_by_ids(character_ids: list[int]) -> list[Character]:
         return []
 
 
+def get_character_ids_by_server_and_guild(
+    server_name: str, guild_name: str, page: int = 1, page_size: int = 100
+) -> list[int]:
+    with get_db_connection() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            offset = (page - 1) * page_size
+            cursor.execute(
+                """
+                SELECT id FROM public.characters
+                WHERE LOWER(server_name) = %s AND LOWER(guild_name) = %s
+                ORDER BY id
+                LIMIT %s OFFSET %s
+                """,
+                (server_name.lower(), guild_name.lower(), page_size, offset),
+            )
+            results = cursor.fetchall()
+            return [row["id"] for row in results] if results else []
+
+
 def get_character_by_name_and_server(
     character_name: str, server_name: str
 ) -> Character | None:
@@ -1825,6 +1844,19 @@ def get_access_token_by_character_id(character_id: str) -> str:
             if not access_token:
                 return ""
             return access_token[0]
+
+
+def get_character_id_by_access_token(access_token: str) -> str:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT character_id FROM public.access_tokens WHERE access_token = %s",
+                (access_token,),
+            )
+            character_id = cursor.fetchone()
+            if not character_id:
+                return ""
+            return character_id[0]
 
 
 def get_all_quest_names() -> list[str]:
