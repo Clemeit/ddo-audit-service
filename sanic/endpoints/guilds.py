@@ -103,7 +103,6 @@ async def get_guilds_by_name(request: Request, guild_name: str):
     """
     try:
         guild_name = unquote(guild_name)
-        page = int(request.args.get("page", 1))
     except Exception as e:
         return json({"message": "Invalid guild name."}, status=400)
 
@@ -120,6 +119,9 @@ async def get_guilds_by_name(request: Request, guild_name: str):
         auth_header = request.headers.get("Authorization")
         if not auth_header:
             return json({"data": guild_data})
+        page = int(request.args.get("page", 1))
+        if page < 1:
+            raise ValueError
         # if auth header is provided, hydrate guilds that the user is a member of
         verified_character_id = postgres_client.get_character_id_by_access_token(
             auth_header
@@ -146,12 +148,12 @@ async def get_guilds_by_name(request: Request, guild_name: str):
                 guild.update(
                     {
                         "is_member": True,
-                        "member_count": len(member_ids),
                         "member_ids": member_ids,
                     }
                 )
                 break
         return json({"data": guild_data})
-
+    except ValueError:
+        return json({"message": "Invalid page number."}, status=400)
     except Exception as e:
         return json({"message": str(e)}, status=500)
