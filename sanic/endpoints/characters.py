@@ -90,7 +90,9 @@ async def get_online_characters_by_guild_name(request: Request, guild_name: str)
 
     if not guild_utils.validate_guild_name(guild_name):
         return json(
-            {"message": "Guild name must be alphanumeric, spaces, or hyphens."},
+            {
+                "message": "Guild name must be alphanumeric, spaces, single quotes, or hyphens."
+            },
             status=400,
         )
 

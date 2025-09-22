@@ -35,7 +35,9 @@ async def get_guilds_by_name_deprecated(request: Request, guild_name: str):
 
     if not guild_utils.validate_guild_name(guild_name):
         return json(
-            {"message": "Guild name must be alphanumeric, spaces, or hyphens."},
+            {
+                "message": "Guild name must be alphanumeric, spaces, single quotes, or hyphens."
+            },
             status=400,
         )
 
@@ -116,7 +118,9 @@ async def get_guild_by_server_name_and_guild_name(
 
     if not guild_utils.validate_guild_name(guild_name):
         return json(
-            {"message": "Guild name must be alphanumeric, spaces, or hyphens."},
+            {
+                "message": "Guild name must be alphanumeric, spaces, single quotes, or hyphens."
+            },
             status=400,
         )
     try:
@@ -139,7 +143,7 @@ async def get_guild_by_server_name_and_guild_name(
             raise ValueError
         if page_size < 1 or page_size > 200:
             raise ValueError
-        if sort_by not in ("last_save", "total_level", "name"):
+        if sort_by not in ("last_save", "total_level", "name", "id"):
             raise ValueError
         # if auth header is provided, hydrate guilds that the user is a member of
         verified_character_id = postgres_client.get_character_id_by_access_token(
