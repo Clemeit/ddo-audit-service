@@ -18,7 +18,7 @@ guild_blueprint = Blueprint("guild", url_prefix="/guilds", version=1)
 
 # ===== Client-facing endpoints =====
 @guild_blueprint.get("/by-name/<guild_name:str>")
-async def get_guilds_by_name(request: Request, guild_name: str):
+async def get_guilds_by_name_deprecated(request: Request, guild_name: str):
     """
     Method: GET
 
@@ -84,6 +84,75 @@ async def get_all_guilds(request: Request):
                 "total": len(guild_data),
             }
         )
+    except ValueError:
+        return json({"message": "Invalid page number."}, status=400)
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+
+@guild_blueprint.get("/<guild_name:str>")
+async def get_guilds_by_name(request: Request, guild_name: str):
+    """
+    Method: GET
+
+    Route: /guilds/<guild_name>
+
+    Description: Get guild information including name, server, character count, and last
+    update timestamp. If the authorization header is provided, any guild that the user is
+    a member of will be hydrated with additional information.
+    """
+    try:
+        guild_name = unquote(guild_name)
+    except Exception as e:
+        return json({"message": "Invalid guild name."}, status=400)
+
+    if not guild_name or len(guild_name) > GUILD_NAME_MAX_LENGTH:
+        return json({"message": "Invalid guild name."}, status=400)
+    if not all(c.isalnum() or c.isspace() or c == "-" for c in guild_name):
+        return json(
+            {"message": "Guild name must be alphanumeric, spaces, or hyphens."},
+            status=400,
+        )
+
+    try:
+        guild_data = postgres_client.get_guilds_by_name(guild_name)
+        auth_header = request.headers.get("Authorization")
+        if not auth_header:
+            return json({"data": guild_data})
+        page = int(request.args.get("page", 1))
+        if page < 1:
+            raise ValueError
+        # if auth header is provided, hydrate guilds that the user is a member of
+        verified_character_id = postgres_client.get_character_id_by_access_token(
+            auth_header
+        )
+        verified_character = (
+            postgres_client.get_character_by_id(verified_character_id)
+            if verified_character_id
+            else None
+        )
+        if not verified_character:
+            return json({"data": guild_data})
+        verified_guild_name = verified_character.get("guild_name")
+        verified_server_name = verified_character.get("server_name")
+        if not verified_guild_name or not verified_server_name:
+            return json({"data": guild_data})
+        for guild in guild_data:
+            if (
+                guild["guild_name"] == verified_guild_name
+                and guild["server_name"] == verified_server_name
+            ):
+                member_ids = postgres_client.get_character_ids_by_server_and_guild(
+                    verified_server_name, verified_guild_name, page
+                )
+                guild.update(
+                    {
+                        "is_member": True,
+                        "member_ids": member_ids,
+                    }
+                )
+                break
+        return json({"data": guild_data})
     except ValueError:
         return json({"message": "Invalid page number."}, status=400)
     except Exception as e:
