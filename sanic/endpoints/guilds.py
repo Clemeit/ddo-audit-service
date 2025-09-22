@@ -33,9 +33,7 @@ async def get_guilds_by_name_deprecated(request: Request, guild_name: str):
     except Exception as e:
         return json({"message": "Invalid guild name."}, status=400)
 
-    if not guild_name or len(guild_name) > GUILD_NAME_MAX_LENGTH:
-        return json({"message": "Invalid guild name."}, status=400)
-    if not all(c.isalnum() or c.isspace() or c == "-" for c in guild_name):
+    if not guild_utils.validate_guild_name(guild_name):
         return json(
             {"message": "Guild name must be alphanumeric, spaces, or hyphens."},
             status=400,
@@ -116,14 +114,11 @@ async def get_guild_by_server_name_and_guild_name(
     except Exception as e:
         return json({"message": "Invalid guild name."}, status=400)
 
-    if not guild_name or len(guild_name) > GUILD_NAME_MAX_LENGTH:
-        return json({"message": "Invalid guild name."}, status=400)
-    if not all(c.isalnum() or c.isspace() or c == "-" for c in guild_name):
+    if not guild_utils.validate_guild_name(guild_name):
         return json(
             {"message": "Guild name must be alphanumeric, spaces, or hyphens."},
             status=400,
         )
-
     try:
         guild_data = postgres_client.get_guild_by_server_name_and_guild_name(
             server_name, guild_name
@@ -138,7 +133,13 @@ async def get_guild_by_server_name_and_guild_name(
         if not auth_header:
             return json({"data": guild_data})
         page = int(request.args.get("page", 1))
+        page_size = int(request.args.get("page_size", 50))
+        sort_by = request.args.get("sort_by", "last_save")
         if page < 1:
+            raise ValueError
+        if page_size < 1 or page_size > 200:
+            raise ValueError
+        if sort_by not in ("last_save", "total_level", "name"):
             raise ValueError
         # if auth header is provided, hydrate guilds that the user is a member of
         verified_character_id = postgres_client.get_character_id_by_access_token(
@@ -165,7 +166,7 @@ async def get_guild_by_server_name_and_guild_name(
         # The verified character is in the requested guild, so we can
         # safely add member information
         member_ids = postgres_client.get_character_ids_by_server_and_guild(
-            server_name, guild_name, page
+            server_name, guild_name, page, page_size, sort_by
         )
         guild_data.update(
             {
@@ -175,6 +176,6 @@ async def get_guild_by_server_name_and_guild_name(
         )
         return json({"data": guild_data})
     except ValueError:
-        return json({"message": "Invalid page number."}, status=400)
+        return json({"message": "Invalid page number, page size, or sort."}, status=400)
     except Exception as e:
         return json({"message": str(e)}, status=500)

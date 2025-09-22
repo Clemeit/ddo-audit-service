@@ -17,6 +17,7 @@ from sanic.response import json
 from urllib.parse import unquote
 
 from utils.log import logMessage
+import utils.guilds as guild_utils
 from constants.guilds import GUILD_NAME_MAX_LENGTH
 from constants.server import MAX_CHARACTER_LOOKUP_IDS
 
@@ -87,9 +88,7 @@ async def get_online_characters_by_guild_name(request: Request, guild_name: str)
     except Exception as e:
         return json({"message": "Invalid guild name."}, status=400)
 
-    if not guild_name or len(guild_name) > GUILD_NAME_MAX_LENGTH:
-        return json({"message": "Invalid guild name."}, status=400)
-    if not all(c.isalnum() or c.isspace() or c == "-" for c in guild_name):
+    if not guild_utils.validate_guild_name(guild_name):
         return json(
             {"message": "Guild name must be alphanumeric, spaces, or hyphens."},
             status=400,
