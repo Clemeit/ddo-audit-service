@@ -32,5 +32,5 @@ def validate_guild_name(guild_name: str) -> bool:
     if not guild_name or len(guild_name) > GUILD_NAME_MAX_LENGTH:
         return False
     if not all(c.isalnum() or c.isspace() or c == "-" or c == "'" for c in guild_name):
-        False
+        return False
     return True
