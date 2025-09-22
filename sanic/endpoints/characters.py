@@ -18,6 +18,7 @@ from urllib.parse import unquote
 
 from utils.log import logMessage
 from constants.guilds import GUILD_NAME_MAX_LENGTH
+from constants.server import MAX_CHARACTER_LOOKUP_IDS
 
 
 character_blueprint = Blueprint("character", url_prefix="/characters", version=1)
@@ -181,6 +182,15 @@ async def get_characters_by_ids(request: Request, character_ids: str):
 
     try:
         character_ids_list = [int(id) for id in character_ids.split(",")]
+        if len(character_ids_list) > MAX_CHARACTER_LOOKUP_IDS:
+            return json(
+                {"message": "Cannot request more than 100 character IDs at once"},
+                status=400,
+            )
+        if not all(
+            0 < character_id <= 1099511627775 for character_id in character_ids_list
+        ):
+            return json({"message": "Invalid character IDs"}, status=400)
         discovered_characters: dict[int, dict] = {}
         cached_character_ids: set[int] = set()
         cached_characters = redis_client.get_characters_by_ids_as_dict(

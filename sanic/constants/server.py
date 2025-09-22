@@ -11,9 +11,11 @@ SERVER_NAMES: list[str] = [
     "Cormyr",
     "Shadowdale",
     "Thrane",
-    "Moonsea"
+    "Moonsea",
 ]
 
 SERVER_NAMES_LOWERCASE: list[str] = [
     server_name.lower() for server_name in SERVER_NAMES
 ]
+
+MAX_CHARACTER_LOOKUP_IDS = 100

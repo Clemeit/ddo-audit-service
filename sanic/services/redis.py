@@ -554,12 +554,15 @@ def get_characters_by_name(character_name: str) -> dict[int, Character]:
 
 
 def get_characters_by_guild_name_as_dict(
-    guild_name: str, exact_match: bool = False
+    guild_name: str, server_name: str = None, exact_match: bool = False
 ) -> dict[int, dict]:
     """Get all character dicts matching a guild name"""
     guild_name_lower = guild_name.lower()
     characters: dict[int, dict] = {}
     for server_name in SERVER_NAMES_LOWERCASE:
+        # Note: not the most efficient
+        if server_name and server_name.lower() != server_name:
+            continue
         server_characters = get_characters_by_server_name_as_dict(server_name)
         if exact_match:
             matching_characters = [
@@ -583,10 +586,12 @@ def get_characters_by_guild_name_as_dict(
 
 
 def get_characters_by_guild_name(
-    guild_name: str, exact_match: bool = False
+    guild_name: str, server_name: str = None, exact_match: bool = False
 ) -> dict[int, Character]:
     """Get all character objects matching a guild name"""
-    characters = get_characters_by_guild_name_as_dict(guild_name, exact_match)
+    characters = get_characters_by_guild_name_as_dict(
+        guild_name, server_name, exact_match
+    )
     return {
         character_id: Character(**character)
         for [character_id, character] in characters.items()
