@@ -2540,6 +2540,45 @@ def get_guilds_by_name(guild_name: str) -> list[dict]:
             ]
 
 
+def get_guild_by_server_name_and_guild_name(
+    server_name: str, guild_name: str
+) -> dict | None:
+    """
+    Get a specific guild by server name and guild name with its character count.
+
+    Args:
+        server_name: The server name to filter by
+        guild_name: The exact guild name to filter by
+    Returns:
+        Dictionary containing guild details or None if not found
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT 
+                    guild_name, 
+                    server_name, 
+                    COUNT(*) as character_count
+                FROM public.characters
+                WHERE LOWER(server_name) = LOWER(%s)
+                    AND LOWER(guild_name) = LOWER(%s)
+                    AND guild_name IS NOT NULL AND guild_name != ''
+                GROUP BY guild_name, server_name
+                LIMIT 1
+            """,
+                (server_name, guild_name),
+            )
+            guild = cursor.fetchone()
+            if not guild:
+                return None
+            return {
+                "guild_name": guild[0],
+                "server_name": guild[1],
+                "character_count": guild[2],
+            }
+
+
 def get_all_guilds() -> list[dict]:
     """
     Get all unique guilds, including server name and the total number of characters in each guild.
