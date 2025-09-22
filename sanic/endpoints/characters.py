@@ -73,8 +73,10 @@ async def get_online_character_ids(request: Request):
         return json({"message": str(e)}, status=500)
 
 
-@character_blueprint.get("/by-guild-name/<guild_name:str>")
-async def get_online_characters_by_guild_name(request: Request, guild_name: str):
+@character_blueprint.get("/by-server-and-guild-name/<server_name:str>/<guild_name:str>")
+async def get_online_characters_by_guild_name(
+    request: Request, server_name: str, guild_name: str
+):
     """
     Method: GET
 
@@ -82,6 +84,8 @@ async def get_online_characters_by_guild_name(request: Request, guild_name: str)
 
     Description: Get all online characters in a specific guild from the Redis cache.
     """
+    if not is_server_name_valid(server_name):
+        return json({"message": "Invalid server name"}, status=400)
 
     try:
         guild_name = unquote(guild_name)
@@ -98,7 +102,11 @@ async def get_online_characters_by_guild_name(request: Request, guild_name: str)
 
     try:
         return json(
-            {"data": redis_client.get_characters_by_guild_name_as_dict(guild_name)}
+            {
+                "data": redis_client.get_online_characters_by_server_and_guild_name_as_dict(
+                    server_name, guild_name
+                )
+            }
         )
     except Exception as e:
         return json({"message": str(e)}, status=500)

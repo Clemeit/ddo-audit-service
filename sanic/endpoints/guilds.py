@@ -129,8 +129,10 @@ async def get_guild_by_server_name_and_guild_name(
         )
         if not guild_data:
             return json({"data": None}, status=404)
-        online_characters = redis_client.get_characters_by_guild_name_as_dict(
-            guild_name, server_name, True
+        online_characters = (
+            redis_client.get_online_characters_by_server_and_guild_name_as_dict(
+                server_name, guild_name
+            )
         )
         guild_data.update({"online_characters": online_characters})
         auth_header = request.headers.get("Authorization")
