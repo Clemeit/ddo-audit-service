@@ -151,13 +151,19 @@ async def get_guild_by_server_name_and_guild_name(
         )
         if not verified_character:
             return json({"data": guild_data})
-        verified_guild_name = verified_character.guild_name
-        verified_server_name = verified_character.server_name
-        if not verified_guild_name or not verified_server_name:
+        # Ensure the verified character is actually in the requested guild
+        if (
+            not verified_character.guild_name.strip()
+            or not verified_character.server_name.strip()
+            or verified_character.server_name.lower() != server_name.lower()
+            or verified_character.guild_name.lower() != guild_name.lower()
+        ):
             return json({"data": guild_data})
 
+        # The verified character is in the requested guild, so we can
+        # safely add member information
         member_ids = postgres_client.get_character_ids_by_server_and_guild(
-            verified_server_name, verified_guild_name, page
+            server_name, guild_name, page
         )
         guild_data.update(
             {
