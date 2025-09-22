@@ -12,6 +12,7 @@ from sanic.response import json
 
 from constants.guilds import GUILD_NAME_MAX_LENGTH, GUILD_PAGE_LENGTH
 import utils.guilds as guild_utils
+from constants.server import SERVER_NAMES_LOWERCASE
 
 
 guild_blueprint = Blueprint("guild", url_prefix="/guilds", version=1)
@@ -91,18 +92,25 @@ async def get_all_guilds(request: Request):
         return json({"message": str(e)}, status=500)
 
 
-@guild_blueprint.get("/<guild_name:str>")
-async def get_guilds_by_name(request: Request, guild_name: str):
+@guild_blueprint.get("/<server_name:str>/<guild_name:str>")
+async def get_guild_by_server_name_and_guild_name(
+    request: Request, server_name: str, guild_name: str
+):
     """
     Method: GET
 
-    Route: /guilds/<guild_name>
+    Route: /guilds/<server_name>/<guild_name>
 
     Description: Get guild information including name, server, character count, last
     update timestamp, and current online characters. If the authorization header is
     provided, any guild that the user is a member of will be hydrated with additional
     information.
     """
+    # Validate server name
+    if server_name.lower() not in SERVER_NAMES_LOWERCASE:
+        return json({"message": "Invalid server name."}, status=400)
+
+    # Validate guild name
     try:
         guild_name = unquote(guild_name)
     except Exception as e:
@@ -117,17 +125,18 @@ async def get_guilds_by_name(request: Request, guild_name: str):
         )
 
     try:
-        generic_guild_data = postgres_client.get_guilds_by_name(guild_name)
-        if not generic_guild_data:
-            return json({"data": []})
-        for guild in generic_guild_data:
-            online_characters = redis_client.get_characters_by_guild_name_as_dict(
-                guild["guild_name"], guild["server_name"], True
-            )
-            guild.update({"online_characters": online_characters})
+        guild_data = postgres_client.get_guild_by_server_name_and_guild_name(
+            server_name, guild_name
+        )
+        if not guild_data:
+            return json({"data": None}, status=404)
+        online_characters = redis_client.get_characters_by_guild_name_as_dict(
+            guild_name, server_name, True
+        )
+        guild_data.update({"online_characters": online_characters})
         auth_header = request.headers.get("Authorization")
         if not auth_header:
-            return json({"data": generic_guild_data})
+            return json({"data": guild_data})
         page = int(request.args.get("page", 1))
         if page < 1:
             raise ValueError
@@ -141,27 +150,30 @@ async def get_guilds_by_name(request: Request, guild_name: str):
             else None
         )
         if not verified_character:
-            return json({"data": generic_guild_data})
-        verified_guild_name = verified_character.guild_name
-        verified_server_name = verified_character.server_name
-        if not verified_guild_name or not verified_server_name:
-            return json({"data": generic_guild_data})
-        for guild in generic_guild_data:
-            if (
-                guild["guild_name"] == verified_guild_name
-                and guild["server_name"] == verified_server_name
-            ):
-                member_ids = postgres_client.get_character_ids_by_server_and_guild(
-                    verified_server_name, verified_guild_name, page
-                )
-                guild.update(
-                    {
-                        "is_member": True,
-                        "member_ids": member_ids,
-                    }
-                )
-                break
-        return json({"data": generic_guild_data})
+            return json({"data": guild_data})
+        # Ensure the verified character is actually in the requested guild
+        if (
+            verified_character.guild_name is None
+            or verified_character.server_name is None
+            or not verified_character.guild_name.strip()
+            or not verified_character.server_name.strip()
+            or verified_character.server_name.lower() != server_name.lower()
+            or verified_character.guild_name.lower() != guild_name.lower()
+        ):
+            return json({"data": guild_data})
+
+        # The verified character is in the requested guild, so we can
+        # safely add member information
+        member_ids = postgres_client.get_character_ids_by_server_and_guild(
+            server_name, guild_name, page
+        )
+        guild_data.update(
+            {
+                "is_member": True,
+                "member_ids": member_ids,
+            }
+        )
+        return json({"data": guild_data})
     except ValueError:
         return json({"message": "Invalid page number."}, status=400)
     except Exception as e:
