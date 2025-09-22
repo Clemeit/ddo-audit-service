@@ -3,6 +3,7 @@ Guild endpoints.
 """
 
 import services.postgres as postgres_client
+import services.redis as redis_client
 from urllib.parse import unquote
 
 from sanic import Blueprint
@@ -97,9 +98,10 @@ async def get_guilds_by_name(request: Request, guild_name: str):
 
     Route: /guilds/<guild_name>
 
-    Description: Get guild information including name, server, character count, and last
-    update timestamp. If the authorization header is provided, any guild that the user is
-    a member of will be hydrated with additional information.
+    Description: Get guild information including name, server, character count, last
+    update timestamp, and current online characters. If the authorization header is
+    provided, any guild that the user is a member of will be hydrated with additional
+    information.
     """
     try:
         guild_name = unquote(guild_name)
@@ -115,10 +117,17 @@ async def get_guilds_by_name(request: Request, guild_name: str):
         )
 
     try:
-        guild_data = postgres_client.get_guilds_by_name(guild_name)
+        generic_guild_data = postgres_client.get_guilds_by_name(guild_name)
+        if not generic_guild_data:
+            return json({"data": []})
+        for guild in generic_guild_data:
+            online_characters = redis_client.get_characters_by_guild_name_as_dict(
+                guild["guild_name"], guild["server_name"], True
+            )
+            guild.update({"online_characters": online_characters})
         auth_header = request.headers.get("Authorization")
         if not auth_header:
-            return json({"data": guild_data})
+            return json({"data": generic_guild_data})
         page = int(request.args.get("page", 1))
         if page < 1:
             raise ValueError
@@ -132,12 +141,12 @@ async def get_guilds_by_name(request: Request, guild_name: str):
             else None
         )
         if not verified_character:
-            return json({"data": guild_data})
+            return json({"data": generic_guild_data})
         verified_guild_name = verified_character.guild_name
         verified_server_name = verified_character.server_name
         if not verified_guild_name or not verified_server_name:
-            return json({"data": guild_data})
-        for guild in guild_data:
+            return json({"data": generic_guild_data})
+        for guild in generic_guild_data:
             if (
                 guild["guild_name"] == verified_guild_name
                 and guild["server_name"] == verified_server_name
@@ -152,7 +161,7 @@ async def get_guilds_by_name(request: Request, guild_name: str):
                     }
                 )
                 break
-        return json({"data": guild_data})
+        return json({"data": generic_guild_data})
     except ValueError:
         return json({"message": "Invalid page number."}, status=400)
     except Exception as e:
