@@ -924,6 +924,9 @@ def get_character_activity_by_type_and_character_id(
         ),
     )
 
+    if activity_Type not in CharacterActivityType:
+        raise ValueError(f"Invalid activity type: {activity_Type}")
+
     with get_db_connection() as conn:
         # TODO: use datetime_to_datetime_string ?
         with conn.cursor() as cursor:
@@ -931,13 +934,13 @@ def get_character_activity_by_type_and_character_id(
                 """
                 SELECT timestamp, character_id, data
                 FROM public.character_activity
-                WHERE id = %s AND activity_type = %s AND timestamp BETWEEN %s AND %s
+                WHERE character_id = %s AND activity_type = %s AND timestamp BETWEEN %s AND %s
                 ORDER BY timestamp DESC
                 LIMIT %s
                 """,
                 (
                     character_id,
-                    activity_Type.name,
+                    activity_Type.value,
                     start_date.isoformat(),
                     end_date.isoformat(),
                     limit,
@@ -947,7 +950,75 @@ def get_character_activity_by_type_and_character_id(
             if not activity:
                 return []
 
-            return build_character_activity_from_rows(activity)
+            if activity_Type == CharacterActivityType.LOCATION:
+                return [
+                    build_character_location_activity_from_row(row) for row in activity
+                ]
+            elif activity_Type == CharacterActivityType.STATUS:
+                return [
+                    build_character_status_activity_from_row(row) for row in activity
+                ]
+            elif activity_Type == CharacterActivityType.TOTAL_LEVEL:
+                return [
+                    build_character_total_level_activity_from_row(row)
+                    for row in activity
+                ]
+            elif activity_Type == CharacterActivityType.GUILD_NAME:
+                return [
+                    build_character_guild_name_activity_from_row(row)
+                    for row in activity
+                ]
+            else:
+                return []  # not implemented
+
+
+def build_character_location_activity_from_row(row: tuple) -> dict:
+    return {
+        "timestamp": (
+            datetime_to_datetime_string(row[0]) if isinstance(row[0], datetime) else ""
+        ),
+        "character_id": int(row[1]),
+        "data": {
+            "location_id": int(row[2]["value"]) if row[2] is not None else None,
+        },
+    }
+
+
+def build_character_status_activity_from_row(row: tuple) -> dict:
+    return {
+        "timestamp": (
+            datetime_to_datetime_string(row[0]) if isinstance(row[0], datetime) else ""
+        ),
+        "character_id": int(row[1]),
+        "data": {
+            "status": bool(row[2]["value"]) if row[2] is not None else None,
+        },
+    }
+
+
+def build_character_guild_name_activity_from_row(row: tuple) -> dict:
+    return {
+        "timestamp": (
+            datetime_to_datetime_string(row[0]) if isinstance(row[0], datetime) else ""
+        ),
+        "character_id": int(row[1]),
+        "data": {
+            "guild_name": str(row[2]["value"]) if row[2] is not None else None,
+        },
+    }
+
+
+def build_character_total_level_activity_from_row(row: tuple) -> dict:
+    return {
+        "timestamp": (
+            datetime_to_datetime_string(row[0]) if isinstance(row[0], datetime) else ""
+        ),
+        "character_id": int(row[1]),
+        "data": {
+            "total_level": row[2]["total_level"] if row[2] is not None else None,
+            "classes": row[2]["classes"] if row[2] is not None else None,
+        },
+    }
 
 
 def get_recent_quest_activity_by_character_id(
@@ -991,7 +1062,7 @@ def get_recent_raid_activity_by_character_id(
             if not activities:
                 return []
 
-            return build_character_activity_from_rows(activities)
+            return build_character_raid_activity_from_rows(activities)
 
 
 def get_recent_raid_activity_by_character_ids(
@@ -1030,7 +1101,7 @@ def get_recent_raid_activity_by_character_ids(
             if not activities:
                 return []
 
-            return build_character_activity_from_rows(activities)
+            return build_character_raid_activity_from_rows(activities)
 
 
 def validate_lookback(lookback: int) -> None:
@@ -1809,7 +1880,7 @@ def build_character_quest_activity_from_row(row: tuple) -> CharacterQuestActivit
     )
 
 
-def build_character_activity_from_rows(rows: list[tuple]) -> list[dict]:
+def build_character_raid_activity_from_rows(rows: list[tuple]) -> list[dict]:
     return [
         {
             "timestamp": (
