@@ -940,7 +940,7 @@ def get_character_activity_by_type_and_character_id(
                 """,
                 (
                     character_id,
-                    activity_Type.name.lower(),
+                    activity_Type.value,
                     start_date.isoformat(),
                     end_date.isoformat(),
                     limit,
