@@ -31,19 +31,40 @@ async def get_location_activity_by_character_id(request: Request, character_id: 
 
     Description: Get location activity by character ID.
     """
-    start_date = request.args.get("start_date")
-    end_date = request.args.get("end_date")
-    limit = request.args.get("limit")
+    start_date_str = request.args.get("start_date")
+    end_date_str = request.args.get("end_date")
+    limit_str = request.args.get("limit")
 
     try:
-        # convert dates to datetime objects
-        if start_date:
-            start_date = datetime.strptime(start_date, "%Y-%m-%d")
-        if end_date:
-            end_date = datetime.strptime(end_date, "%Y-%m-%d")
-        limit = int(limit) if limit else None
+        verify_authorization(request, character_id)
 
-        # verify_authorization(request, character_id) # TODO: re-enabled through this file
+        start_date = None
+        end_date = None
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+            except ValueError:
+                return json({"message": "start_date must be YYYY-MM-DD"}, status=400)
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
+            except ValueError:
+                return json({"message": "end_date must be YYYY-MM-DD"}, status=400)
+
+        if start_date and end_date and start_date > end_date:
+            return json({"message": "start_date cannot be after end_date"}, status=400)
+
+        limit = None
+        if limit_str is not None:
+            try:
+                limit = int(limit_str)
+            except ValueError:
+                return json({"message": "limit must be an integer"}, status=400)
+            if limit <= 0:
+                return json({"message": "limit must be greater than 0"}, status=400)
+            if limit > 500:
+                return json({"message": "limit must be <= 500"}, status=400)
+
         activity = postgres_client.get_character_activity_by_type_and_character_id(
             character_id, CharacterActivityType.LOCATION, start_date, end_date, limit
         )
@@ -77,7 +98,7 @@ async def get_level_activity_by_character_id(request, character_id: str):
             end_date = datetime.strptime(end_date, "%Y-%m-%d")
         limit = int(limit) if limit else None
 
-        # verify_authorization(request, character_id)
+        verify_authorization(request, character_id)
         activity = postgres_client.get_character_activity_by_type_and_character_id(
             character_id, CharacterActivityType.TOTAL_LEVEL, start_date, end_date
         )
@@ -111,7 +132,7 @@ async def get_guild_name_activity_by_character_id(request, character_id: str):
             end_date = datetime.strptime(end_date, "%Y-%m-%d")
         limit = int(limit) if limit else None
 
-        # verify_authorization(request, character_id)
+        verify_authorization(request, character_id)
         activity = postgres_client.get_character_activity_by_type_and_character_id(
             character_id, CharacterActivityType.GUILD_NAME, start_date, end_date
         )
@@ -158,7 +179,7 @@ async def get_status_activity_by_character_id(request, character_id: str):
             end_date = datetime.strptime(end_date, "%Y-%m-%d")
         limit = int(limit) if limit else None
 
-        # verify_authorization(request, character_id)
+        verify_authorization(request, character_id)
         activity = postgres_client.get_character_activity_by_type_and_character_id(
             character_id, CharacterActivityType.STATUS, start_date, end_date
         )
@@ -182,7 +203,7 @@ async def get_recent_quests_by_character_id(request, character_id: str):
     """
 
     try:
-        # verify_authorization(request, character_id)
+        verify_authorization(request, character_id)
         quest_activity = postgres_client.get_recent_quest_activity_by_character_id(
             character_id
         )

@@ -170,8 +170,8 @@ def aggregate_character_activity_for_server(
                 )
 
             # check for guild change
-            current_guild = current_character.get("guild")
-            previous_guild = previous_character.get("guild")
+            current_guild = current_character.get("guild_name")
+            previous_guild = previous_character.get("guild_name")
             if current_guild != previous_guild:
                 character_activity.append(
                     CharacterActivity(
