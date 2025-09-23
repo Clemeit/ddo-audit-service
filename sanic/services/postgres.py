@@ -1015,7 +1015,8 @@ def build_character_total_level_activity_from_row(row: tuple) -> dict:
         ),
         "character_id": int(row[1]),
         "data": {
-            "total_level": row[2] if row[2] is not None else None,
+            "total_level": row[2]["total_level"] if row[2] is not None else None,
+            "classes": row[2]["classes"] if row[2] is not None else None,
         },
     }
 
