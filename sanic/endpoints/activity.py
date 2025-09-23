@@ -22,14 +22,16 @@ class VerificationError(Exception):
     pass
 
 
-@activity_blueprint.get("/<character_id:int>/location")
-async def get_location_activity_by_character_id(request: Request, character_id: int):
+@activity_blueprint.get("/<character_id:int>/<activity_type:str>")
+async def get_activity_by_character_id_and_activity_type(
+    request: Request, character_id: int, activity_type: str
+):
     """
     Method: GET
 
-    Route: /activity/<character_id:int>/location
+    Route: /activity/<character_id:int>/<activity_type:str>
 
-    Description: Get location activity by character ID.
+    Description: Get activity by character ID and activity type.
     """
     start_date_str = request.args.get("start_date")
     end_date_str = request.args.get("end_date")
@@ -37,6 +39,12 @@ async def get_location_activity_by_character_id(request: Request, character_id: 
 
     try:
         verify_authorization(request, character_id)
+
+        # validate activity type
+        try:
+            activity_type = CharacterActivityType(activity_type)
+        except ValueError:
+            return json({"message": "Invalid activity type"}, status=400)
 
         start_date = None
         end_date = None
@@ -66,7 +74,7 @@ async def get_location_activity_by_character_id(request: Request, character_id: 
                 return json({"message": "limit must be <= 500"}, status=400)
 
         activity = postgres_client.get_character_activity_by_type_and_character_id(
-            character_id, CharacterActivityType.LOCATION, start_date, end_date, limit
+            character_id, activity_type, start_date, end_date, limit
         )
     except AuthorizationError as e:
         return json({"message": str(e)}, status=401)
@@ -77,119 +85,119 @@ async def get_location_activity_by_character_id(request: Request, character_id: 
     return json({"data": activity})
 
 
-@activity_blueprint.get("/<character_id:int>/level")
-async def get_level_activity_by_character_id(request, character_id: str):
-    """
-    Method: GET
+# @activity_blueprint.get("/<character_id:int>/level")
+# async def get_level_activity_by_character_id(request, character_id: str):
+#     """
+#     Method: GET
 
-    Route: /activity/<character_id:int>/level
+#     Route: /activity/<character_id:int>/level
 
-    Description: Get level activity by character ID.
-    """
-    start_date = request.args.get("start_date")
-    end_date = request.args.get("end_date")
-    limit = request.args.get("limit")
+#     Description: Get level activity by character ID.
+#     """
+#     start_date = request.args.get("start_date")
+#     end_date = request.args.get("end_date")
+#     limit = request.args.get("limit")
 
-    try:
-        # convert dates to datetime objects
-        if start_date:
-            start_date = datetime.strptime(start_date, "%Y-%m-%d")
-        if end_date:
-            end_date = datetime.strptime(end_date, "%Y-%m-%d")
-        limit = int(limit) if limit else None
+#     try:
+#         # convert dates to datetime objects
+#         if start_date:
+#             start_date = datetime.strptime(start_date, "%Y-%m-%d")
+#         if end_date:
+#             end_date = datetime.strptime(end_date, "%Y-%m-%d")
+#         limit = int(limit) if limit else None
 
-        verify_authorization(request, character_id)
-        activity = postgres_client.get_character_activity_by_type_and_character_id(
-            character_id, CharacterActivityType.TOTAL_LEVEL, start_date, end_date
-        )
-    except AuthorizationError as e:
-        return json({"message": str(e)}, status=401)
-    except VerificationError as e:
-        return json({"message": str(e)}, status=403)
-    except Exception as e:
-        return json({"message": str(e)}, status=500)
-    return json({"data": activity})
-
-
-@activity_blueprint.get("/<character_id:int>/guild_name")
-async def get_guild_name_activity_by_character_id(request, character_id: str):
-    """
-    Method: GET
-
-    Route: /activity/<character_id:int>/guild_name
-
-    Description: Get guild name activity by character ID.
-    """
-    start_date = request.args.get("start_date")
-    end_date = request.args.get("end_date")
-    limit = request.args.get("limit")
-
-    try:
-        # convert dates to datetime objects
-        if start_date:
-            start_date = datetime.strptime(start_date, "%Y-%m-%d")
-        if end_date:
-            end_date = datetime.strptime(end_date, "%Y-%m-%d")
-        limit = int(limit) if limit else None
-
-        verify_authorization(request, character_id)
-        activity = postgres_client.get_character_activity_by_type_and_character_id(
-            character_id, CharacterActivityType.GUILD_NAME, start_date, end_date
-        )
-    except AuthorizationError as e:
-        return json({"message": str(e)}, status=401)
-    except VerificationError as e:
-        return json({"message": str(e)}, status=403)
-    except Exception as e:
-        return json({"message": str(e)}, status=500)
-    return json({"data": activity})
+#         verify_authorization(request, character_id)
+#         activity = postgres_client.get_character_activity_by_type_and_character_id(
+#             character_id, CharacterActivityType.TOTAL_LEVEL, start_date, end_date
+#         )
+#     except AuthorizationError as e:
+#         return json({"message": str(e)}, status=401)
+#     except VerificationError as e:
+#         return json({"message": str(e)}, status=403)
+#     except Exception as e:
+#         return json({"message": str(e)}, status=500)
+#     return json({"data": activity})
 
 
-@activity_blueprint.get("/<character_id:int>/character_name")
-async def get_character_name_activity_by_character_id(request, character_id: str):
-    """
-    Method: GET
+# @activity_blueprint.get("/<character_id:int>/guild_name")
+# async def get_guild_name_activity_by_character_id(request, character_id: str):
+#     """
+#     Method: GET
 
-    Route: /activity/<character_id:int>/character_name
+#     Route: /activity/<character_id:int>/guild_name
 
-    Description: Get character name activity by character ID.
-    """
+#     Description: Get guild name activity by character ID.
+#     """
+#     start_date = request.args.get("start_date")
+#     end_date = request.args.get("end_date")
+#     limit = request.args.get("limit")
 
-    return json({"message": "not implemented"}, status=501)
+#     try:
+#         # convert dates to datetime objects
+#         if start_date:
+#             start_date = datetime.strptime(start_date, "%Y-%m-%d")
+#         if end_date:
+#             end_date = datetime.strptime(end_date, "%Y-%m-%d")
+#         limit = int(limit) if limit else None
+
+#         verify_authorization(request, character_id)
+#         activity = postgres_client.get_character_activity_by_type_and_character_id(
+#             character_id, CharacterActivityType.GUILD_NAME, start_date, end_date
+#         )
+#     except AuthorizationError as e:
+#         return json({"message": str(e)}, status=401)
+#     except VerificationError as e:
+#         return json({"message": str(e)}, status=403)
+#     except Exception as e:
+#         return json({"message": str(e)}, status=500)
+#     return json({"data": activity})
 
 
-@activity_blueprint.get("/<character_id:int>/status")
-async def get_status_activity_by_character_id(request, character_id: str):
-    """
-    Method: GET
+# @activity_blueprint.get("/<character_id:int>/character_name")
+# async def get_character_name_activity_by_character_id(request, character_id: str):
+#     """
+#     Method: GET
 
-    Route: /activity/<character_id:int>/status
+#     Route: /activity/<character_id:int>/character_name
 
-    Description: Get status activity (online or offline) by character ID.
-    """
-    start_date = request.args.get("start_date")
-    end_date = request.args.get("end_date")
-    limit = request.args.get("limit")
+#     Description: Get character name activity by character ID.
+#     """
 
-    try:
-        # convert dates to datetime objects
-        if start_date:
-            start_date = datetime.strptime(start_date, "%Y-%m-%d")
-        if end_date:
-            end_date = datetime.strptime(end_date, "%Y-%m-%d")
-        limit = int(limit) if limit else None
+#     return json({"message": "not implemented"}, status=501)
 
-        verify_authorization(request, character_id)
-        activity = postgres_client.get_character_activity_by_type_and_character_id(
-            character_id, CharacterActivityType.STATUS, start_date, end_date
-        )
-    except AuthorizationError as e:
-        return json({"message": str(e)}, status=401)
-    except VerificationError as e:
-        return json({"message": str(e)}, status=403)
-    except Exception as e:
-        return json({"message": str(e)}, status=500)
-    return json({"data": activity})
+
+# @activity_blueprint.get("/<character_id:int>/status")
+# async def get_status_activity_by_character_id(request, character_id: str):
+#     """
+#     Method: GET
+
+#     Route: /activity/<character_id:int>/status
+
+#     Description: Get status activity (online or offline) by character ID.
+#     """
+#     start_date = request.args.get("start_date")
+#     end_date = request.args.get("end_date")
+#     limit = request.args.get("limit")
+
+#     try:
+#         # convert dates to datetime objects
+#         if start_date:
+#             start_date = datetime.strptime(start_date, "%Y-%m-%d")
+#         if end_date:
+#             end_date = datetime.strptime(end_date, "%Y-%m-%d")
+#         limit = int(limit) if limit else None
+
+#         verify_authorization(request, character_id)
+#         activity = postgres_client.get_character_activity_by_type_and_character_id(
+#             character_id, CharacterActivityType.STATUS, start_date, end_date
+#         )
+#     except AuthorizationError as e:
+#         return json({"message": str(e)}, status=401)
+#     except VerificationError as e:
+#         return json({"message": str(e)}, status=403)
+#     except Exception as e:
+#         return json({"message": str(e)}, status=500)
+#     return json({"data": activity})
 
 
 @activity_blueprint.get("/<character_id:int>/quests")
