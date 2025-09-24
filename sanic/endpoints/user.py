@@ -7,7 +7,8 @@ import services.redis as redis_client
 from sanic import Blueprint
 from sanic.response import json
 
-import secrets, string
+import secrets
+import string
 
 user_blueprint = Blueprint("user", url_prefix="/user", version=1)
 
@@ -30,7 +31,7 @@ async def post_user_settings(request):
 
         # Ensure size less than 25 KB
         if len(request.body) > 25 * 1024:
-            return json({"message": len(request.body)}, status=413)
+            return json({"message": "Request body too large"}, status=413)
 
         attempts = 0
         max_attempts = 10
@@ -47,7 +48,7 @@ async def post_user_settings(request):
             return json({"message": "Could not generate unique user ID"}, status=500)
 
         redis_client.store_one_time_user_settings(user_id, settings)
-    except Exception as e:
+    except Exception:
         return json({"message": "Internal server error"}, status=500)
 
     return json({"data": {"user_id": user_id}})
@@ -68,7 +69,7 @@ async def get_user_settings(request, user_id: str):
             return json(
                 {"message": "Settings not found or already retrieved"}, status=404
             )
-    except Exception as e:
-        return json({"message": str(e)}, status=500)
+    except Exception:
+        return json({"message": "Internal server error"}, status=500)
 
     return json({"data": settings})

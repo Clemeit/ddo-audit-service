@@ -3,24 +3,19 @@ Service to interface with the Redis server.
 """
 
 import os
-import random
 
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.character import Character
 from models.lfm import Lfm
 from models.redis import (
     ServerInfo,
-    ServerCharacterData,
-    ServerLfmData,
     ServerSpecificInfo,
     KnownAreasModel,
     KnownQuestsModel,
-    ServerInfoDict,
     RedisKeys,
     REDIS_KEY_TYPE_MAPPING,
 )
 from time import time
-from constants.redis import VALID_AREA_CACHE_TTL, VALID_QUEST_CACHE_TTL
 from models.area import Area
 from models.service import News, PageMessage
 from models.quest import Quest
