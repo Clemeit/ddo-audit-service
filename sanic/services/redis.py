@@ -3,24 +3,19 @@ Service to interface with the Redis server.
 """
 
 import os
-import random
 
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.character import Character
 from models.lfm import Lfm
 from models.redis import (
     ServerInfo,
-    ServerCharacterData,
-    ServerLfmData,
     ServerSpecificInfo,
     KnownAreasModel,
     KnownQuestsModel,
-    ServerInfoDict,
     RedisKeys,
     REDIS_KEY_TYPE_MAPPING,
 )
 from time import time
-from constants.redis import VALID_AREA_CACHE_TTL, VALID_QUEST_CACHE_TTL
 from models.area import Area
 from models.service import News, PageMessage
 from models.quest import Quest
@@ -54,6 +49,19 @@ logger = logging.getLogger(__name__)
 # Global connection pool
 _connection_pool: ConnectionPool = None
 _async_connection_pool: aioredis.ConnectionPool = None
+
+
+ONE_TIME_USER_SETTINGS_PREFIX = "one_time_user_settings:"
+
+# Atomic JSON.GET + DEL (ensures true one-time access)
+_ONE_TIME_USER_SETTINGS_GETDEL_LUA = """
+local key = KEYS[1]
+local val = redis.call('JSON.GET', key)
+if val then
+  redis.call('DEL', key)
+end
+return val
+"""
 
 
 class RedisConnectionManager:
@@ -996,6 +1004,40 @@ def expire_key_immediately(key: str):
     """Expire a Redis key immediately (force removal from cache)."""
     with get_redis_client() as client:
         client.expire(key, 0)
+
+
+def store_one_time_user_settings(user_id: str, settings: dict):
+    """Store one-time user settings (expires after 5 minutes)."""
+    key = f"{ONE_TIME_USER_SETTINGS_PREFIX}{user_id}"
+    with get_redis_client() as client:
+        client.json().set(key, path="$", obj=settings)
+        client.expire(key, 300)  # 5 minutes
+
+
+def get_one_time_user_settings(user_id: str) -> Optional[dict]:
+    """
+    Atomically retrieve and delete one-time user settings.
+    Returns None if already consumed or missing.
+    """
+    key = f"{ONE_TIME_USER_SETTINGS_PREFIX}{user_id}"
+    with get_redis_client() as client:
+        raw = client.eval(_ONE_TIME_USER_SETTINGS_GETDEL_LUA, 1, key)
+    if not raw:
+        return None
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8")
+    try:
+        return json.loads(raw)
+    except Exception:
+        # Fallback: if someone stored a non-JSON scalar unexpectedly
+        return None
+
+
+def one_time_user_settings_exists(user_id: str) -> bool:
+    """Check existence without consuming."""
+    key = f"{ONE_TIME_USER_SETTINGS_PREFIX}{user_id}"
+    with get_redis_client() as client:
+        return client.exists(key) == 1
 
 
 # ======= Game Population ========
