@@ -914,7 +914,10 @@ def get_character_activity_by_type_and_character_id(
     # if the total number of days is greater than the maximum allowed, set
     # the end date to the maximum allowed
     if (end_date - start_date).days > MAX_CHARACTER_ACTIVITY_READ_HISTORY:
-        end_date = start_date + timedelta(days=MAX_CHARACTER_ACTIVITY_READ_HISTORY)
+        start_date = datetime.now() - timedelta(
+            days=MAX_CHARACTER_ACTIVITY_READ_HISTORY
+        )
+        end_date = datetime.now()
 
     limit = max(
         1,
