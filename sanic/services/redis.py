@@ -1016,7 +1016,7 @@ def store_one_time_user_settings(user_id: str, settings: dict):
     key = f"{ONE_TIME_USER_SETTINGS_PREFIX}{user_id}"
     with get_redis_client() as client:
         client.json().set(key, path="$", obj=settings)
-        client.expire(key, 5)  # 5 minutes
+        client.expire(key, 300)  # 5 minutes
 
 
 def get_one_time_user_settings(user_id: str) -> Optional[dict]:
