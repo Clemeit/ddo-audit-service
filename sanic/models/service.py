@@ -36,6 +36,7 @@ class LogRequest(BaseModel):
     timestamp: Optional[str] = None  # ISO 8601 format
     session_id: Optional[str] = None
     user_id: Optional[str] = None
+    originating_user_id: Optional[str] = None
     commit_hash: Optional[str] = None
 
     # Browser/Environment

@@ -2217,8 +2217,8 @@ def persist_log(log: LogRequest):
             try:
                 cursor.execute(
                     """
-                    INSERT INTO public.logs (message, level, timestamp, component, action, metadata, session_id, user_id, user_agent, browser, browser_version, os, screen_resolution, viewport_size, url, page_title, referrer, route, ip_address, country, is_internal, commit_hash)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO public.logs (message, level, timestamp, component, action, metadata, session_id, user_id, user_agent, browser, browser_version, os, screen_resolution, viewport_size, url, page_title, referrer, route, ip_address, country, is_internal, commit_hash, originating_user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         log.message,
@@ -2243,6 +2243,7 @@ def persist_log(log: LogRequest):
                         log.country,
                         log.is_internal,
                         log.commit_hash,
+                        log.originating_user_id,
                     ),
                 )
                 conn.commit()
