@@ -1139,7 +1139,7 @@ def get_recent_quest_activity_by_character_id(
 
 def get_recent_raid_activity_by_character_id(
     character_id: int,
-) -> list[dict[str, Quest]]:
+) -> list[dict]:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(

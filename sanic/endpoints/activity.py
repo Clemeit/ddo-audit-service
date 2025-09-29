@@ -93,7 +93,7 @@ async def get_recent_raid_activity_by_character_ids(
     """
     Method: GET
 
-    Route: /activity/raids/<character_id:int>
+    Route: /activity/raids/<character_ids:str>
 
     Description: Get recent activity by character IDs. No auth needed.
     """
