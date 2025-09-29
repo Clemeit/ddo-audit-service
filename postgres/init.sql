@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS public."characters"
     is_anonymous boolean NOT NULL,
     last_update timestamp with time zone NOT NULL,
     last_save timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    auditing_flags jsonb,
     CONSTRAINT character_pkey PRIMARY KEY (id)
 )
 
@@ -197,12 +198,10 @@ CREATE TABLE IF NOT EXISTS public."config"
 (
     key text NOT NULL,
     value text,
-    value_type text NOT NULL DEFAULT 'string',
     description text,
-    category text,
     is_enabled boolean NOT NULL DEFAULT true,
     created_date timestamp with time zone NOT NULL DEFAULT current_timestamp,
-    updated_date timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    modified_date timestamp with time zone NOT NULL DEFAULT current_timestamp,
     PRIMARY KEY (key)
 )
 

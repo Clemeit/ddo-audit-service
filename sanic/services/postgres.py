@@ -2717,11 +2717,12 @@ def get_config() -> dict:
 
             return {
                 row[0]: {
+                    "key": row[0],
                     "value": row[1],
-                    "value_type": row[2],
-                    "description": row[3],
-                    "category": row[4],
-                    "is_enabled": row[5],
+                    "description": row[2],
+                    "is_enabled": row[3],
+                    "created_date": row[4],
+                    "modified_date": row[5],
                 }
                 for row in config_rows
             }
@@ -2750,10 +2751,10 @@ def get_config_by_key(key: str) -> dict | None:
             return {
                 "key": config_row[0],
                 "value": config_row[1],
-                "value_type": config_row[2],
-                "description": config_row[3],
-                "category": config_row[4],
-                "is_enabled": config_row[5],
+                "description": config_row[2],
+                "is_enabled": config_row[3],
+                "created_date": config_row[4],
+                "modified_date": config_row[5],
             }
 
 
