@@ -2721,8 +2721,16 @@ def get_config() -> dict:
                     "value": row[1],
                     "description": row[2],
                     "is_enabled": row[3],
-                    "created_date": row[4],
-                    "modified_date": row[5],
+                    "created_date": (
+                        datetime_to_datetime_string(row[4])
+                        if isinstance(row[4], datetime)
+                        else row[4]
+                    ),
+                    "modified_date": (
+                        datetime_to_datetime_string(row[5])
+                        if isinstance(row[5], datetime)
+                        else row[5]
+                    ),
                 }
                 for row in config_rows
             }
@@ -2753,8 +2761,16 @@ def get_config_by_key(key: str) -> dict | None:
                 "value": config_row[1],
                 "description": config_row[2],
                 "is_enabled": config_row[3],
-                "created_date": config_row[4],
-                "modified_date": config_row[5],
+                "created_date": (
+                    datetime_to_datetime_string(config_row[4])
+                    if isinstance(config_row[4], datetime)
+                    else config_row[4]
+                ),
+                "modified_date": (
+                    datetime_to_datetime_string(config_row[5])
+                    if isinstance(config_row[5], datetime)
+                    else config_row[5]
+                ),
             }
 
 
