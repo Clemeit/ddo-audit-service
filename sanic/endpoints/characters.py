@@ -18,6 +18,7 @@ from urllib.parse import unquote
 
 from utils.log import logMessage
 import utils.guilds as guild_utils
+from constants.guilds import GUILD_NAME_MAX_LENGTH
 from constants.server import MAX_CHARACTER_LOOKUP_IDS
 
 
@@ -192,9 +193,7 @@ async def get_characters_by_ids(request: Request, character_ids: str):
         character_ids_list = [int(id) for id in character_ids.split(",")]
         if len(character_ids_list) > MAX_CHARACTER_LOOKUP_IDS:
             return json(
-                {
-                    "message": f"Cannot request more than {MAX_CHARACTER_LOOKUP_IDS} character IDs at once"
-                },
+                {"message": "Cannot request more than 100 character IDs at once"},
                 status=400,
             )
         if not all(
