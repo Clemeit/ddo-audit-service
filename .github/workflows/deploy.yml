@@ -54,6 +54,13 @@ jobs:
           NGINX_HTTP_PORT=${{ vars.NGINX_HTTP_PORT }}
           NGINX_HTTPS_PORT=${{ vars.NGINX_HTTPS_PORT }}
           STATIC_FILES_PATH=${{ vars.STATIC_FILES_PATH }}
+          PRERENDER_TOKEN=${{ secrets.PRERENDER_TOKEN }}
+          EOF
+
+      - name: Create prerender_token.conf file
+        run: |
+          cat > prerender_token.conf <<'EOF'
+          set $prerender_token "${{ secrets.PRERENDER_TOKEN }}";
           EOF
 
       - name: Ensure target directory exists
@@ -81,6 +88,15 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           source: "./.env"
+          target: "/var/www/ddoaudit-stage.com/app/"
+
+      - name: Copy prerender_token.conf to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "./prerender_token.conf"
           target: "/var/www/ddoaudit-stage.com/app/"
 
       - name: Deploy to Stage
