@@ -61,7 +61,9 @@ jobs:
         run: |
           mkdir -p build/nginx
           cat > build/nginx/00-prerender-token.conf <<'EOF'
-          map "" $prerender_token { default "${{ secrets.PRERENDER_TOKEN }}"; }
+          map $http_host $prerender_token {
+            default "${{ secrets.PRERENDER_TOKEN }}";
+          }
           EOF
 
       - name: Ensure target directory exists
@@ -171,7 +173,9 @@ jobs:
         run: |
           mkdir -p build/nginx
           cat > build/nginx/00-prerender-token.conf <<'EOF'
-          map "" $prerender_token { default "${{ secrets.PRERENDER_TOKEN }}"; }
+          map $http_host $prerender_token {
+            default "${{ secrets.PRERENDER_TOKEN }}";
+          }
           EOF
 
       - name: Ensure target directory exists
@@ -208,7 +212,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           source: "./build/nginx/00-prerender-token.conf"
-          target: "/var/www/ddoaudit-stage.com/app/"
+          target: "/var/www/ddoaudit.com/app/"
 
       - name: Deploy to Production
         uses: appleboy/ssh-action@master
