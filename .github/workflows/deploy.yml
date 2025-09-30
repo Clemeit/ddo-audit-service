@@ -99,7 +99,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          source: "./build/nginx/00-prerender-token.conf"
+          source: "build/nginx/00-prerender-token.conf"
           target: "/var/www/ddoaudit-stage.com/app/"
 
       - name: Deploy to Stage
