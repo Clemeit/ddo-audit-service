@@ -141,12 +141,19 @@ jobs:
           NGINX_HTTP_PORT=${{ vars.NGINX_HTTP_PORT }}
           NGINX_HTTPS_PORT=${{ vars.NGINX_HTTPS_PORT }}
           STATIC_FILES_PATH=${{ vars.STATIC_FILES_PATH }}
+          PRERENDER_TOKEN=${{ secrets.PRERENDER_TOKEN }}
           BETTERSTACK_SERVER_INFO_KEY=${{ secrets.BETTERSTACK_SERVER_INFO_KEY }}
           BETTERSTACK_CHARACTER_COLLECTIONS_KEY=${{ secrets.BETTERSTACK_CHARACTER_COLLECTIONS_KEY }}
           BETTERSTACK_LFM_COLLECTIONS_KEY=${{ secrets.BETTERSTACK_LFM_COLLECTIONS_KEY }}
           BETTERSTACK_SERVER_INFO_API_KEY=${{ secrets.BETTERSTACK_SERVER_INFO_API_KEY }}
           BETTERSTACK_CHARACTER_API_KEY=${{ secrets.BETTERSTACK_CHARACTER_API_KEY }}
           BETTERSTACK_LFM_API_KEY=${{ secrets.BETTERSTACK_LFM_API_KEY }}
+          EOF
+
+      - name: Create prerender_token.conf file
+        run: |
+          cat > prerender_token.conf <<'EOF'
+          set $prerender_token "${{ secrets.PRERENDER_TOKEN }}";
           EOF
 
       - name: Ensure target directory exists
@@ -174,6 +181,15 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           source: "./.env"
+          target: "/var/www/ddoaudit.com/app/"
+
+      - name: Copy prerender_token.conf to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "./prerender_token.conf"
           target: "/var/www/ddoaudit.com/app/"
 
       - name: Deploy to Production

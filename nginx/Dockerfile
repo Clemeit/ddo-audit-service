@@ -6,6 +6,10 @@ RUN rm -rf /usr/share/nginx/html/*
 # Copy the build files from the host to the container
 # COPY /client /usr/share/nginx/html
 
+# Inject prerender token script
+COPY ./nginx/docker-entrypoint.d/ /docker-entrypoint.d/
+RUN chmod +x /docker-entrypoint.d/*.sh
+
 # Copy the Nginx configuration file from the host to the container
 COPY ./nginx/nginx.conf /etc/nginx/nginx.conf
 COPY ./nginx/api.conf /etc/nginx/conf.d/api.conf
