@@ -109,6 +109,7 @@ services:
       - /var/www/ddoaudit-stage.com/html/client/build:/usr/share/nginx/html:ro
       - /var/www/ddoaudit.com/acme-challenge:/acme-challenge
       - /etc/letsencrypt:/etc/letsencrypt
+      - /var/www/ddoaudit-stage.com/app/prerender_token.conf:/etc/nginx/conf.d/zz-prerender-token.conf:ro
 
   pgadmin:
     image: dpage/pgadmin4
