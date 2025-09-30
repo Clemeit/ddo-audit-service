@@ -62,6 +62,7 @@ services:
       - BETTERSTACK_SERVER_INFO_KEY=${BETTERSTACK_SERVER_INFO_KEY}
       - BETTERSTACK_CHARACTER_COLLECTIONS_KEY=${BETTERSTACK_CHARACTER_COLLECTIONS_KEY}
       - BETTERSTACK_LFM_COLLECTIONS_KEY=${BETTERSTACK_LFM_COLLECTIONS_KEY}
+      - PRERENDER_TOKEN=${PRERENDER_TOKEN}
     expose:
       - 8000
     networks:
@@ -94,6 +95,7 @@ services:
       - /var/www/ddoaudit.com/html/client/build:/usr/share/nginx/html:ro
       - /var/www/ddoaudit.com/acme-challenge:/acme-challenge
       - /etc/letsencrypt:/etc/letsencrypt
+      - /var/www/ddoaudit.com/app/prerender_token.conf:/etc/nginx/conf.d/zz-prerender-token.conf:ro
 
   pgadmin:
     image: dpage/pgadmin4
