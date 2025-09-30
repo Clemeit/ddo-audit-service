@@ -931,7 +931,6 @@ def get_character_activity_by_type_and_character_id(
         raise ValueError(f"Invalid activity type: {activity_Type}")
 
     with get_db_connection() as conn:
-        # TODO: use datetime_to_datetime_string ?
         with conn.cursor() as cursor:
             cursor.execute(
                 """
@@ -973,6 +972,98 @@ def get_character_activity_by_type_and_character_id(
                 ]
             else:
                 return []  # not implemented
+
+
+def get_recent_raid_activity_by_character_id(
+    character_id: int,
+) -> list[dict[str, Quest]]:
+    """
+    Get recent (last 3 days) raid activity - similar to location activity but where the ID matches
+    with a raid quest (i.e. quests with group_size = 'Raid').
+
+    This is different from get_character_activity_by_type_and_character_id() because it does not
+    require character verification.
+
+    Returned from the query should be a start_time (when the character entered the location) and
+    an end_time (when the character left the location or entered a new location).
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT 
+                    current_activity.timestamp AS start_time,
+                    COALESCE(next_activity.timestamp, null) AS end_time,
+                    current_activity.character_id, 
+                    ARRAY_AGG(DISTINCT quests.id ORDER BY quests.id) AS quest_ids
+                FROM public.character_activity current_activity
+                LEFT JOIN public.quests 
+                    ON public.quests.area_id = CAST(current_activity.data ->> 'value' AS INTEGER)
+                LEFT JOIN LATERAL (
+                    SELECT timestamp 
+                    FROM public.character_activity next_activity
+                    WHERE next_activity.character_id = current_activity.character_id 
+                        AND next_activity.activity_type = 'location'
+                        AND next_activity.timestamp > current_activity.timestamp
+                    ORDER BY next_activity.timestamp ASC
+                    LIMIT 1
+                ) next_activity ON TRUE
+                WHERE quests.group_size = 'Raid' 
+                    AND current_activity.character_id = %s 
+                    AND current_activity.activity_type = 'location' 
+                    AND current_activity.timestamp >= NOW() - INTERVAL '3 days'
+                GROUP BY start_time, end_time, current_activity.character_id
+                ORDER BY start_time DESC
+                LIMIT 100
+                """,
+                (character_id,),
+            )
+            activities = cursor.fetchall()
+            if not activities:
+                return []
+
+            return build_character_raid_activity_from_rows(activities)
+
+
+def get_recent_raid_activity_by_character_ids(
+    character_ids: list[int],
+) -> list[dict]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT 
+                    current_activity.timestamp AS start_time,
+                    COALESCE(next_activity.timestamp, null) AS end_time,
+                    current_activity.character_id, 
+                    ARRAY_AGG(DISTINCT quests.id ORDER BY quests.id) AS quest_ids
+                FROM public.character_activity current_activity
+                LEFT JOIN public.quests 
+                    ON public.quests.area_id = CAST(current_activity.data ->> 'value' AS INTEGER)
+                LEFT JOIN LATERAL (
+                    SELECT timestamp 
+                    FROM public.character_activity next_activity
+                    WHERE next_activity.character_id = current_activity.character_id 
+                        AND next_activity.activity_type = 'location'
+                        AND next_activity.timestamp > current_activity.timestamp
+                    ORDER BY next_activity.timestamp ASC
+                    LIMIT 1
+                ) next_activity ON TRUE
+                WHERE quests.group_size = 'Raid' 
+                    AND current_activity.character_id = ANY(%s) 
+                    AND current_activity.activity_type = 'location' 
+                    AND current_activity.timestamp >= NOW() - INTERVAL '3 days'
+                GROUP BY start_time, end_time, current_activity.character_id
+                ORDER BY start_time DESC
+                LIMIT 100
+                """,
+                (character_ids,),
+            )
+            activities = cursor.fetchall()
+            if not activities:
+                return []
+
+            return build_character_raid_activity_from_rows(activities)
 
 
 def build_character_location_activity_from_row(row: tuple) -> dict:
@@ -1048,7 +1139,7 @@ def get_recent_quest_activity_by_character_id(
 
 def get_recent_raid_activity_by_character_id(
     character_id: int,
-) -> list[dict[str, Quest]]:
+) -> list[dict]:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -1886,16 +1977,21 @@ def build_character_quest_activity_from_row(row: tuple) -> CharacterQuestActivit
 def build_character_raid_activity_from_rows(rows: list[tuple]) -> list[dict]:
     return [
         {
-            "timestamp": (
+            "start_time": (
                 datetime_to_datetime_string(row[0])
                 if isinstance(row[0], datetime)
                 else ""
             ),
-            "character_id": int(row[1]),
+            "end_time": (
+                datetime_to_datetime_string(row[1])
+                if isinstance(row[1], datetime)
+                else ""
+            ),
+            "character_id": int(row[2]),
             "data": {
                 "quest_ids": (
-                    [int(quest_id) for quest_id in row[2] if quest_id is not None]
-                    if row[2]
+                    [int(quest_id) for quest_id in row[3] if quest_id is not None]
+                    if row[3]
                     else []
                 ),
             },
