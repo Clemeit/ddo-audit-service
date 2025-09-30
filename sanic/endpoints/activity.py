@@ -6,6 +6,7 @@ from datetime import datetime
 
 import services.postgres as postgres_client
 from constants.activity import CharacterActivityType
+from constants.server import MAX_REGISTERED_CHARACTER_COUNT
 
 from sanic import Blueprint
 from sanic.response import json
@@ -83,6 +84,40 @@ async def get_activity_by_character_id_and_activity_type(
     except Exception as e:
         return json({"message": str(e)}, status=500)
     return json({"data": activity})
+
+
+@activity_blueprint.get("/raids/<character_ids:str>")
+async def get_recent_raid_activity_by_character_ids(
+    request: Request, character_ids: str
+):
+    """
+    Method: GET
+
+    Route: /activity/raids/<character_ids:str>
+
+    Description: Get recent activity by character IDs. No auth needed.
+    """
+    # validate that all character_ids are numbers
+    if not all(character_id.isdigit() for character_id in character_ids.split(",")):
+        return json({"message": "Invalid character IDs"}, status=400)
+
+    try:
+        character_ids_list = [int(id) for id in character_ids.split(",")]
+        if len(character_ids_list) > MAX_REGISTERED_CHARACTER_COUNT:
+            return json(
+                {
+                    "message": f"Cannot request more than {MAX_REGISTERED_CHARACTER_COUNT} character IDs at once"
+                },
+                status=400,
+            )
+
+        raid_activity = postgres_client.get_recent_raid_activity_by_character_ids(
+            character_ids_list
+        )
+        return_data = {item["character_id"]: item for item in raid_activity}
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+    return json({"data": return_data})
 
 
 # @activity_blueprint.get("/<character_id:int>/level")
@@ -222,51 +257,6 @@ async def get_recent_quests_by_character_id(request, character_id: str):
     except Exception as e:
         return json({"message": str(e)}, status=500)
     return json({"data": quest_activity})
-
-
-@activity_blueprint.get("/raids")
-async def get_raid_activity_by_character_ids(request: Request):
-    """
-    Method: GET
-
-    Route: /activity/raids
-
-    Description: Get recent raids by character IDs.
-    """
-    try:
-        # get character IDs from the query parameter
-        character_ids_param: str = request.args.get("character_ids")
-        if not character_ids_param:
-            return json(
-                {"message": "character_ids query parameter is required"}, status=400
-            )
-
-        # Parse and validate character IDs
-        try:
-            character_ids = [
-                int(id.strip()) for id in character_ids_param.split(",") if id.strip()
-            ]
-        except ValueError:
-            return json(
-                {"message": "character_ids must be a comma-separated list of integers"},
-                status=400,
-            )
-
-        if not character_ids:
-            return json({"data": []})
-
-        if len(character_ids) > 30:
-            return json(
-                {"message": "Too many character IDs provided. Maximum is 30"},
-                status=400,
-            )
-
-        raid_activity = postgres_client.get_recent_raid_activity_by_character_ids(
-            character_ids
-        )
-        return json({"data": raid_activity})
-    except Exception as e:
-        return json({"message": str(e)}, status=500)
 
 
 def verify_authorization(request: Request, character_id: int):
