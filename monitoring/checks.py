@@ -12,10 +12,12 @@ class ServerInfoCheck(Check):
         self,
         betterstack_key: str = None,
         interval: int = 60,
+        ignored_servers: list[str] = None,
     ):
         super().__init__("Server Info Check", interval)
         self.url = "http://sanic:8000/v1/game/server-info"
         self.betterstack_key = betterstack_key
+        self.ignored_servers = ignored_servers if ignored_servers else []
 
     def execute(self) -> Dict[str, Any]:
         """Execute the server info check."""
@@ -35,6 +37,9 @@ class ServerInfoCheck(Check):
                 unhealthy_servers = []
 
                 for server_name, server_info in data.items():
+                    if server_name.lower() in self.ignored_servers:
+                        continue
+
                     last_status_check_iso_string = server_info.get(
                         "last_status_check", ""
                     )
@@ -171,6 +176,7 @@ class CharacterCheck(Check):
         request_timeout: int = 10,
         percent_difference_threshold: int = 0.02,
         absolute_difference_threshold: int = 5,
+        ignored_servers: list[str] = None,
     ):
         super().__init__("Character Check", interval)
         self.server_info_url = "http://sanic:8000/v1/game/server-info"
@@ -181,6 +187,7 @@ class CharacterCheck(Check):
         self.request_timeout = request_timeout
         self.percent_difference_threshold = percent_difference_threshold
         self.absolute_difference_threshold = absolute_difference_threshold
+        self.ignored_servers = ignored_servers if ignored_servers else []
 
     def execute(self) -> Dict[str, Any]:
         """Execute the character check."""
@@ -415,6 +422,9 @@ class CharacterCheck(Check):
 
         try:
             for server_name, server_info in server_info_data.items():
+                if server_name.lower() in self.ignored_servers:
+                    continue
+
                 is_online = server_info.get("is_online", False)
                 if not is_online:
                     continue

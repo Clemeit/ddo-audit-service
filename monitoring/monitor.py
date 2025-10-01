@@ -5,6 +5,19 @@ from core import MonitoringService
 from checks import ServerInfoCheck, CharacterCheck
 
 
+IGNORED_SERVERS: list[str] = [
+    "argonnessen",
+    "cannith",
+    "ghallanda",
+    "khyber",
+    "orien",
+    "sarlona",
+    "thelanis",
+    "wayfinder",
+    "hardcore",
+]
+
+
 def main():
     """Main entry point for the monitoring service."""
 
@@ -15,6 +28,7 @@ def main():
     server_info_check = ServerInfoCheck(
         betterstack_key=os.getenv("BETTERSTACK_SERVER_INFO_API_KEY"),
         interval=60,
+        ignored_servers=IGNORED_SERVERS,
     )
     monitoring.add_check(server_info_check)
 
@@ -24,6 +38,7 @@ def main():
         interval=60,
         character_update_threshold_minutes=5,
         request_timeout=10,
+        ignored_servers=IGNORED_SERVERS,
     )
     monitoring.add_check(character_check)
 
