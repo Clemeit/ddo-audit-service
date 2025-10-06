@@ -294,7 +294,7 @@ async def get_character_playstyle_score(request: Request, character_id: int):
                 {"message": "Not enough activity data to calculate score"}, status=404
             )
 
-        return json({"data": {"character_id": character_id, "playstyle_score": score}})
+        return json({"data": score})
     except Exception as e:
         return json({"message": str(e)}, status=500)
 

@@ -70,15 +70,27 @@ def _extract_activity_streams(activities: List[dict]):
 def calculate_active_playstyle_score(
     activities: List[dict],
     bank_location_ids: Optional[List[int]] = None,
-) -> float:
+) -> dict[str, float]:
     """
     Calculate how actively a character is played vs being used as storage.
 
     Returns:
         Float between 0.0 (likely a bank/mule character) and 1.0 (actively played)
     """
+    result = {
+        "score": 0.0,
+        "level_score": 0.0,
+        "location_score": 0.0,
+        "session_score": 0.0,
+        "weights": {
+            "level": _WEIGHT_LEVEL,
+            "location": _WEIGHT_LOCATION,
+            "session": _WEIGHT_SESSION,
+        },
+    }
+
     if not activities:
-        return 0.0
+        return result
 
     bank_location_ids = bank_location_ids or _DEFAULT_BANK_LOCATION_IDS
     status_events, location_events, level_events = _extract_activity_streams(activities)
@@ -173,7 +185,16 @@ def calculate_active_playstyle_score(
     ):
         score -= 0.2
 
-    return round(_clamp01(score), 3)
+    score = round(_clamp01(score), 3)
+    result.update(
+        {
+            "score": score,
+            "level_score": round(level_score, 3),
+            "location_score": round(location_score, 3),
+            "session_score": round(session_score, 3),
+        }
+    )
+    return result
 
 
 def calculate_average_session_duration(
