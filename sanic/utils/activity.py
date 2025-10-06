@@ -41,6 +41,21 @@ def _scale(
     return out_min + (out_max - out_min) * _clamp01(t)
 
 
+def _timespan_to_score_days(days: float) -> float:
+    """
+    Map a span (in days) to a 0..1 score where short bursts score low and
+    longer spans score high. Saturates around ~1 month.
+    """
+    if days <= 1:
+        return _scale(days, 0, 1, 0.0, 0.2)
+    elif days <= 7:
+        return _scale(days, 1, 7, 0.2, 0.6)
+    elif days <= 30:
+        return _scale(days, 7, 30, 0.6, 1.0)
+    else:
+        return 1.0
+
+
 def _extract_activity_streams(activities: List[dict]):
     """Split mixed activity records into typed streams."""
     status_events = []  # List[tuple[datetime, bool]]
@@ -106,14 +121,31 @@ def calculate_active_playstyle_score(
     # Level activity factor
     # ---------------------
     # - If max level: treat level factor as neutral (not considered).
-    # - Otherwise, reward any observed level increases.
-    # - Heavier penalty if sitting at suspicious levels w/o any increases.
+    # - Otherwise, reward observed level increases.
+    # - Boost when increases are spread over time; penalize tight bursts.
     level_score = 0.5  # neutral baseline
     current_level = character.get("total_level")
     level_increases = 0
+
+    # Collect timestamps when a level increase occurred
+    increase_ts: List[datetime] = []
     for i in range(1, len(level_events)):
-        if level_events[i][1] > level_events[i - 1][1]:
+        prev_lvl = level_events[i - 1][1]
+        curr_lvl = level_events[i][1]
+        if curr_lvl > prev_lvl:
             level_increases += 1
+            increase_ts.append(level_events[i][0])
+
+    # Compute the span (in days) of level activity
+    span_days = 0.0
+    if len(increase_ts) >= 2:
+        span_days = (increase_ts[-1] - increase_ts[0]).total_seconds() / (24 * 3600)
+    elif len(level_events) >= 2:
+        # Fallback to span of all level events if no detected increases
+        span_days = (level_events[-1][0] - level_events[0][0]).total_seconds() / (
+            24 * 3600
+        )
+    time_spread_score = _timespan_to_score_days(span_days)
 
     if current_level is not None:
         if current_level >= _MAX_LEVEL:
@@ -121,15 +153,19 @@ def calculate_active_playstyle_score(
             level_score = 0.5
         else:
             if level_increases > 0:
-                # Any increase is a strong signal of active play
-                # Cap minor additional benefit after 3 increases
-                level_score = _clamp01(_scale(level_increases, 0, 3, 0.3, 1.0))
+                # Any increase is a signal of active play; cap benefits after ~3 increases.
+                progress_score = _clamp01(_scale(level_increases, 0, 3, 0.3, 1.0))
+                # Blend in time spread so tight, bursty increases score lower.
+                level_score = _clamp01(0.7 * progress_score + 0.3 * time_spread_score)
             else:
                 # No increases
                 if current_level in _SUSPICIOUS_LEVELS:
                     level_score = 0.1  # heavy penalty
                 else:
                     level_score = 0.3  # moderate penalty
+                # Further penalize if all level events are in a short time block (<= ~1 day)
+                if len(level_events) >= 2 and span_days <= 1.0:
+                    level_score = max(0.05, level_score - 0.1)
 
     # ---------------------
     # Location activity factor (volume > diversity)
@@ -147,7 +183,7 @@ def calculate_active_playstyle_score(
 
         # Volume: more events => higher confidence of active play
         # Saturate around ~40 events.
-        volume_score = _scale(n, 1, 40, 0.2, 1.0)
+        volume_score = _scale(n, 1, 40, 0.1, 1.0)
 
         # Diversity: combine unique locations and actual transitions
         diversity_ratio = unique_count / n  # uniqueness
@@ -156,7 +192,7 @@ def calculate_active_playstyle_score(
         diversity_score = 0.5 * diversity_ratio + 0.5 * transition_ratio
 
         # Combine with stronger weight on volume
-        location_score = 0.7 * volume_score + 0.3 * diversity_score
+        location_score = 0.8 * volume_score + 0.2 * diversity_score
 
         # Penalize dominance of a bank hub
         top_loc, top_count = counts.most_common(1)[0]
