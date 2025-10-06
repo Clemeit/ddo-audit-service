@@ -282,13 +282,24 @@ async def get_character_playstyle_score(request: Request, character_id: int):
         return json({"message": "Invalid character ID"}, status=400)
 
     try:
+        character = redis_client.get_character_by_id_as_dict(character_id)
+        if not character:
+            character = postgres_client.get_character_by_id(character_id)
+            if character:
+                character = character.model_dump()
+
+        if not character:
+            return json({"message": "Character not found"}, status=404)
+
         activity_data = postgres_client.get_all_character_activity_by_character_id(
             character_id
         )
         if not activity_data or len(activity_data) == 0:
             return json({"message": "No activity data found"}, status=404)
 
-        score = calculate_active_playstyle_score(activities=activity_data)
+        score = calculate_active_playstyle_score(
+            character=character, activities=activity_data
+        )
         if score is None:
             return json(
                 {"message": "Not enough activity data to calculate score"}, status=404

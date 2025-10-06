@@ -5,7 +5,7 @@ from collections import Counter
 # Tunable constants
 _MAX_LEVEL = 34
 _SUSPICIOUS_LEVELS = {1, 4, 7, 15}
-_DEFAULT_BANK_LOCATION_IDS = [10, 11, 12, 13]
+_DEFAULT_BANK_LOCATION_IDS = [1879058850, 1879063720, 1879065023]
 
 # Component weights (should sum to 1.0)
 _WEIGHT_LEVEL = 0.4
@@ -68,6 +68,7 @@ def _extract_activity_streams(activities: List[dict]):
 
 
 def calculate_active_playstyle_score(
+    character: dict,
     activities: List[dict],
     bank_location_ids: Optional[List[int]] = None,
 ) -> dict[str, float]:
@@ -102,7 +103,7 @@ def calculate_active_playstyle_score(
     # - Otherwise, reward any observed level increases.
     # - Heavier penalty if sitting at suspicious levels w/o any increases.
     level_score = 0.5  # neutral baseline
-    current_level = level_events[-1][1] if level_events else None
+    current_level = character.get("total_level")
     level_increases = 0
     for i in range(1, len(level_events)):
         if level_events[i][1] > level_events[i - 1][1]:
@@ -119,30 +120,44 @@ def calculate_active_playstyle_score(
                 level_score = _clamp01(_scale(level_increases, 0, 3, 0.3, 1.0))
             else:
                 # No increases
-                # Slightly above zero to avoid overpowering other signals
-                level_score = 0.1
+                if current_level in _SUSPICIOUS_LEVELS:
+                    level_score = 0.1  # heavy penalty
+                else:
+                    level_score = 0.3  # moderate penalty
 
     # ---------------------
-    # Location diversity factor
+    # Location activity factor (volume > diversity)
     # ---------------------
-    # Characters who stay in one location score lower, especially if that location
-    # is one of the configured bank hubs.
+    # Prioritize how many location activity events exist (volume), with
+    # diversity and transitions as a secondary signal. Still penalize
+    # heavy concentration in known bank hubs.
     if not location_events:
-        location_score = 0.5  # neutral if we have no data
+        location_score = 0.1  # No location changes observed
     else:
         locations = [loc for _, loc in location_events]
         n = len(locations)
         counts = Counter(locations)
         unique_count = len(counts)
-        diversity_ratio = unique_count / n  # 1.0 => all different, 0.0 => impossible
-        # Penalize high concentration in a known bank location
+
+        # Volume: more events => higher confidence of active play
+        # Saturate around ~40 events.
+        volume_score = _scale(n, 1, 40, 0.2, 1.0)
+
+        # Diversity: combine unique locations and actual transitions
+        diversity_ratio = unique_count / n  # uniqueness
+        transitions = sum(1 for i in range(1, n) if locations[i] != locations[i - 1])
+        transition_ratio = transitions / max(1, n - 1)  # movement between locations
+        diversity_score = 0.5 * diversity_ratio + 0.5 * transition_ratio
+
+        # Combine with stronger weight on volume
+        location_score = 0.7 * volume_score + 0.3 * diversity_score
+
+        # Penalize dominance of a bank hub
         top_loc, top_count = counts.most_common(1)[0]
-        location_score = diversity_ratio
         if top_loc in (bank_location_ids or []):
-            # Reduce score if the most common location is a bank hub
-            # The reduction scales with how dominant that location is.
             dominance = top_count / n  # 0..1
             location_score *= 1.0 - 0.4 * dominance  # up to 40% reduction
+
         location_score = _clamp01(location_score)
 
     # ---------------------
@@ -175,15 +190,6 @@ def calculate_active_playstyle_score(
         + _WEIGHT_LOCATION * location_score
         + _WEIGHT_SESSION * session_score
     )
-
-    # Extra penalty if sitting at suspicious levels with no level increases
-    if (
-        current_level is not None
-        and current_level in _SUSPICIOUS_LEVELS
-        and level_increases == 0
-        and (current_level < _MAX_LEVEL)  # do not penalize capped characters
-    ):
-        score -= 0.2
 
     score = round(_clamp01(score), 3)
     result.update(
