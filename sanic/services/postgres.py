@@ -899,6 +899,105 @@ def get_character_activity_summary_by_character_id(
             return build_character_activity_summary_from_row(activity)
 
 
+def get_all_character_activity_by_character_id(
+    character_id: int,
+    start_date: datetime = None,
+    end_date: datetime = None,
+    limit: int = MAX_CHARACTER_ACTIVITY_READ_LENGTH,
+) -> list[dict]:
+    """
+    Get mixed activity entries (all activity types) for a character.
+
+    Returns a list of dicts:
+      { activity_type: "<type>", timestamp: "...", character_id: <int>, data: {...} }
+
+    Applies the same default window and maximum history as
+    get_character_activity_by_type_and_character_id.
+    """
+    if not start_date:
+        start_date = datetime.now() - timedelta(days=90)
+    if not end_date:
+        end_date = datetime.now()
+
+    # Clamp history window
+    if (end_date - start_date).days > MAX_CHARACTER_ACTIVITY_READ_HISTORY:
+        start_date = datetime.now() - timedelta(
+            days=MAX_CHARACTER_ACTIVITY_READ_HISTORY
+        )
+        end_date = datetime.now()
+
+    # Clamp limit
+    limit = max(
+        1,
+        min(
+            limit if limit is not None else MAX_CHARACTER_ACTIVITY_READ_LENGTH,
+            MAX_CHARACTER_ACTIVITY_READ_LENGTH,
+        ),
+    )
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT timestamp, character_id, activity_type, data
+                FROM public.character_activity
+                WHERE character_id = %s
+                  AND timestamp BETWEEN %s AND %s
+                ORDER BY timestamp DESC
+                LIMIT %s
+                """,
+                (
+                    character_id,
+                    start_date.isoformat(),
+                    end_date.isoformat(),
+                    limit,
+                ),
+            )
+            rows = cursor.fetchall()
+            if not rows:
+                return []
+
+            results: list[dict] = []
+            for row in rows:
+                ts, cid, activity_type_str, data = row
+                try:
+                    atype = CharacterActivityType(activity_type_str)
+                except Exception:
+                    atype = None
+
+                # Reuse existing builders by adapting the tuple shape
+                built: dict
+                if atype == CharacterActivityType.LOCATION:
+                    built = build_character_location_activity_from_row((ts, cid, data))
+                elif atype == CharacterActivityType.STATUS:
+                    built = build_character_status_activity_from_row((ts, cid, data))
+                elif atype == CharacterActivityType.TOTAL_LEVEL:
+                    built = build_character_total_level_activity_from_row(
+                        (ts, cid, data)
+                    )
+                elif atype == CharacterActivityType.GUILD_NAME:
+                    built = build_character_guild_name_activity_from_row(
+                        (ts, cid, data)
+                    )
+                else:
+                    # Fallback for unknown/unhandled types
+                    built = {
+                        "timestamp": (
+                            datetime_to_datetime_string(ts)
+                            if isinstance(ts, datetime)
+                            else ""
+                        ),
+                        "character_id": int(cid),
+                        "data": data if isinstance(data, dict) else {},
+                    }
+
+                # Attach the activity type for mixed results
+                built["activity_type"] = activity_type_str
+                results.append(built)
+
+            return results
+
+
 def get_character_activity_by_type_and_character_id(
     character_id: str,
     activity_Type: CharacterActivityType,

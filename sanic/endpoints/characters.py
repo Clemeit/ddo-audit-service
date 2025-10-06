@@ -18,6 +18,7 @@ from urllib.parse import unquote
 
 from utils.log import logMessage
 import utils.guilds as guild_utils
+from utils.activity import calculate_active_playstyle_score
 from constants.guilds import GUILD_NAME_MAX_LENGTH
 from constants.server import MAX_CHARACTER_LOOKUP_IDS
 
@@ -266,6 +267,36 @@ async def get_character_by_server_name_and_character_name(
         return json({"message": "Character not found"}, status=404)
 
     return json({"data": found_character, "source": source})
+
+
+@character_blueprint.get("/playstyle-score/<character_id:int>")
+async def get_character_playstyle_score(request: Request, character_id: int):
+    """
+    Method: GET
+
+    Route: /characters/playstyle-score/<character_id:int>
+
+    Description: Get a character's active playstyle score based on their activity data.
+    """
+    if character_id <= 0:
+        return json({"message": "Invalid character ID"}, status=400)
+
+    try:
+        activity_data = postgres_client.get_all_character_activity_by_character_id(
+            character_id
+        )
+        if not activity_data or len(activity_data) == 0:
+            return json({"message": "No activity data found"}, status=404)
+
+        score = calculate_active_playstyle_score(activities=activity_data)
+        if score is None:
+            return json(
+                {"message": "Not enough activity data to calculate score"}, status=404
+            )
+
+        return json({"data": {"character_id": character_id, "playstyle_score": score}})
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
 
 
 async def get_characters_by_character_name(character_name: str):
