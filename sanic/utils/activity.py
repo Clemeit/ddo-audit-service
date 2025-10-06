@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Any
 from collections import Counter
 
 # Tunable constants
@@ -11,6 +11,10 @@ _DEFAULT_BANK_LOCATION_IDS = [1879058850, 1879063720, 1879065023]
 _WEIGHT_LEVEL = 0.4
 _WEIGHT_LOCATION = 0.3
 _WEIGHT_SESSION = 0.3
+
+# Verdict tuning
+_ACTIVE_THRESHOLD = 0.35  # score >= this is considered active
+_UNCERTAIN_BAND = 0.10  # +/- band around threshold for low confidence
 
 
 def _parse_ts(ts: str) -> Optional[datetime]:
@@ -71,7 +75,7 @@ def calculate_active_playstyle_score(
     character: dict,
     activities: List[dict],
     bank_location_ids: Optional[List[int]] = None,
-) -> dict[str, float]:
+) -> dict[str, Any]:
     """
     Calculate how actively a character is played vs being used as storage.
 
@@ -83,6 +87,8 @@ def calculate_active_playstyle_score(
         "level_score": 0.0,
         "location_score": 0.0,
         "session_score": 0.0,
+        "is_active": False,  # verdict
+        "confidence": 0.0,  # 0..1 confidence in verdict
         "weights": {
             "level": _WEIGHT_LEVEL,
             "location": _WEIGHT_LOCATION,
@@ -192,12 +198,27 @@ def calculate_active_playstyle_score(
     )
 
     score = round(_clamp01(score), 3)
+
+    # Verdict and confidence
+    is_active = score >= _ACTIVE_THRESHOLD
+    # Confidence from margin to threshold
+    margin_conf = _clamp01(abs(score - _ACTIVE_THRESHOLD) / _UNCERTAIN_BAND)
+    # Evidence completeness (how many components had data)
+    evidence = 0
+    evidence += 1 if (current_level is not None or level_events) else 0
+    evidence += 1 if location_events else 0
+    evidence += 1 if avg_session is not None else 0
+    evidence_weight = evidence / 3.0
+    confidence = round(_clamp01(0.5 * margin_conf + 0.5 * evidence_weight), 3)
+
     result.update(
         {
             "score": score,
             "level_score": round(level_score, 3),
             "location_score": round(location_score, 3),
             "session_score": round(session_score, 3),
+            "is_active": is_active,
+            "confidence": confidence,
         }
     )
     return result
