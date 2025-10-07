@@ -1762,6 +1762,87 @@ def add_character_activity(activites: list[dict]):
                 raise e
 
 
+def set_character_active_status(
+    character_id: int, active: bool, checked_at: datetime | None = None
+) -> None:
+    """Insert or update a character's active status and last-checked timestamp.
+
+    Uses an upsert so callers don't need to know if a row exists.
+    If checked_at is None, the database will set it to NOW().
+    """
+    query = """
+        INSERT INTO public.character_report_status (character_id, active, active_checked_at, updated_at)
+        VALUES (%s, %s, COALESCE(%s, NOW()), NOW())
+        ON CONFLICT (character_id) DO UPDATE
+        SET active = EXCLUDED.active,
+            active_checked_at = EXCLUDED.active_checked_at,
+            updated_at = NOW()
+    """
+
+    with get_db_cursor(commit=True) as cursor:
+        cursor.execute(query, (character_id, active, checked_at))
+
+
+def set_characters_active_status_bulk(
+    updates: list[tuple[int, bool, datetime | None]],
+) -> int:
+    """Bulk upsert active status for many characters.
+
+    Each tuple in updates is (character_id, active, checked_at | None).
+    Returns the number of rows processed where available.
+    """
+    if not updates:
+        return 0
+
+    query = """
+        INSERT INTO public.character_report_status (character_id, active, active_checked_at, updated_at)
+        VALUES (%s, %s, COALESCE(%s, NOW()), NOW())
+        ON CONFLICT (character_id) DO UPDATE
+        SET active = EXCLUDED.active,
+            active_checked_at = EXCLUDED.active_checked_at,
+            updated_at = NOW()
+    """
+
+    with get_db_cursor(commit=True) as cursor:
+        cursor.executemany(query, updates)
+        return cursor.rowcount
+
+
+def get_character_active_status(character_id: int) -> dict | None:
+    """Fetch the active status row for a character.
+
+    Returns a dict: {"character_id": int, "active": bool, "active_checked_at": str | None, "updated_at": str | None}
+    or None if not present.
+    """
+    query = """
+        SELECT character_id, active, active_checked_at, updated_at
+        FROM public.character_report_status
+        WHERE character_id = %s
+    """
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, (character_id,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+            return {
+                "character_id": int(row[0]),
+                "active": bool(row[1]),
+                "active_checked_at": (
+                    datetime_to_datetime_string(row[2])
+                    if isinstance(row[2], datetime)
+                    else None
+                ),
+                "updated_at": (
+                    datetime_to_datetime_string(row[3])
+                    if isinstance(row[3], datetime)
+                    else None
+                ),
+            }
+
+
 def get_news() -> list[News]:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
