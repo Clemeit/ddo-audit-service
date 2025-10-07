@@ -20,20 +20,20 @@ services:
       retries: 3
       start_period: 60s
 
-  prerender:
-    image: lune/prerender:latest
-    restart: unless-stopped
-    shm_size: "512m"
-    security_opt:
-      - seccomp=unconfined
-    environment:
-      PRERENDER_NUM_WORKERS: 2
-      PRERENDER_CONCURRENCY: 5
-      PAGE_TTL: 600
-      LOG_REQUESTS: "true"
-      CHROME_FLAGS: --no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-software-rasterizer,--disable-setuid-sandbox
-    networks:
-      - backend
+  # prerender:
+  #   image: lune/prerender:latest
+  #   restart: unless-stopped
+  #   shm_size: "512m"
+  #   security_opt:
+  #     - seccomp=unconfined
+  #   environment:
+  #     PRERENDER_NUM_WORKERS: 2
+  #     PRERENDER_CONCURRENCY: 5
+  #     PAGE_TTL: 600
+  #     LOG_REQUESTS: "true"
+  #     CHROME_FLAGS: --no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-software-rasterizer,--disable-setuid-sandbox
+  #   networks:
+  #     - backend
 
   redis:
     build:
@@ -44,8 +44,8 @@ services:
     networks:
       - backend
     depends_on:
-      prerender:
-        condition: service_started
+      # prerender:
+      #   condition: service_started
       postgres:
         condition: service_healthy
     healthcheck:
@@ -113,7 +113,7 @@ services:
       - /var/www/ddoaudit-stage.com/app/00-prerender-token.conf:/etc/nginx/conf.d/00-prerender-token.conf:ro
 
   pgadmin:
-    image: dpage/pgadmin4
+    image: dpage/pgadmin4@sha256:d115bcd737940a6cfb61a54439d50de8b850e0782e2363102c9fa761f4022f49
     restart: always
     environment:
       - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
