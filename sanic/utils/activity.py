@@ -156,7 +156,7 @@ def calculate_active_playstyle_score(
                 # Any increase is a signal of active play; cap benefits after ~3 increases.
                 progress_score = _clamp01(_scale(level_increases, 0, 3, 0.3, 1.0))
                 # Blend in time spread so tight, bursty increases score lower.
-                level_score = _clamp01(0.7 * progress_score + 0.3 * time_spread_score)
+                level_score = _clamp01(0.3 * progress_score + 0.7 * time_spread_score)
             else:
                 # No increases
                 if current_level in _SUSPICIOUS_LEVELS:
