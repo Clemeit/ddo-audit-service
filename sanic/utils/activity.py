@@ -116,6 +116,7 @@ def calculate_active_playstyle_score(
 
     bank_location_ids = bank_location_ids or _DEFAULT_BANK_LOCATION_IDS
     status_events, location_events, level_events = _extract_activity_streams(activities)
+    level_events: List[tuple[datetime, int]]
 
     # ---------------------
     # Level activity factor
@@ -125,38 +126,24 @@ def calculate_active_playstyle_score(
     # - Boost when increases are spread over time; penalize tight bursts.
     level_score = 0.5  # neutral baseline
     current_level = character.get("total_level")
-    level_increases = 0
-
-    # Collect timestamps when a level increase occurred
-    increase_ts: List[datetime] = []
-    for i in range(1, len(level_events)):
-        prev_lvl = level_events[i - 1][1]
-        curr_lvl = level_events[i][1]
-        if curr_lvl > prev_lvl:
-            level_increases += 1
-            increase_ts.append(level_events[i][0])
-
-    print(f"Level increases: {level_increases}")
 
     # Compute the span (in days) of level activity
     span_days = 0.0
-    if len(increase_ts) >= 2:
-        span_days = (increase_ts[-1] - increase_ts[0]).total_seconds() / (24 * 3600)
-    elif len(level_events) >= 2:
-        # Fallback to span of all level events if no detected increases
+    if len(level_events) >= 2:
         span_days = (level_events[-1][0] - level_events[0][0]).total_seconds() / (
             24 * 3600
         )
     time_spread_score = _timespan_to_score_days(span_days)
 
+    print(f"Level events: {len(level_events)}, current level: {current_level}")
     print(
         f"Level event span days: {span_days:.1f}, time spread score: {time_spread_score:.3f}"
     )
 
     if current_level is not None:
-        if level_increases > 0:
+        if len(level_events) > 0:
             # Any increase is a signal of active play; cap benefits after ~3 increases.
-            progress_score = _clamp01(_scale(level_increases, 0, 3, 0.3, 1.0))
+            progress_score = _clamp01(_scale(len(level_events), 0, 3, 0.3, 1.0))
             # Blend in time spread so tight, bursty increases score lower.
             level_score = _clamp01(0.3 * progress_score + 0.7 * time_spread_score)
         else:
@@ -165,9 +152,10 @@ def calculate_active_playstyle_score(
                 level_score = 0.1  # heavy penalty
             else:
                 level_score = 0.3  # moderate penalty
-            # Further penalize if all level events are in a short time block (<= ~1 day)
-            if len(level_events) >= 2 and span_days <= 1.0:
-                level_score = max(0.05, level_score - 0.1)
+    # Further penalize if all level events are in a short time block (<= ~1 day)
+    if len(level_events) >= 2 and span_days <= 1.0:
+        level_score = max(0.05, level_score - 0.1)
+
     if current_level >= _MAX_LEVEL:
         level_score = max(level_score, 0.5)  # at least neutral if max level
 
