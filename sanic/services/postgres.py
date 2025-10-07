@@ -1218,21 +1218,38 @@ def validate_lookback(lookback: int) -> None:
         raise ValueError("lookback cannot exceed 365 days")
 
 
-def get_gender_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+def get_gender_distribution(
+    lookback_in_days: int = 90, activity_level: str = "all"
+) -> dict[str, int]:
     """
     Get the gender distribution of characters in the database.
+    Optionally filter by activity_level: one of "all" (default), "active", or "inactive".
     """
     validate_lookback(lookback_in_days)
+    if activity_level == "active":
+        query = """
+            SELECT server_name, gender, COUNT(*) as count FROM public.characters
+            LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+            WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS TRUE
+            GROUP BY gender, server_name
+            """
+    elif activity_level == "inactive":
+        query = """
+            SELECT server_name, gender, COUNT(*) as count FROM public.characters
+            LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+            WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS FALSE
+            GROUP BY gender, server_name
+            """
+    else:
+        query = """
+            SELECT server_name, gender, COUNT(*) as count FROM public.characters
+            WHERE last_save > NOW() - (make_interval(days => %s))
+            GROUP BY gender, server_name
+            """
+
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT server_name, gender, COUNT(*) as count FROM public.characters
-                WHERE last_save > NOW() - (make_interval(days => %s))
-                GROUP BY gender, server_name
-                """,
-                (lookback_in_days,),
-            )
+            cursor.execute(query, (lookback_in_days,))
             gender_distribution = cursor.fetchall()
             if not gender_distribution:
                 return {}
@@ -1245,21 +1262,39 @@ def get_gender_distribution(lookback_in_days: int = 90) -> dict[str, int]:
             return output
 
 
-def get_race_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+def get_race_distribution(
+    lookback_in_days: int = 90, activity_level: str = "all"
+) -> dict[str, int]:
     """
     Get the race distribution of characters in the database.
+    Optionally filter by activity_level: one of "all" (default), "active", or "inactive".
     """
     validate_lookback(lookback_in_days)
+
+    if activity_level == "active":
+        query = """
+            SELECT server_name, race, COUNT(*) as count FROM public.characters
+            LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+            WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS TRUE
+            GROUP BY race, server_name
+            """
+    elif activity_level == "inactive":
+        query = """
+            SELECT server_name, race, COUNT(*) as count FROM public.characters
+            LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+            WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS FALSE
+            GROUP BY race, server_name
+            """
+    else:
+        query = """
+            SELECT server_name, race, COUNT(*) as count FROM public.characters
+            WHERE last_save > NOW() - (make_interval(days => %s))
+            GROUP BY race, server_name
+            """
+
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT server_name, race, COUNT(*) as count FROM public.characters
-                WHERE last_save > NOW() - (make_interval(days => %s))
-                GROUP BY race, server_name
-                """,
-                (lookback_in_days,),
-            )
+            cursor.execute(query, (lookback_in_days,))
             race_distribution = cursor.fetchall()
             if not race_distribution:
                 return {}
@@ -1322,7 +1357,9 @@ def get_total_level_distribution(
             return output
 
 
-def get_class_count_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+def get_class_count_distribution(
+    lookback_in_days: int = 90, activity_level: str = "all"
+) -> dict[str, int]:
     """
     Get the number of classes distribution of characters in the database.
     i.e. The number of classes each character has, excluding "Legendary" and "Epic" (which are not playable classes).
@@ -1331,26 +1368,60 @@ def get_class_count_distribution(lookback_in_days: int = 90) -> dict[str, int]:
     [{"name": "Fighter", "level": 20}, {"name": "Wizard", "level": 10}]
     """
     validate_lookback(lookback_in_days)
+    if activity_level == "active":
+        query = """
+            SELECT server_name, class_count, COUNT(*) as count
+            FROM (
+                SELECT server_name,
+                    (
+                        SELECT COUNT(*)
+                        FROM jsonb_array_elements(classes) AS elem
+                        WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                    ) AS class_count
+                FROM public.characters
+                LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+                WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS TRUE
+            ) AS sub
+            GROUP BY server_name, class_count
+            ORDER BY server_name, class_count
+            """
+    elif activity_level == "inactive":
+        query = """
+            SELECT server_name, class_count, COUNT(*) as count
+            FROM (
+                SELECT server_name,
+                    (
+                        SELECT COUNT(*)
+                        FROM jsonb_array_elements(classes) AS elem
+                        WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                    ) AS class_count
+                FROM public.characters
+                LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+                WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS FALSE
+            ) AS sub
+            GROUP BY server_name, class_count
+            ORDER BY server_name, class_count
+            """
+    else:
+        query = """
+            SELECT server_name, class_count, COUNT(*) as count
+            FROM (
+                SELECT server_name,
+                    (
+                        SELECT COUNT(*)
+                        FROM jsonb_array_elements(classes) AS elem
+                        WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                    ) AS class_count
+                FROM public.characters
+                WHERE last_save > NOW() - (make_interval(days => %s))
+            ) AS sub
+            GROUP BY server_name, class_count
+            ORDER BY server_name, class_count
+            """
+
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT server_name, class_count, COUNT(*) as count
-                FROM (
-                    SELECT server_name,
-                        (
-                            SELECT COUNT(*)
-                            FROM jsonb_array_elements(classes) AS elem
-                            WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
-                        ) AS class_count
-                    FROM public.characters
-                    WHERE last_save > NOW() - (make_interval(days => %s))
-                ) AS sub
-                GROUP BY server_name, class_count
-                ORDER BY server_name, class_count
-                """,
-                (lookback_in_days,),
-            )
+            cursor.execute(query, (lookback_in_days,))
             result = cursor.fetchall()
             if not result:
                 return {}
@@ -1363,37 +1434,85 @@ def get_class_count_distribution(lookback_in_days: int = 90) -> dict[str, int]:
             return output
 
 
-def get_primary_class_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+def get_primary_class_distribution(
+    lookback_in_days: int = 90, activity_level: str = "all"
+) -> dict[str, int]:
     """
     Get the primary class distribution of characters in the database.
     """
     validate_lookback(lookback_in_days)
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
+    if activity_level == "active":
+        query = """
+            SELECT
+                server_name,
+                primary_class,
+                COUNT(*) as count
+            FROM (
                 SELECT
                     server_name,
-                    primary_class,
-                    COUNT(*) as count
-                FROM (
-                    SELECT
-                        server_name,
-                        (
-                            SELECT elem->>'name'
-                            FROM jsonb_array_elements(classes) AS elem
-                            WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
-                            ORDER BY (elem->>'level')::int DESC
-                            LIMIT 1
-                        ) AS primary_class
-                    FROM public.characters
-                    WHERE last_save > NOW() - (make_interval(days => %s))
-                ) AS sub
-                GROUP BY server_name, primary_class
-                ORDER BY server_name, count DESC
-                """,
-                (lookback_in_days,),
-            )
+                    (
+                        SELECT elem->>'name'
+                        FROM jsonb_array_elements(classes) AS elem
+                        WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                        ORDER BY (elem->>'level')::int DESC
+                        LIMIT 1
+                    ) AS primary_class
+                FROM public.characters
+                LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+                WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS TRUE
+            ) AS sub
+            GROUP BY server_name, primary_class
+            ORDER BY server_name, count DESC
+            """
+    elif activity_level == "inactive":
+        query = """
+            SELECT
+                server_name,
+                primary_class,
+                COUNT(*) as count
+            FROM (
+                SELECT
+                    server_name,
+                    (
+                        SELECT elem->>'name'
+                        FROM jsonb_array_elements(classes) AS elem
+                        WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                        ORDER BY (elem->>'level')::int DESC
+                        LIMIT 1
+                    ) AS primary_class
+                FROM public.characters
+                LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+                WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS FALSE
+            ) AS sub
+            GROUP BY server_name, primary_class
+            ORDER BY server_name, count DESC
+            """
+    else:
+        query = """
+            SELECT
+                server_name,
+                primary_class,
+                COUNT(*) as count
+            FROM (
+                SELECT
+                    server_name,
+                    (
+                        SELECT elem->>'name'
+                        FROM jsonb_array_elements(classes) AS elem
+                        WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                        ORDER BY (elem->>'level')::int DESC
+                        LIMIT 1
+                    ) AS primary_class
+                FROM public.characters
+                WHERE last_save > NOW() - (make_interval(days => %s))
+            ) AS sub
+            GROUP BY server_name, primary_class
+            ORDER BY server_name, count DESC
+            """
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, (lookback_in_days,))
             result = cursor.fetchall()
             if not result:
                 return {}
@@ -1407,25 +1526,45 @@ def get_primary_class_distribution(lookback_in_days: int = 90) -> dict[str, int]
 
 
 def get_guild_affiliation_distribution(
-    lookback_in_days: int = 90,
+    lookback_in_days: int = 90, activity_level: str = "all"
 ) -> dict[str, dict[str, int]]:
     """
     Gets the distribution of characters in a guild and not in a guild.
     """
     validate_lookback(lookback_in_days)
+    if activity_level == "active":
+        query = """
+            SELECT server_name,
+                SUM(CASE WHEN guild_name IS NOT NULL AND guild_name <> '' THEN 1 ELSE 0 END) AS in_guild,
+                SUM(CASE WHEN guild_name IS NULL OR guild_name = '' THEN 1 ELSE 0 END) AS not_in_guild
+            FROM public.characters
+            LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+            WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS TRUE
+            GROUP BY server_name
+            """
+    elif activity_level == "inactive":
+        query = """
+            SELECT server_name,
+                SUM(CASE WHEN guild_name IS NOT NULL AND guild_name <> '' THEN 1 ELSE 0 END) AS in_guild,
+                SUM(CASE WHEN guild_name IS NULL OR guild_name = '' THEN 1 ELSE 0 END) AS not_in_guild
+            FROM public.characters
+            LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+            WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS FALSE
+            GROUP BY server_name
+            """
+    else:
+        query = """
+            SELECT server_name,
+                SUM(CASE WHEN guild_name IS NOT NULL AND guild_name <> '' THEN 1 ELSE 0 END) AS in_guild,
+                SUM(CASE WHEN guild_name IS NULL OR guild_name = '' THEN 1 ELSE 0 END) AS not_in_guild
+            FROM public.characters
+            WHERE last_save > NOW() - (make_interval(days => %s))
+            GROUP BY server_name
+            """
+
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT server_name,
-                    SUM(CASE WHEN guild_name IS NOT NULL AND guild_name <> '' THEN 1 ELSE 0 END) AS in_guild,
-                    SUM(CASE WHEN guild_name IS NULL OR guild_name = '' THEN 1 ELSE 0 END) AS not_in_guild
-                FROM public.characters
-                WHERE last_save > NOW() - (make_interval(days => %s))
-                GROUP BY server_name
-                """,
-                (lookback_in_days,),
-            )
+            cursor.execute(query, (lookback_in_days,))
             result = cursor.fetchall()
             if not result:
                 return {}

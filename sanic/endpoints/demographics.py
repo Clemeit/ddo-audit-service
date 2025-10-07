@@ -26,15 +26,31 @@ async def get_population_race(request: Request, period: str):
     Supported periods: day, week, month, quarter, year
     """
     period = period.lower()
+    activity_level = request.args.get("activity_level", "all").lower()
+    if not validate_activity_level(activity_level):
+        return json(
+            {
+                "message": f"Invalid activity_level '{activity_level}'. Supported values: all, active, inactive"
+            },
+            status=400,
+        )
 
     period_functions = {
-        "day": lambda: demographics_utils.get_race_distribution(ReportLookback.day),
-        "week": lambda: demographics_utils.get_race_distribution(ReportLookback.week),
-        "month": lambda: demographics_utils.get_race_distribution(ReportLookback.month),
-        "quarter": lambda: demographics_utils.get_race_distribution(
-            ReportLookback.quarter
+        "day": lambda: demographics_utils.get_race_distribution(
+            ReportLookback.day, activity_level
         ),
-        "year": lambda: demographics_utils.get_race_distribution(ReportLookback.year),
+        "week": lambda: demographics_utils.get_race_distribution(
+            ReportLookback.week, activity_level
+        ),
+        "month": lambda: demographics_utils.get_race_distribution(
+            ReportLookback.month, activity_level
+        ),
+        "quarter": lambda: demographics_utils.get_race_distribution(
+            ReportLookback.quarter, activity_level
+        ),
+        "year": lambda: demographics_utils.get_race_distribution(
+            ReportLookback.year, activity_level
+        ),
     }
 
     if period not in period_functions:
@@ -65,17 +81,31 @@ async def get_population_gender(request: Request, period: str):
     Supported periods: day, week, month, quarter, year
     """
     period = period.lower()
+    activity_level = request.args.get("activity_level", "all").lower()
+    if not validate_activity_level(activity_level):
+        return json(
+            {
+                "message": f"Invalid activity_level '{activity_level}'. Supported values: all, active, inactive"
+            },
+            status=400,
+        )
 
     period_functions = {
-        "day": lambda: demographics_utils.get_gender_distribution(ReportLookback.day),
-        "week": lambda: demographics_utils.get_gender_distribution(ReportLookback.week),
+        "day": lambda: demographics_utils.get_gender_distribution(
+            ReportLookback.day, activity_level
+        ),
+        "week": lambda: demographics_utils.get_gender_distribution(
+            ReportLookback.week, activity_level
+        ),
         "month": lambda: demographics_utils.get_gender_distribution(
-            ReportLookback.month
+            ReportLookback.month, activity_level
         ),
         "quarter": lambda: demographics_utils.get_gender_distribution(
-            ReportLookback.quarter
+            ReportLookback.quarter, activity_level
         ),
-        "year": lambda: demographics_utils.get_gender_distribution(ReportLookback.year),
+        "year": lambda: demographics_utils.get_gender_distribution(
+            ReportLookback.year, activity_level
+        ),
     }
 
     if period not in period_functions:
@@ -107,7 +137,7 @@ async def get_population_total_level(request: Request, period: str):
     """
     period = period.lower()
     activity_level = request.args.get("activity_level", "all").lower()
-    if activity_level not in ("all", "active", "inactive"):
+    if not validate_activity_level(activity_level):
         return json(
             {
                 "message": f"Invalid activity_level '{activity_level}'. Supported values: all, active, inactive"
@@ -161,22 +191,30 @@ async def get_population_class_count(request: Request, period: str):
     Supported periods: day, week, month, quarter, year
     """
     period = period.lower()
+    activity_level = request.args.get("activity_level", "all").lower()
+    if not validate_activity_level(activity_level):
+        return json(
+            {
+                "message": f"Invalid activity_level '{activity_level}'. Supported values: all, active, inactive"
+            },
+            status=400,
+        )
 
     period_functions = {
         "day": lambda: demographics_utils.get_class_count_distribution(
-            ReportLookback.day
+            ReportLookback.day, activity_level
         ),
         "week": lambda: demographics_utils.get_class_count_distribution(
-            ReportLookback.week
+            ReportLookback.week, activity_level
         ),
         "month": lambda: demographics_utils.get_class_count_distribution(
-            ReportLookback.month
+            ReportLookback.month, activity_level
         ),
         "quarter": lambda: demographics_utils.get_class_count_distribution(
-            ReportLookback.quarter
+            ReportLookback.quarter, activity_level
         ),
         "year": lambda: demographics_utils.get_class_count_distribution(
-            ReportLookback.year
+            ReportLookback.year, activity_level
         ),
     }
 
@@ -208,22 +246,30 @@ async def get_population_primary_class(request: Request, period: str):
     Supported periods: day, week, month, quarter, year
     """
     period = period.lower()
+    activity_level = request.args.get("activity_level", "all").lower()
+    if not validate_activity_level(activity_level):
+        return json(
+            {
+                "message": f"Invalid activity_level '{activity_level}'. Supported values: all, active, inactive"
+            },
+            status=400,
+        )
 
     period_functions = {
         "day": lambda: demographics_utils.get_primary_class_distribution(
-            ReportLookback.day
+            ReportLookback.day, activity_level
         ),
         "week": lambda: demographics_utils.get_primary_class_distribution(
-            ReportLookback.week
+            ReportLookback.week, activity_level
         ),
         "month": lambda: demographics_utils.get_primary_class_distribution(
-            ReportLookback.month
+            ReportLookback.month, activity_level
         ),
         "quarter": lambda: demographics_utils.get_primary_class_distribution(
-            ReportLookback.quarter
+            ReportLookback.quarter, activity_level
         ),
         "year": lambda: demographics_utils.get_primary_class_distribution(
-            ReportLookback.year
+            ReportLookback.year, activity_level
         ),
     }
 
@@ -255,22 +301,30 @@ async def get_guild_affiliation_demographics(request: Request, period: str):
     Supported periods: day, week, month, quarter, year
     """
     period = period.lower()
+    activity_level = request.args.get("activity_level", "all").lower()
+    if not validate_activity_level(activity_level):
+        return json(
+            {
+                "message": f"Invalid activity_level '{activity_level}'. Supported values: all, active, inactive"
+            },
+            status=400,
+        )
 
     period_functions = {
         "day": lambda: demographics_utils.get_guild_affiliation_distribution(
-            ReportLookback.day
+            ReportLookback.day, activity_level
         ),
         "week": lambda: demographics_utils.get_guild_affiliation_distribution(
-            ReportLookback.week
+            ReportLookback.week, activity_level
         ),
         "month": lambda: demographics_utils.get_guild_affiliation_distribution(
-            ReportLookback.month
+            ReportLookback.month, activity_level
         ),
         "quarter": lambda: demographics_utils.get_guild_affiliation_distribution(
-            ReportLookback.quarter
+            ReportLookback.quarter, activity_level
         ),
         "year": lambda: demographics_utils.get_guild_affiliation_distribution(
-            ReportLookback.year
+            ReportLookback.year, activity_level
         ),
     }
 
@@ -288,3 +342,10 @@ async def get_guild_affiliation_demographics(request: Request, period: str):
         return json({"message": str(e)}, status=500)
 
     return json({"data": data})
+
+
+def validate_activity_level(activity_level: str) -> str | None:
+    activity_level = activity_level.lower()
+    if activity_level in ("all", "active", "inactive"):
+        return activity_level
+    return None

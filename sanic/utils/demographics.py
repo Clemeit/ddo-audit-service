@@ -43,7 +43,9 @@ report_lookback_map = {
 }
 
 
-def get_race_distribution(period: ReportLookback) -> dict[str, int]:
+def get_race_distribution(
+    period: ReportLookback, activity_level: str = "all"
+) -> dict[str, int]:
     """
     Gets race demographics data for the specified period.
     Checks cache then database.
@@ -57,13 +59,15 @@ def get_race_distribution(period: ReportLookback) -> dict[str, int]:
     cache_ttl = report_lookback_map[period]["cache_ttl"]
 
     return get_cached_data_with_fallback(
-        f"race_distribution_{period}",
-        lambda: postgres_client.get_race_distribution(days),
+        f"race_distribution_{period}_{activity_level}",
+        lambda: postgres_client.get_race_distribution(days, activity_level),
         cache_ttl,
     )
 
 
-def get_gender_distribution(period: ReportLookback) -> dict[str, int]:
+def get_gender_distribution(
+    period: ReportLookback, activity_level: str = "all"
+) -> dict[str, int]:
     """
     Gets gender demographics data for the specified period.
     Checks cache then database.
@@ -77,8 +81,8 @@ def get_gender_distribution(period: ReportLookback) -> dict[str, int]:
     cache_ttl = report_lookback_map[period]["cache_ttl"]
 
     return get_cached_data_with_fallback(
-        f"gender_distribution_{period}",
-        lambda: postgres_client.get_gender_distribution(days),
+        f"gender_distribution_{period}_{activity_level}",
+        lambda: postgres_client.get_gender_distribution(days, activity_level),
         cache_ttl,
     )
 
@@ -105,7 +109,9 @@ def get_total_level_distribution(
     )
 
 
-def get_class_count_distribution(period: ReportLookback) -> dict[str, int]:
+def get_class_count_distribution(
+    period: ReportLookback, activity_level: str = "all"
+) -> dict[str, int]:
     """
     Gets class count demographics data for the specified period.
     Checks cache then database.
@@ -119,13 +125,15 @@ def get_class_count_distribution(period: ReportLookback) -> dict[str, int]:
     cache_ttl = report_lookback_map[period]["cache_ttl"]
 
     return get_cached_data_with_fallback(
-        f"class_count_distribution_{period}",
-        lambda: postgres_client.get_class_count_distribution(days),
+        f"class_count_distribution_{period}_{activity_level}",
+        lambda: postgres_client.get_class_count_distribution(days, activity_level),
         cache_ttl,
     )
 
 
-def get_primary_class_distribution(period: ReportLookback) -> dict[str, int]:
+def get_primary_class_distribution(
+    period: ReportLookback, activity_level: str = "all"
+) -> dict[str, int]:
     """
     Gets primary class demographics data for the specified period.
     Checks cache then database.
@@ -139,14 +147,14 @@ def get_primary_class_distribution(period: ReportLookback) -> dict[str, int]:
     cache_ttl = report_lookback_map[period]["cache_ttl"]
 
     return get_cached_data_with_fallback(
-        f"primary_class_distribution_{period}",
-        lambda: postgres_client.get_primary_class_distribution(days),
+        f"primary_class_distribution_{period}_{activity_level}",
+        lambda: postgres_client.get_primary_class_distribution(days, activity_level),
         cache_ttl,
     )
 
 
 def get_guild_affiliation_distribution(
-    period: ReportLookback,
+    period: ReportLookback, activity_level: str = "all"
 ) -> dict[str, dict[str, int]]:
     """
     Gets guild affiliation demographics data for the specified period.
@@ -161,8 +169,10 @@ def get_guild_affiliation_distribution(
     cache_ttl = report_lookback_map[period]["cache_ttl"]
 
     return get_cached_data_with_fallback(
-        f"guild_affiliation_distribution_{period}",
-        lambda: postgres_client.get_guild_affiliation_distribution(days),
+        f"guild_affiliation_distribution_{period}_{activity_level}",
+        lambda: postgres_client.get_guild_affiliation_distribution(
+            days, activity_level
+        ),
         cache_ttl,
     )
 
