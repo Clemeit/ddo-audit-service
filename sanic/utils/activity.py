@@ -135,11 +135,6 @@ def calculate_active_playstyle_score(
         )
     time_spread_score = _timespan_to_score_days(span_days)
 
-    print(f"Level events: {len(level_events)}, current level: {current_level}")
-    print(
-        f"Level event span days: {span_days:.1f}, time spread score: {time_spread_score:.3f}"
-    )
-
     if current_level is not None:
         if len(level_events) > 0:
             # Any increase is a signal of active play; cap benefits after ~3 increases.

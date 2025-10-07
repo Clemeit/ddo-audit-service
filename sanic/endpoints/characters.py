@@ -19,7 +19,6 @@ from urllib.parse import unquote
 from utils.log import logMessage
 import utils.guilds as guild_utils
 from utils.activity import calculate_active_playstyle_score
-from constants.guilds import GUILD_NAME_MAX_LENGTH
 from constants.server import MAX_CHARACTER_LOOKUP_IDS
 
 

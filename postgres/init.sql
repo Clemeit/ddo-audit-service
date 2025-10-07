@@ -67,6 +67,22 @@ ALTER TABLE IF EXISTS public."characters"
     OWNER to pgadmin;
     CREATE INDEX idx_name_server_name ON public."characters" (LOWER(name), LOWER(server_name));
 
+CREATE TABLE IF NOT EXISTS public."character_report_status"
+(
+    character_id bigint PRIMARY KEY REFERENCES public."characters"(id) ON DELETE CASCADE,
+    active boolean NOT NULL DEFAULT false,
+    active_checked_at timestamp with time zone,
+    updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."character_report_status"
+    OWNER to pgadmin;
+
+CREATE INDEX crs_active_idx ON public."character_report_status" (active);
+CREATE INDEX crs_checked_at_idx ON public."character_report_status" (active_checked_at);
+
 CREATE TABLE IF NOT EXISTS public."game_info"
 (
     id serial NOT NULL,
@@ -210,8 +226,7 @@ TABLESPACE pg_default;
 ALTER TABLE IF EXISTS public."config"
     OWNER to pgadmin;
 
--- Create an index on category for faster filtering
-CREATE INDEX idx_config_category ON public."config" (category);
+-- Note: removed index on non-existent column "category" to avoid init errors.
 
 -- Create an index on is_enabled for quick feature toggles
 CREATE INDEX idx_config_enabled ON public."config" (is_enabled);
