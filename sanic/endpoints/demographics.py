@@ -106,23 +106,30 @@ async def get_population_total_level(request: Request, period: str):
     Supported periods: day, week, month, quarter, year
     """
     period = period.lower()
-    active_only = request.args.get("active_only", "false").lower() == "true"
+    activity_level = request.args.get("activity_level", "all").lower()
+    if activity_level not in ("all", "active", "inactive"):
+        return json(
+            {
+                "message": f"Invalid activity_level '{activity_level}'. Supported values: all, active, inactive"
+            },
+            status=400,
+        )
 
     period_functions = {
         "day": lambda: demographics_utils.get_total_level_distribution(
-            ReportLookback.day, active_only
+            ReportLookback.day, activity_level
         ),
         "week": lambda: demographics_utils.get_total_level_distribution(
-            ReportLookback.week, active_only
+            ReportLookback.week, activity_level
         ),
         "month": lambda: demographics_utils.get_total_level_distribution(
-            ReportLookback.month, active_only
+            ReportLookback.month, activity_level
         ),
         "quarter": lambda: demographics_utils.get_total_level_distribution(
-            ReportLookback.quarter, active_only
+            ReportLookback.quarter, activity_level
         ),
         "year": lambda: demographics_utils.get_total_level_distribution(
-            ReportLookback.year, active_only
+            ReportLookback.year, activity_level
         ),
     }
 

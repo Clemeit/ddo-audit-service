@@ -84,7 +84,7 @@ def get_gender_distribution(period: ReportLookback) -> dict[str, int]:
 
 
 def get_total_level_distribution(
-    period: ReportLookback, active_only: bool = False
+    period: ReportLookback, activity_level: str = "all"
 ) -> dict[str, int]:
     """
     Gets total level demographics data for the specified period.
@@ -99,8 +99,8 @@ def get_total_level_distribution(
     cache_ttl = report_lookback_map[period]["cache_ttl"]
 
     return get_cached_data_with_fallback(
-        f"total_level_distribution_{period}_{'active' if active_only else 'all'}",
-        lambda: postgres_client.get_total_level_distribution(days, active_only),
+        f"total_level_distribution_{period}_{activity_level}",
+        lambda: postgres_client.get_total_level_distribution(days, activity_level),
         cache_ttl,
     )
 
