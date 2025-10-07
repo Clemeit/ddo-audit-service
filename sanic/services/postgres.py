@@ -1272,20 +1272,34 @@ def get_race_distribution(lookback_in_days: int = 90) -> dict[str, int]:
             return output
 
 
-def get_total_level_distribution(lookback_in_days: int = 90) -> dict[str, int]:
+def get_total_level_distribution(
+    lookback_in_days: int = 90, active_only: bool = False
+) -> dict[str, int]:
     """
     Get the total_level distribution of characters in the database.
     """
     validate_lookback(lookback_in_days)
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
+
+    if active_only:
+        query = """
+                SELECT server_name, total_level, COUNT(*) as count FROM public.characters
+                LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+                WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS TRUE
+                GROUP BY total_level, server_name
+                ORDER BY server_name, total_level
                 """
+    else:
+        query = """
                 SELECT server_name, total_level, COUNT(*) as count FROM public.characters
                 WHERE last_save > NOW() - (make_interval(days => %s))
                 GROUP BY total_level, server_name
                 ORDER BY server_name, total_level
-                """,
+                """
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                query,
                 (lookback_in_days,),
             )
             total_level_distribution = cursor.fetchall()
