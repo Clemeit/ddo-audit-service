@@ -98,9 +98,10 @@ services:
       - WORKER_BATCH_SIZE=${WORKER_BATCH_SIZE:-100}
       - WORKER_LOOKBACK_DAYS=${WORKER_LOOKBACK_DAYS:-90}
       - WORKER_SLEEP_SECS=${WORKER_SLEEP_SECS:-5}
+      - WORKER_IDLE_SECS=${WORKER_IDLE_SECS:-60}
       - WORKER_MAX_BATCHES=${WORKER_MAX_BATCHES:-0}
       - WORKER_STALE_DAYS=${WORKER_STALE_DAYS:-7}
-      - WORKER_SEED_MISSING=${WORKER_SEED_MISSING:-true}
+      - WORKER_SEED_MISSING=${WORKER_SEED_MISSING:-false}
       - WORKER_SEED_LIMIT=${WORKER_SEED_LIMIT:-0}
     expose:
       - 0
@@ -109,39 +110,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-
-  # workers_1:
-  #   build:
-  #     context: ./sanic
-  #     dockerfile: Dockerfile
-  #   image: clemeit/ddoaudit-sanic:latest
-  #   restart: always
-  #   command: ["python", "-m", "workers.active_backfill_worker"]
-  #   environment:
-  #     - POSTGRES_DB=${POSTGRES_DB}
-  #     - POSTGRES_HOST=${POSTGRES_HOST}
-  #     - POSTGRES_PORT=${POSTGRES_PORT}
-  #     - POSTGRES_USER=${POSTGRES_USER}
-  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-  #     - POSTGRES_MIN_CONN=${POSTGRES_MIN_CONN}
-  #     - POSTGRES_MAX_CONN=${POSTGRES_MAX_CONN}
-  #     - WORKER_SHARDS=${WORKER_SHARDS:-2}
-  #     - WORKER_INDEX=1
-  #     - WORKER_AUTO_INDEX=${WORKER_AUTO_INDEX:-false}
-  #     - WORKER_BATCH_SIZE=${WORKER_BATCH_SIZE:-100}
-  #     - WORKER_LOOKBACK_DAYS=${WORKER_LOOKBACK_DAYS:-90}
-  #     - WORKER_SLEEP_SECS=${WORKER_SLEEP_SECS:-5}
-  #     - WORKER_MAX_BATCHES=${WORKER_MAX_BATCHES:-0}
-  #     - WORKER_STALE_DAYS=${WORKER_STALE_DAYS:-7}
-  #     - WORKER_SEED_MISSING=${WORKER_SEED_MISSING:-true}
-  #     - WORKER_SEED_LIMIT=${WORKER_SEED_LIMIT:-0}
-  #   expose:
-  #     - 0
-  #   networks:
-  #     - backend
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
 
   nginx:
     build:

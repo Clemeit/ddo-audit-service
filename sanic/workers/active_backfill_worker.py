@@ -243,6 +243,7 @@ def main():
     batch_size = max(1, env_int("WORKER_BATCH_SIZE", 1000))
     lookback_days = max(1, env_int("WORKER_LOOKBACK_DAYS", 90))
     sleep_secs = max(0.0, env_float("WORKER_SLEEP_SECS", 0.0))
+    idle_sleep_secs = max(0.0, env_float("WORKER_IDLE_SECS", 300.0))
     max_batches = env_int("WORKER_MAX_BATCHES", 0)  # 0 = run until done
     stale_days = max(1, env_int("WORKER_STALE_DAYS", 7))
     seed_missing = os.getenv("WORKER_SEED_MISSING", "").lower() in ("1", "true", "yes")
@@ -292,10 +293,18 @@ def main():
                 processing_stale = False
             if not chars:
                 logger.info(
-                    "No more characters for this shard. Processed=%s. Exiting.",
+                    "No work for shard %s. Processed=%s. Sleeping for %ss before rechecking.",
+                    shard_index,
                     total_processed,
+                    idle_sleep_secs,
                 )
-                break
+                # Reset pagination so a new pass starts from the beginning
+                last_id = -1
+                stale_last_id = -1
+                if idle_sleep_secs > 0:
+                    time.sleep(idle_sleep_secs)
+                # Continue loop to re-check for work
+                continue
 
             batch_start = time.perf_counter()
             ids = [cid for cid, _ in chars]
