@@ -1,4 +1,4 @@
-FROM nginx@sha256:3987fe64037c03d4c08bd5b69f1d2f8a85724f3da580891d094dc881e179f390
+FROM nginx:1.29.1-alpine
 
 # Remove the default Nginx configuration file
 RUN rm -rf /usr/share/nginx/html/*
