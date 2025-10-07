@@ -20,6 +20,7 @@ import psycopg2.extras  # type: ignore
 import psycopg2.sql  # type: ignore
 from constants.activity import (
     MAX_CHARACTER_ACTIVITY_READ_LENGTH,
+    MAX_CHARACTER_AGG_ACTIVITY_READ_LENGTH,
     MAX_CHARACTER_ACTIVITY_READ_HISTORY,
 )
 
@@ -903,7 +904,7 @@ def get_all_character_activity_by_character_id(
     character_id: int,
     start_date: datetime = None,
     end_date: datetime = None,
-    limit: int = MAX_CHARACTER_ACTIVITY_READ_LENGTH,
+    limit: int = MAX_CHARACTER_AGG_ACTIVITY_READ_LENGTH,
 ) -> list[dict]:
     """
     Get mixed activity entries (all activity types) for a character.
@@ -930,8 +931,8 @@ def get_all_character_activity_by_character_id(
     limit = max(
         1,
         min(
-            limit if limit is not None else MAX_CHARACTER_ACTIVITY_READ_LENGTH,
-            MAX_CHARACTER_ACTIVITY_READ_LENGTH,
+            limit if limit is not None else MAX_CHARACTER_AGG_ACTIVITY_READ_LENGTH,
+            MAX_CHARACTER_AGG_ACTIVITY_READ_LENGTH,
         ),
     )
 

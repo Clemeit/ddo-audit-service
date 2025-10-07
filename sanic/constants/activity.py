@@ -10,4 +10,5 @@ class CharacterActivityType(str, Enum):
 
 
 MAX_CHARACTER_ACTIVITY_READ_LENGTH = 500  # 500 activity events
+MAX_CHARACTER_AGG_ACTIVITY_READ_LENGTH = 2000  # 500 activity events
 MAX_CHARACTER_ACTIVITY_READ_HISTORY = 90  # 90 days
