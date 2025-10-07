@@ -45,16 +45,20 @@ def env_float(name: str, default: float) -> float:
 def fetch_character_batch(
     last_id: int, shard_count: int, shard_index: int, batch_size: int
 ) -> List[Tuple[int, int]]:
-    """Fetch a batch of character ids and minimal fields for this shard.
+    """Fetch a batch of characters for this shard that are missing a status row.
 
     Returns list of tuples (id, total_level).
     """
-    query = (
-        "SELECT id, total_level "
-        "FROM public.characters "
-        "WHERE id > %s AND (id %% %s) = %s "
-        "ORDER BY id ASC LIMIT %s"
-    )
+    query = """
+        SELECT c.id, c.total_level
+        FROM public.characters c
+        LEFT JOIN public.character_report_status s ON s.character_id = c.id
+        WHERE c.id > %s
+          AND (c.id %% %s) = %s
+          AND s.character_id IS NULL
+        ORDER BY c.id ASC
+        LIMIT %s
+        """
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(query, (last_id, shard_count, shard_index, batch_size))
@@ -293,6 +297,7 @@ def main():
                 )
                 break
 
+            batch_start = time.perf_counter()
             ids = [cid for cid, _ in chars]
             acts = fetch_activities_for_ids(ids, lookback_days)
             updates = compute_updates(chars, acts)
@@ -306,6 +311,10 @@ def main():
                         "Bulk upsert failed for batch starting id %s: %s", last_id, e
                     )
 
+            elapsed_s = max(0.0, time.perf_counter() - batch_start)
+            duration_ms = round(elapsed_s * 1000.0, 2)
+            avg_ms_per_char = round(duration_ms / max(1, len(chars)), 2)
+
             total_processed += len(chars)
             if processing_stale:
                 stale_last_id = ids[-1]
@@ -313,12 +322,14 @@ def main():
                 last_id = ids[-1]
             batches += 1
             logger.info(
-                "Shard %s: processed %s batch of %s (last_id=%s, stale_last_id=%s), total=%s",
+                "Shard %s: processed %s batch of %s (last_id=%s, stale_last_id=%s) in %sms (avg %sms/char), total=%s",
                 shard_index,
                 "stale" if processing_stale else "new",
                 len(chars),
                 last_id,
                 stale_last_id,
+                duration_ms,
+                avg_ms_per_char,
                 total_processed,
             )
 
