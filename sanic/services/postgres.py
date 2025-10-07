@@ -1284,7 +1284,7 @@ def get_total_level_distribution(
         query = """
                 SELECT server_name, total_level, COUNT(*) as count FROM public.characters
                 LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
-                WHERE last_save > NOW() - (make_interval(days => %s)) AND character_activity.active = TRUE
+                WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS TRUE
                 GROUP BY total_level, server_name
                 ORDER BY server_name, total_level
                 """
