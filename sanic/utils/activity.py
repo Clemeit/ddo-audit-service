@@ -136,6 +136,8 @@ def calculate_active_playstyle_score(
             level_increases += 1
             increase_ts.append(level_events[i][0])
 
+    print(f"Level increases: {level_increases}")
+
     # Compute the span (in days) of level activity
     span_days = 0.0
     if len(increase_ts) >= 2:
@@ -147,25 +149,27 @@ def calculate_active_playstyle_score(
         )
     time_spread_score = _timespan_to_score_days(span_days)
 
+    print(
+        f"Level event span days: {span_days:.1f}, time spread score: {time_spread_score:.3f}"
+    )
+
     if current_level is not None:
-        if current_level >= _MAX_LEVEL:
-            # Max level: do not factor level progression (neutral)
-            level_score = 0.5
+        if level_increases > 0:
+            # Any increase is a signal of active play; cap benefits after ~3 increases.
+            progress_score = _clamp01(_scale(level_increases, 0, 3, 0.3, 1.0))
+            # Blend in time spread so tight, bursty increases score lower.
+            level_score = _clamp01(0.3 * progress_score + 0.7 * time_spread_score)
         else:
-            if level_increases > 0:
-                # Any increase is a signal of active play; cap benefits after ~3 increases.
-                progress_score = _clamp01(_scale(level_increases, 0, 3, 0.3, 1.0))
-                # Blend in time spread so tight, bursty increases score lower.
-                level_score = _clamp01(0.3 * progress_score + 0.7 * time_spread_score)
+            # No increases
+            if current_level in _SUSPICIOUS_LEVELS:
+                level_score = 0.1  # heavy penalty
             else:
-                # No increases
-                if current_level in _SUSPICIOUS_LEVELS:
-                    level_score = 0.1  # heavy penalty
-                else:
-                    level_score = 0.3  # moderate penalty
-                # Further penalize if all level events are in a short time block (<= ~1 day)
-                if len(level_events) >= 2 and span_days <= 1.0:
-                    level_score = max(0.05, level_score - 0.1)
+                level_score = 0.3  # moderate penalty
+            # Further penalize if all level events are in a short time block (<= ~1 day)
+            if len(level_events) >= 2 and span_days <= 1.0:
+                level_score = max(0.05, level_score - 0.1)
+    if current_level >= _MAX_LEVEL:
+        level_score = max(level_score, 0.5)  # at least neutral if max level
 
     # ---------------------
     # Location activity factor (volume > diversity)
