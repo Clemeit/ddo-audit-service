@@ -2543,36 +2543,46 @@ def get_unique_character_and_guild_count(
 
         with get_db_cursor(commit=False) as cursor:
             if server_name:
-                # Query for specific server
+                # Query for specific server including active counts via join
                 cursor.execute(
                     """
                     SELECT 
-                        COUNT(*) as unique_character_count,
-                        COUNT(DISTINCT guild_name) as unique_guild_count
-                    FROM public.characters 
-                    WHERE last_save >= %s 
-                        AND LOWER(server_name) = LOWER(%s)
-                        AND guild_name IS NOT NULL
-                        AND guild_name != ''
+                        COUNT(*) AS unique_character_count,
+                        COUNT(DISTINCT c.guild_name) AS unique_guild_count,
+                        COUNT(*) FILTER (WHERE crs.active IS TRUE) AS active_unique_character_count,
+                        COUNT(DISTINCT c.guild_name) FILTER (WHERE crs.active IS TRUE) AS active_unique_guild_count
+                    FROM public.characters c
+                    LEFT JOIN public.character_report_status crs
+                        ON crs.character_id = c.id
+                    WHERE c.last_save >= %s 
+                        AND LOWER(c.server_name) = LOWER(%s)
+                        AND c.guild_name IS NOT NULL
+                        AND c.guild_name != ''
                     """,
                     (start_date, server_name),
                 )
                 result = cursor.fetchone()
                 unique_character_count = result[0] if result else 0
                 unique_guild_count = result[1] if result else 0
+                active_unique_character_count = result[2] if result else 0
+                active_unique_guild_count = result[3] if result else 0
                 server_breakdown = {}
             else:
-                # Query for all servers - get breakdown and sum for totals
+                # Query for all servers - get breakdown (including active counts) and sum for totals
                 cursor.execute(
                     """
                     SELECT 
-                        server_name, 
-                        COUNT(*) as unique_character_count,
-                        COUNT(DISTINCT guild_name) as unique_guild_count
-                    FROM public.characters 
-                    WHERE last_save >= %s
-                        AND server_name IS NOT NULL
-                    GROUP BY server_name
+                        c.server_name, 
+                        COUNT(*) AS unique_character_count,
+                        COUNT(DISTINCT c.guild_name) AS unique_guild_count,
+                        COUNT(*) FILTER (WHERE crs.active IS TRUE) AS active_unique_character_count,
+                        COUNT(DISTINCT c.guild_name) FILTER (WHERE crs.active IS TRUE) AS active_unique_guild_count
+                    FROM public.characters c
+                    LEFT JOIN public.character_report_status crs
+                        ON crs.character_id = c.id
+                    WHERE c.last_save >= %s
+                        AND c.server_name IS NOT NULL
+                    GROUP BY c.server_name
                     ORDER BY unique_character_count DESC
                     """,
                     (start_date,),
@@ -2584,8 +2594,16 @@ def get_unique_character_and_guild_count(
                         str(server).lower(): {
                             "unique_character_count": char_count,
                             "unique_guild_count": guild_count,
+                            "active_unique_character_count": active_char_count,
+                            "active_unique_guild_count": active_guild_count,
                         }
-                        for server, char_count, guild_count in server_results
+                        for (
+                            server,
+                            char_count,
+                            guild_count,
+                            active_char_count,
+                            active_guild_count,
+                        ) in server_results
                     }
                     if server_results
                     else {}
@@ -2607,10 +2625,28 @@ def get_unique_character_and_guild_count(
                     if server_breakdown
                     else 0
                 )
+                active_unique_character_count = (
+                    sum(
+                        data["active_unique_character_count"]
+                        for data in server_breakdown.values()
+                    )
+                    if server_breakdown
+                    else 0
+                )
+                active_unique_guild_count = (
+                    sum(
+                        data["active_unique_guild_count"]
+                        for data in server_breakdown.values()
+                    )
+                    if server_breakdown
+                    else 0
+                )
 
             return {
                 "unique_character_count": unique_character_count,
                 "unique_guild_count": unique_guild_count,
+                "active_unique_character_count": active_unique_character_count,
+                "active_unique_guild_count": active_unique_guild_count,
                 "days_analyzed": days,
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),
@@ -2623,6 +2659,8 @@ def get_unique_character_and_guild_count(
         return {
             "unique_character_count": 0,
             "unique_guild_count": 0,
+            "active_unique_character_count": 0,
+            "active_unique_guild_count": 0,
             "error": str(e),
             "days_analyzed": days,
             "server_name": server_name,
