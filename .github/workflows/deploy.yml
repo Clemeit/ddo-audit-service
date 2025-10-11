@@ -23,112 +23,112 @@ jobs:
       - name: Push Docker image with Compose
         run: docker compose push
 
-  # deploy-stage:
-  #   needs: build-and-push-images
-  #   if: github.ref == 'refs/heads/master' && github.event_name != 'workflow_dispatch'
-  #   environment: stage
-  #   runs-on: ubuntu-latest
+  deploy-stage:
+    needs: build-and-push-images
+    if: github.ref == 'refs/heads/master' && github.event_name != 'workflow_dispatch'
+    environment: stage
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v3
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-  #     - name: Create .env file
-  #       run: |
-  #         cat > .env <<EOF
-  #         POSTGRES_DB=${{ vars.POSTGRES_DB }}
-  #         POSTGRES_HOST=${{ vars.POSTGRES_HOST }}
-  #         POSTGRES_PORT=${{ vars.POSTGRES_PORT }}
-  #         POSTGRES_USER=${{ vars.POSTGRES_USER }}
-  #         POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-  #         POSTGRES_MIN_CONN=${{ vars.POSTGRES_MIN_CONN }}
-  #         POSTGRES_MAX_CONN=${{ vars.POSTGRES_MAX_CONN }}
-  #         API_KEY=${{ secrets.API_KEY }}
-  #         APP_HOST=${{ vars.APP_HOST }}
-  #         APP_PORT=${{ vars.APP_PORT }}
-  #         APP_WORKERS=${{ vars.APP_WORKERS }}
-  #         CRYPTO_PASS=${{ secrets.CRYPTO_PASS }}
-  #         REDIS_HOST=${{ vars.REDIS_HOST }}
-  #         REDIS_PORT=${{ vars.REDIS_PORT }}
-  #         PGADMIN_DEFAULT_PASSWORD=${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
-  #         PGADMIN_DEFAULT_EMAIL=${{ vars.PGADMIN_DEFAULT_EMAIL }}
-  #         NGINX_HTTP_PORT=${{ vars.NGINX_HTTP_PORT }}
-  #         NGINX_HTTPS_PORT=${{ vars.NGINX_HTTPS_PORT }}
-  #         STATIC_FILES_PATH=${{ vars.STATIC_FILES_PATH }}
-  #         PRERENDER_TOKEN=${{ secrets.PRERENDER_TOKEN }}
-  #         EOF
+      - name: Create .env file
+        run: |
+          cat > .env <<EOF
+          POSTGRES_DB=${{ vars.POSTGRES_DB }}
+          POSTGRES_HOST=${{ vars.POSTGRES_HOST }}
+          POSTGRES_PORT=${{ vars.POSTGRES_PORT }}
+          POSTGRES_USER=${{ vars.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_MIN_CONN=${{ vars.POSTGRES_MIN_CONN }}
+          POSTGRES_MAX_CONN=${{ vars.POSTGRES_MAX_CONN }}
+          API_KEY=${{ secrets.API_KEY }}
+          APP_HOST=${{ vars.APP_HOST }}
+          APP_PORT=${{ vars.APP_PORT }}
+          APP_WORKERS=${{ vars.APP_WORKERS }}
+          CRYPTO_PASS=${{ secrets.CRYPTO_PASS }}
+          REDIS_HOST=${{ vars.REDIS_HOST }}
+          REDIS_PORT=${{ vars.REDIS_PORT }}
+          PGADMIN_DEFAULT_PASSWORD=${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
+          PGADMIN_DEFAULT_EMAIL=${{ vars.PGADMIN_DEFAULT_EMAIL }}
+          NGINX_HTTP_PORT=${{ vars.NGINX_HTTP_PORT }}
+          NGINX_HTTPS_PORT=${{ vars.NGINX_HTTPS_PORT }}
+          STATIC_FILES_PATH=${{ vars.STATIC_FILES_PATH }}
+          PRERENDER_TOKEN=${{ secrets.PRERENDER_TOKEN }}
+          EOF
 
-  #     - name: Create prerender_token.conf file
-  #       run: |
-  #         mkdir -p build/nginx
-  #         cat > build/nginx/00-prerender-token.conf <<'EOF'
-  #         map $http_host $prerender_token {
-  #           default "${{ secrets.PRERENDER_TOKEN }}";
-  #         }
-  #         EOF
+      - name: Create prerender_token.conf file
+        run: |
+          mkdir -p build/nginx
+          cat > build/nginx/00-prerender-token.conf <<'EOF'
+          map $http_host $prerender_token {
+            default "${{ secrets.PRERENDER_TOKEN }}";
+          }
+          EOF
 
-  #     - name: Ensure target directory exists
-  #       uses: appleboy/ssh-action@master
-  #       with:
-  #         host: ${{ secrets.SSH_HOST }}
-  #         username: ${{ secrets.SSH_USER }}
-  #         key: ${{ secrets.SSH_KEY }}
-  #         script: |
-  #           mkdir -p /var/www/ddoaudit-stage.com/app/
+      - name: Ensure target directory exists
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            mkdir -p /var/www/ddoaudit-stage.com/app/
 
-  #     - name: Copy docker-compose.yml to server
-  #       uses: appleboy/scp-action@master
-  #       with:
-  #         host: ${{ secrets.SSH_HOST }}
-  #         username: ${{ secrets.SSH_USER }}
-  #         key: ${{ secrets.SSH_KEY }}
-  #         source: "./docker-compose.stage.yml"
-  #         target: "/var/www/ddoaudit-stage.com/app/"
+      - name: Copy docker-compose.yml to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "./docker-compose.stage.yml"
+          target: "/var/www/ddoaudit-stage.com/app/"
 
-  #     - name: Copy .env to server
-  #       uses: appleboy/scp-action@master
-  #       with:
-  #         host: ${{ secrets.SSH_HOST }}
-  #         username: ${{ secrets.SSH_USER }}
-  #         key: ${{ secrets.SSH_KEY }}
-  #         source: "./.env"
-  #         target: "/var/www/ddoaudit-stage.com/app/"
+      - name: Copy .env to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "./.env"
+          target: "/var/www/ddoaudit-stage.com/app/"
 
-  #     - name: Copy prerender_token.conf to server
-  #       uses: appleboy/scp-action@master
-  #       with:
-  #         host: ${{ secrets.SSH_HOST }}
-  #         username: ${{ secrets.SSH_USER }}
-  #         key: ${{ secrets.SSH_KEY }}
-  #         source: "build/nginx/00-prerender-token.conf"
-  #         target: "/var/www/ddoaudit-stage.com/app/"
-  #         strip_components: 2
+      - name: Copy prerender_token.conf to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "build/nginx/00-prerender-token.conf"
+          target: "/var/www/ddoaudit-stage.com/app/"
+          strip_components: 2
 
-  #     - name: Deploy to Stage
-  #       uses: appleboy/ssh-action@master
-  #       with:
-  #         host: ${{ secrets.SSH_HOST }}
-  #         username: ${{ secrets.SSH_USER }}
-  #         key: ${{ secrets.SSH_KEY }}
-  #         script: |
-  #           cd /var/www/ddoaudit-stage.com/app
+      - name: Deploy to Stage
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /var/www/ddoaudit-stage.com/app
 
-  #           # Create external volumes if they don't exist
-  #           docker volume create ddoaudit-stage_postgres_data 2>/dev/null || true
-  #           docker volume create ddoaudit-stage_redis_data 2>/dev/null || true
-  #           docker volume create ddoaudit-stage_pgadmin_data 2>/dev/null || true
+            # Create external volumes if they don't exist
+            docker volume create ddoaudit-stage_postgres_data 2>/dev/null || true
+            docker volume create ddoaudit-stage_redis_data 2>/dev/null || true
+            docker volume create ddoaudit-stage_pgadmin_data 2>/dev/null || true
 
-  #           docker compose -f docker-compose.stage.yml -p ddoaudit-stage pull
-  #           docker compose -f docker-compose.stage.yml -p ddoaudit-stage up -d
+            docker compose -f docker-compose.stage.yml -p ddoaudit-stage pull
+            docker compose -f docker-compose.stage.yml -p ddoaudit-stage up -d
 
-  #     - name: Prune unused Docker images
-  #       uses: appleboy/ssh-action@master
-  #       with:
-  #         host: ${{ secrets.SSH_HOST }}
-  #         username: ${{ secrets.SSH_USER }}
-  #         key: ${{ secrets.SSH_KEY }}
-  #         script: |
-  #           docker image prune -af
+      - name: Prune unused Docker images
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            docker image prune -af
 
   deploy-prod:
     needs: build-and-push-images
