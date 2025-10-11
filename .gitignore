@@ -6,3 +6,13 @@
 .vscode
 
 \tests
+
+# Prerender
+node_modules/
+npm-debug.log
+.env
+.DS_Store
+*.log
+
+# React build
+client/

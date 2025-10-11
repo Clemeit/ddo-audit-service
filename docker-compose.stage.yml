@@ -20,20 +20,57 @@ services:
       retries: 3
       start_period: 60s
 
-  # prerender:
-  #   image: lune/prerender:latest
-  #   restart: unless-stopped
-  #   shm_size: "512m"
-  #   security_opt:
-  #     - seccomp=unconfined
-  #   environment:
-  #     PRERENDER_NUM_WORKERS: 2
-  #     PRERENDER_CONCURRENCY: 5
-  #     PAGE_TTL: 600
-  #     LOG_REQUESTS: "true"
-  #     CHROME_FLAGS: --no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-software-rasterizer,--disable-setuid-sandbox
-  #   networks:
-  #     - backend
+  prerender:
+    build:
+      context: ./prerender
+      dockerfile: Dockerfile
+    image: clemeit/ddoaudit-prerender:latest
+    restart: always
+    environment:
+      # Redis connection
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      # REDIS_PASSWORD=${REDIS_PASSWORD}  # Uncomment if Redis requires password
+      
+      # Cache TTL in seconds (default: 86400 = 24 hours)
+      - CACHE_TTL=${PRERENDER_CACHE_TTL:-86400}
+      
+      # Page rendering timeout in milliseconds (default: 30000 = 30 seconds)
+      - PAGE_TIMEOUT=${PRERENDER_PAGE_TIMEOUT:-30000}
+      
+      # Wait condition: load, domcontentloaded, networkidle0, networkidle2
+      - WAIT_UNTIL=${PRERENDER_WAIT_UNTIL:-networkidle0}
+      
+      # Optional: Comma-separated list of allowed domains
+      # ALLOWED_DOMAINS=${PRERENDER_ALLOWED_DOMAINS}
+      
+      # Server port
+      - PORT=3000
+    expose:
+      - 3000
+    networks:
+      - backend
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Add security options
+    security_opt:
+      - no-new-privileges:true
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   redis:
     build:
@@ -44,8 +81,6 @@ services:
     networks:
       - backend
     depends_on:
-      # prerender:
-      #   condition: service_started
       postgres:
         condition: service_healthy
     healthcheck:
@@ -105,6 +140,8 @@ services:
       - backend
     depends_on:
       sanic:
+        condition: service_healthy
+      prerender:
         condition: service_healthy
     volumes:
       - /var/www/ddoaudit-stage.com/html/client/build:/usr/share/nginx/html:ro

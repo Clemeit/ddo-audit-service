@@ -60,6 +60,7 @@ services:
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
       - BETTERSTACK_SERVER_STATUS_KEY=${BETTERSTACK_SERVER_STATUS_KEY}
+      - PRERENDER_TOKEN=${PRERENDER_TOKEN}
     expose:
       - 8000
     networks:
@@ -87,6 +88,8 @@ services:
       - backend
     depends_on:
       sanic:
+        condition: service_healthy
+      prerender:
         condition: service_healthy
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
@@ -125,6 +128,53 @@ services:
     depends_on:
       sanic:
         condition: service_healthy
+  
+  prerender:
+    build:
+      context: ./prerender
+      dockerfile: Dockerfile
+    container_name: prerender
+    ports:
+      - "3000:3000"
+    environment:
+      # Redis connection (adjust these to match your existing Redis container)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # REDIS_PASSWORD: your_redis_password  # Uncomment if Redis requires password
+      
+      # Cache TTL in seconds (default: 86400 = 24 hours)
+      CACHE_TTL: 86400
+      
+      # Page rendering timeout in milliseconds (default: 30000 = 30 seconds)
+      PAGE_TIMEOUT: 30000
+      
+      # Wait condition: load, domcontentloaded, networkidle0, networkidle2
+      WAIT_UNTIL: networkidle0
+      
+      # Optional: Comma-separated list of allowed domains
+      # ALLOWED_DOMAINS: example.com,mysite.com
+      
+      # Server port
+      PORT: 3000
+    restart: unless-stopped
+    networks:
+      - backend
+    # Add extra hosts to resolve localtest.me from container
+    extra_hosts:
+      - "www.localtest.me:host-gateway"
+      - "api.localtest.me:host-gateway"
+    # Add security options
+    security_opt:
+      - no-new-privileges:true
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
 networks:
   backend:
