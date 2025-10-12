@@ -43,7 +43,7 @@ app.get('*', validateRequest, async (req, res) => {
       return res.send(cached.html);
     }
 
-    console.log(`Cache MISS for ${targetUrl} - rendering... (lookup: ${cacheLookupTime}ms)`);
+    console.log(`Cache MISS for ${targetUrl} - rendering...`);
 
     // Render the page
     const result = await renderer.render(targetUrl);

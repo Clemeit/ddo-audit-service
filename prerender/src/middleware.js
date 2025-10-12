@@ -45,7 +45,16 @@ function validateUrl(url) {
 
   // Check if it's a valid URL
   try {
-    const urlObj = new URL(url);
+    // Decode once to handle inputs like .../about%3Ffoo=bar or fully-encoded /render/https%3A%2F%2F...
+    let decoded = url;
+    try {
+      decoded = decodeURIComponent(url);
+    } catch (_) {
+      // If decoding fails (malformed %), keep original string
+      decoded = url;
+    }
+
+    const urlObj = new URL(decoded);
     // Normalize early: strip all query params and fragments
     urlObj.search = '';
     urlObj.hash = '';
@@ -71,8 +80,8 @@ function validateUrl(url) {
       }
     }
 
-    // Return the normalized URL string
-    return { valid: true, url: urlObj.toString() };
+    // Return the strictly normalized URL: origin + pathname (no query/hash)
+    return { valid: true, url: `${urlObj.origin}${urlObj.pathname}` };
   } catch (error) {
     return { valid: false, error: 'Invalid URL format' };
   }
@@ -103,6 +112,12 @@ function validateRequest(req, res, next) {
 
   // Attach validated URL to request
   req.targetUrl = validation.url;
+  // Expose normalized URL for easier verification in logs/clients
+  try {
+    res.setHeader('X-Prerender-Normalized-URL', validation.url);
+  } catch (_) {
+    // ignore header set failures
+  }
   next();
 }
 
