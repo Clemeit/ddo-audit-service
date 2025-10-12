@@ -147,10 +147,95 @@ const botUserAgents = [
   'telegrambot',
 ];
 
+/**
+ * Identify well-known crawler by User-Agent
+ * Returns a friendly name or null if not recognized.
+ */
+function identifyCrawler(userAgent = '') {
+  if (!userAgent || typeof userAgent !== 'string') return null;
+
+  const patterns = [
+    [/googlebot/i, 'Googlebot'],
+    [/googleother/i, 'GoogleOther'],
+    [/googlereadaloud/i, 'Google Read Aloud'],
+    [/apis-google/i, 'APIs-Google'],
+    [/adsbot-google/i, 'AdsBot-Google'],
+    [/mediapartners-google/i, 'Mediapartners-Google'],
+
+    [/bingbot/i, 'Bingbot'],
+    [/bingpreview/i, 'BingPreview'],
+
+    [/slurp/i, 'Yahoo! Slurp'],
+    [/duckduckbot/i, 'DuckDuckBot'],
+    [/duckduckgo-favicons-bot/i, 'DuckDuckGo Favicons'],
+    [/baiduspider/i, 'BaiduSpider'],
+    [/yandex/i, 'YandexBot'],
+    [/petalbot/i, 'PetalBot'],
+
+    [/ahrefs(?:bot|siteaudit)/i, 'AhrefsBot'],
+    [/semrush(?:bot)?/i, 'SemrushBot'],
+    [/ccbot/i, 'Common Crawl (CCBot)'],
+    [/mj12bot/i, 'Majestic (MJ12bot)'],
+    [/blexbot/i, 'BLEXBot'],
+    [/exabot/i, 'Exabot'],
+    [/sogou/i, 'Sogou'],
+    [/seznambot/i, 'SeznamBot'],
+    [/(?:yeti|naverbot)/i, 'Naver (Yeti)'],
+    [/ia_archiver/i, 'IA Archiver'],
+    [/bytespider/i, 'ByteSpider (TikTok)'],
+
+    [/facebookexternalhit/i, 'Facebook External Hit'],
+    [/facebot/i, 'Facebook Bot'],
+    [/twitterbot/i, 'Twitterbot'],
+    [/linkedinbot/i, 'LinkedInBot'],
+    [/embedly/i, 'Embedly'],
+    [/quora\s+link\s+preview/i, 'Quora Link Preview'],
+    [/showyoubot/i, 'Showyoubot'],
+    [/outbrain/i, 'Outbrain'],
+    [/pinterestbot/i, 'PinterestBot'],
+    [/pinterest\/0\./i, 'Pinterest (Older UA)'],
+    [/developers\.google\.com\/\+\/web\/snippet/i, 'Google+ Web Snippet'],
+    [/slackbot/i, 'Slackbot'],
+    [/slack-imgproxy/i, 'Slack Image Proxy'],
+    [/vkshare/i, 'VK Share'],
+    [/w3c_validator/i, 'W3C Validator'],
+    [/redditbot/i, 'Redditbot'],
+    [/applebot/i, 'Applebot'],
+    [/whatsapp/i, 'WhatsApp'],
+    [/flipboard/i, 'Flipboard'],
+    [/tumblr/i, 'Tumblr'],
+    [/bitlybot/i, 'BitlyBot'],
+    [/skypeuripreview/i, 'Skype URI Preview'],
+    [/nuzzel/i, 'Nuzzel'],
+    [/discordbot/i, 'Discordbot'],
+    [/google\s+page\s+speed/i, 'Google Page Speed'],
+    [/qwantify/i, 'Qwantify'],
+    [/bitrix\s+link\s+preview/i, 'Bitrix Link Preview'],
+    [/xing-contenttabreceiver/i, 'Xing ContentTabReceiver'],
+    [/chrome-lighthouse/i, 'Lighthouse'],
+    [/telegrambot/i, 'TelegramBot'],
+
+    // Project-specific test bots
+    [/ddoaudit-test-bot/i, 'DDOAudit Test Bot'],
+    [/staging-test-crawler/i, 'Staging Test Crawler'],
+    [/prerender-test/i, 'Prerender Test'],
+
+    // Legacy Moz
+    [/rogerbot/i, 'Rogerbot'],
+    [/dotbot/i, 'DotBot'],
+  ];
+
+  for (const [regex, name] of patterns) {
+    if (regex.test(userAgent)) return name;
+  }
+  return null;
+}
+
 module.exports = {
   extractUrl,
   validateUrl,
   validateRequest,
   botUserAgents,
+  identifyCrawler,
 };
 

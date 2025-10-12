@@ -2,7 +2,7 @@ const express = require('express');
 const config = require('./config');
 const cache = require('./cache');
 const renderer = require('./renderer');
-const { validateRequest } = require('./middleware');
+const { validateRequest, identifyCrawler } = require('./middleware');
 
 const app = express();
 
@@ -20,7 +20,11 @@ app.get('*', validateRequest, async (req, res) => {
   const targetUrl = req.targetUrl;
   const startTime = Date.now();
 
-  console.log(`[${new Date().toISOString()}] Rendering: ${targetUrl}`);
+  const ua = req.headers['user-agent'] || '';
+  const crawler = identifyCrawler(ua);
+  const crawlerLabel = crawler ? ` [crawler=${crawler}]` : '';
+
+  console.log(`[${new Date().toISOString()}] Rendering: ${targetUrl}${crawlerLabel}`);
 
   try {
     // Try to get from cache first
@@ -33,6 +37,7 @@ app.get('*', validateRequest, async (req, res) => {
 
       res.setHeader('X-Prerender-Cache', 'HIT');
       res.setHeader('X-Prerender-Cache-Age', age.toString());
+      if (crawler) res.setHeader('X-Prerender-Crawler', crawler);
       res.status(cached.statusCode);
 
       // Forward important headers from cache
@@ -60,6 +65,7 @@ app.get('*', validateRequest, async (req, res) => {
     // Set response headers
     res.setHeader('X-Prerender-Cache', 'MISS');
     res.setHeader('X-Prerender-Render-Time', renderTime.toString());
+    if (crawler) res.setHeader('X-Prerender-Crawler', crawler);
     res.status(result.statusCode);
 
     // Forward important headers
