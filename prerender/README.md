@@ -120,6 +120,15 @@ The service adds custom headers to help with debugging:
 - `X-Prerender-Redirected`: `true` if the page redirected
 - `X-Prerender-Final-URL`: Final URL after redirects
 
+### Honored Meta Tags
+
+Your app can hint the prerenderer using standard meta tags:
+
+- `<meta name="prerender-status-code" content="404" />` — overrides the HTTP status sent to crawlers (e.g., return 404 for a SPA 404 page while still rendering friendly content).
+- `<meta name="robots" content="noindex,nofollow" />` — forwarded as `X-Robots-Tag` so crawlers receive the directive even when serving prerendered HTML.
+
+Both values are cached along with the HTML. If you later change these meta tags, clear the cache for affected URLs or wait for TTL expiry.
+
 ## Troubleshooting
 
 ### Service won't start

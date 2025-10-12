@@ -39,6 +39,9 @@ app.get('*', validateRequest, async (req, res) => {
       if (cached.headers['content-type']) {
         res.setHeader('Content-Type', cached.headers['content-type']);
       }
+      if (cached.headers['x-robots-tag']) {
+        res.setHeader('X-Robots-Tag', cached.headers['x-robots-tag']);
+      }
 
       return res.send(cached.html);
     }
@@ -64,6 +67,9 @@ app.get('*', validateRequest, async (req, res) => {
       res.setHeader('Content-Type', result.headers['content-type']);
     } else {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    }
+    if (result.headers['x-robots-tag']) {
+      res.setHeader('X-Robots-Tag', result.headers['x-robots-tag']);
     }
 
     // Add redirect information if applicable

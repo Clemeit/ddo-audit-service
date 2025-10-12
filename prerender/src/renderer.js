@@ -75,6 +75,34 @@ class PageRenderer {
       // Wait a bit more for any remaining JavaScript execution
       await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 500)));
 
+      // Inspect meta tags to optionally override status or set headers for crawlers
+      const metaInfo = await page.evaluate(() => {
+        const getMeta = (name) => {
+          const el = document.querySelector(`meta[name="${name}"]`);
+          return el ? el.getAttribute('content') : null;
+        };
+        return {
+          prerenderStatusCode: getMeta('prerender-status-code'),
+          robots: getMeta('robots'),
+        };
+      });
+
+      // Apply overrides from meta tags if present
+      if (metaInfo && metaInfo.prerenderStatusCode) {
+        const parsed = parseInt(metaInfo.prerenderStatusCode, 10);
+        if (!Number.isNaN(parsed) && parsed >= 100 && parsed <= 599) {
+          statusCode = parsed;
+        }
+      }
+
+      if (metaInfo && metaInfo.robots) {
+        // Expose robots directives in a response header for crawlers
+        responseHeaders = {
+          ...responseHeaders,
+          'x-robots-tag': metaInfo.robots,
+        };
+      }
+
       // Get the rendered HTML
       const html = await page.content();
 
