@@ -18,6 +18,7 @@ A self-hosted prerender service that renders JavaScript-heavy web pages for sear
 ### Using Docker Compose
 
 1. **Clone and configure**:
+
 ```bash
 git clone <repository>
 cd prerender-local
@@ -26,11 +27,13 @@ cp .env.example .env
 ```
 
 2. **Build and run**:
+
 ```bash
 docker-compose up -d
 ```
 
 3. **Test the service**:
+
 ```bash
 curl "http://localhost:3000/?url=https://example.com"
 ```
@@ -50,16 +53,16 @@ All configuration is done via environment variables. See `.env.example` for deta
 
 ### Key Configuration Options
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `REDIS_HOST` | `redis` | Redis server hostname |
-| `REDIS_PORT` | `6379` | Redis server port |
-| `REDIS_PASSWORD` | - | Redis password (if required) |
-| `CACHE_TTL` | `86400` | Cache lifetime in seconds (24 hours) |
-| `PAGE_TIMEOUT` | `30000` | Max page load time in milliseconds |
-| `WAIT_UNTIL` | `networkidle0` | Page load wait condition |
-| `PORT` | `3000` | Service port |
-| `ALLOWED_DOMAINS` | - | Comma-separated domain whitelist |
+| Variable          | Default        | Description                          |
+| ----------------- | -------------- | ------------------------------------ |
+| `REDIS_HOST`      | `redis`        | Redis server hostname                |
+| `REDIS_PORT`      | `6379`         | Redis server port                    |
+| `REDIS_PASSWORD`  | -              | Redis password (if required)         |
+| `CACHE_TTL`       | `86400`        | Cache lifetime in seconds (24 hours) |
+| `PAGE_TIMEOUT`    | `30000`        | Max page load time in milliseconds   |
+| `WAIT_UNTIL`      | `networkidle0` | Page load wait condition             |
+| `PORT`            | `3000`         | Service port                         |
+| `ALLOWED_DOMAINS` | -              | Comma-separated domain whitelist     |
 
 ### Wait Conditions
 
@@ -73,18 +76,21 @@ All configuration is done via environment variables. See `.env.example` for deta
 ### Render a URL
 
 **Query Parameter** (recommended):
+
 ```bash
 GET /?url=https://example.com/page
 ```
 
 **Path Format**:
+
 ```bash
 GET /render/https://example.com/page
 ```
 
 **Custom Header**:
+
 ```bash
-GET / 
+GET /
 X-Prerender-URL: https://example.com/page
 ```
 
@@ -95,6 +101,7 @@ GET /health
 ```
 
 Response:
+
 ```json
 {
   "status": "ok",
@@ -113,88 +120,35 @@ The service adds custom headers to help with debugging:
 - `X-Prerender-Redirected`: `true` if the page redirected
 - `X-Prerender-Final-URL`: Final URL after redirects
 
-## Integration with Nginx
-
-Add this to your Nginx configuration to forward bot traffic to the prerender service:
-
-```nginx
-server {
-    listen 80;
-    server_name example.com;
-
-    location / {
-        # Check if the request is from a bot
-        set $prerender 0;
-        if ($http_user_agent ~* "googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|whatsapp") {
-            set $prerender 1;
-        }
-
-        # Forward bot requests to prerender service
-        if ($prerender = 1) {
-            proxy_pass http://prerender:3000/?url=$scheme://$host$request_uri;
-            break;
-        }
-
-        # Regular traffic goes to your application
-        proxy_pass http://your-app:8080;
-    }
-}
-```
-
-## Docker Compose with Existing Redis
-
-If you already have Redis running in another Docker Compose project:
-
-### Option 1: Shared Network
-
-Create a shared network:
-```bash
-docker network create shared-network
-```
-
-Add to your Redis `docker-compose.yml`:
-```yaml
-networks:
-  shared-network:
-    external: true
-```
-
-Update prerender `docker-compose.yml`:
-```yaml
-networks:
-  prerender-network:
-    external: true
-    name: shared-network
-```
-
-### Option 2: Same Compose File
-
-Add the prerender service to your existing `docker-compose.yml` alongside Redis.
-
 ## Troubleshooting
 
 ### Service won't start
+
 - Check logs: `docker-compose logs prerender`
 - Ensure port 3000 is not already in use
 - Verify Chrome dependencies are installed (automatically handled in Docker)
 
 ### Can't connect to Redis
+
 - Verify `REDIS_HOST` matches your Redis container name
 - Check that both containers are on the same Docker network
 - Test Redis connection: `docker exec -it prerender ping redis`
 - If Redis requires password, set `REDIS_PASSWORD`
 
 ### Pages timeout
+
 - Increase `PAGE_TIMEOUT` for slow-loading pages
 - Try changing `WAIT_UNTIL` to `networkidle2` or `domcontentloaded`
 - Check if the target site blocks headless browsers
 
 ### High memory usage
+
 - Adjust resource limits in `docker-compose.yml`
 - Reduce `CACHE_TTL` to clear cache more frequently
 - Consider scaling horizontally with multiple instances
 
 ### Cache not working
+
 - Check `/health` endpoint to verify cache status
 - Ensure Redis is running and accessible
 - Check Redis logs for errors
@@ -224,4 +178,3 @@ MIT
 ## Support
 
 For issues, questions, or contributions, please open an issue in the repository.
-

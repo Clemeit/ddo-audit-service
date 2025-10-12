@@ -46,7 +46,10 @@ function validateUrl(url) {
   // Check if it's a valid URL
   try {
     const urlObj = new URL(url);
-    
+    // Normalize early: strip all query params and fragments
+    urlObj.search = '';
+    urlObj.hash = '';
+
     // Only allow http and https protocols
     if (!['http:', 'https:'].includes(urlObj.protocol)) {
       return { valid: false, error: 'Only HTTP and HTTPS protocols are allowed' };
@@ -61,14 +64,15 @@ function validateUrl(url) {
       });
 
       if (!isAllowed) {
-        return { 
-          valid: false, 
-          error: `Domain ${hostname} is not in the allowed domains list` 
+        return {
+          valid: false,
+          error: `Domain ${hostname} is not in the allowed domains list`
         };
       }
     }
 
-    return { valid: true, url: url };
+    // Return the normalized URL string
+    return { valid: true, url: urlObj.toString() };
   } catch (error) {
     return { valid: false, error: 'Invalid URL format' };
   }
@@ -86,6 +90,15 @@ function validateRequest(req, res, next) {
       error: validation.error,
       hint: 'Provide URL via ?url=https://example.com or X-Prerender-URL header',
     });
+  }
+
+  // Log when URL normalization has changed the original input
+  if (url !== validation.url) {
+    try {
+      console.log(`[${new Date().toISOString()}] Normalized URL: ${url} -> ${validation.url}`);
+    } catch (e) {
+      // no-op if logging fails
+    }
   }
 
   // Attach validated URL to request

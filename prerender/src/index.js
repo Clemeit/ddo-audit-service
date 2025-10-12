@@ -25,29 +25,30 @@ app.get('*', validateRequest, async (req, res) => {
   try {
     // Try to get from cache first
     const cached = await cache.get(targetUrl);
-    
+    const cacheLookupTime = Date.now() - startTime;
+
     if (cached) {
       const age = Math.floor((Date.now() - cached.timestamp) / 1000);
-      console.log(`Cache HIT for ${targetUrl} (age: ${age}s)`);
-      
+      console.log(`Cache HIT for ${targetUrl} (age: ${age}s, lookup: ${cacheLookupTime}ms)`);
+
       res.setHeader('X-Prerender-Cache', 'HIT');
       res.setHeader('X-Prerender-Cache-Age', age.toString());
       res.status(cached.statusCode);
-      
+
       // Forward important headers from cache
       if (cached.headers['content-type']) {
         res.setHeader('Content-Type', cached.headers['content-type']);
       }
-      
+
       return res.send(cached.html);
     }
 
-    console.log(`Cache MISS for ${targetUrl} - rendering...`);
-    
+    console.log(`Cache MISS for ${targetUrl} - rendering... (lookup: ${cacheLookupTime}ms)`);
+
     // Render the page
     const result = await renderer.render(targetUrl);
     const renderTime = Date.now() - startTime;
-    
+
     console.log(`Rendered ${targetUrl} in ${renderTime}ms (status: ${result.statusCode})`);
 
     // Store in cache (even error pages to avoid hammering failing sites)
@@ -74,7 +75,7 @@ app.get('*', validateRequest, async (req, res) => {
     res.send(result.html);
   } catch (error) {
     console.error(`Error processing ${targetUrl}:`, error.message);
-    
+
     res.status(500).json({
       error: 'Failed to render page',
       message: error.message,
@@ -104,13 +105,13 @@ app.use((err, req, res, next) => {
 async function start() {
   try {
     console.log('Starting prerender service...');
-    
+
     // Connect to Redis
     await cache.connect();
-    
+
     // Initialize browser
     await renderer.initialize();
-    
+
     // Start HTTP server
     app.listen(config.port, () => {
       console.log(`\n🚀 Prerender service running on port ${config.port}`);
