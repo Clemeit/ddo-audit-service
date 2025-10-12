@@ -59,6 +59,14 @@ function validateUrl(url) {
     urlObj.search = '';
     urlObj.hash = '';
 
+    // Drop everything after '&'. e.g. https://example.com/path&foo=bar -> https://example.com/path
+    let normalizedPathname = urlObj.pathname;
+    if (normalizedPathname.includes('&')) {
+      const ampIndex = normalizedPathname.indexOf('&');
+      normalizedPathname = normalizedPathname.substring(0, ampIndex);
+    }
+    urlObj.pathname = normalizedPathname;
+
     // Only allow http and https protocols
     if (!['http:', 'https:'].includes(urlObj.protocol)) {
       return { valid: false, error: 'Only HTTP and HTTPS protocols are allowed' };
