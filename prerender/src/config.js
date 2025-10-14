@@ -12,7 +12,7 @@ const config = {
   },
 
   // Cache configuration
-  cacheTTL: parseInt(process.env.CACHE_TTL || '172800', 10), // Default: 48 hours in seconds
+  cacheTTL: parseInt(process.env.CACHE_TTL || '432000', 10), // Default: 5 days
 
   // Rendering configuration
   pageTimeout: parseInt(process.env.PAGE_TIMEOUT || '30000', 10), // Default: 30 seconds
