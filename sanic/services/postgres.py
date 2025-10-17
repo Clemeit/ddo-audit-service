@@ -1193,7 +1193,7 @@ def get_recent_raid_activity_by_character_ids(
                 WHERE quests.group_size = 'Raid' 
                     AND current_activity.character_id = ANY(%s) 
                     AND current_activity.activity_type = 'location' 
-                    AND current_activity.timestamp >= NOW() - INTERVAL '5 days'
+                    AND current_activity.timestamp >= NOW() - INTERVAL '66 hours'
                 GROUP BY next_activity.timestamp, current_activity.character_id
                 ORDER BY timestamp DESC
                 LIMIT 100
