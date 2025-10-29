@@ -36,7 +36,7 @@ async def get_guilds_by_name_deprecated(request: Request, guild_name: str):
     if not guild_utils.validate_guild_name(guild_name):
         return json(
             {
-                "message": "Guild name must be alphanumeric, spaces, single quotes, or hyphens."
+                "message": "Guild name must be alphanumeric, spaces, single quotes, periods, or hyphens."
             },
             status=400,
         )
@@ -119,7 +119,7 @@ async def get_guild_by_server_name_and_guild_name(
     if not guild_utils.validate_guild_name(guild_name):
         return json(
             {
-                "message": "Guild name must be alphanumeric, spaces, single quotes, or hyphens."
+                "message": "Guild name must be alphanumeric, spaces, single quotes, periods, or hyphens."
             },
             status=400,
         )

@@ -29,8 +29,12 @@ def get_cached_data_with_fallback(key: str, fallback_func, ttl: int = 60 * 60) -
 
 
 def validate_guild_name(guild_name: str) -> bool:
+    # Guild name must be alphanumeric, spaces, single quotes, periods, or hyphens.
     if not guild_name or len(guild_name) > GUILD_NAME_MAX_LENGTH:
         return False
-    if not all(c.isalnum() or c.isspace() or c == "-" or c == "'" for c in guild_name):
+    if not all(
+        c.isalnum() or c.isspace() or c == "-" or c == "'" or c == "."
+        for c in guild_name
+    ):
         return False
     return True
