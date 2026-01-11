@@ -22,6 +22,7 @@ from models.quest import Quest
 
 import json
 from typing import Optional, Any
+import uuid
 
 from pydantic import BaseModel
 
@@ -42,6 +43,17 @@ REDIS_SOCKET_CONNECT_TIMEOUT = int(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "5"
 REDIS_SOCKET_TIMEOUT = int(os.getenv("REDIS_SOCKET_TIMEOUT", "5"))
 REDIS_RETRY_ON_TIMEOUT = os.getenv("REDIS_RETRY_ON_TIMEOUT", "true").lower() == "true"
 REDIS_HEALTH_CHECK_INTERVAL = int(os.getenv("REDIS_HEALTH_CHECK_INTERVAL", "30"))
+
+# Traffic counters (for incident investigation)
+TRAFFIC_COUNTERS_ENABLED = (
+    os.getenv("TRAFFIC_COUNTERS_ENABLED", "true").lower() == "true"
+)
+TRAFFIC_COUNTERS_TTL_HOURS = int(os.getenv("TRAFFIC_COUNTERS_TTL_HOURS", "72"))
+TRAFFIC_COUNTERS_BUCKET_SECONDS = int(
+    os.getenv("TRAFFIC_COUNTERS_BUCKET_SECONDS", "60")
+)
+TRAFFIC_COUNTERS_MAX_MINUTES = int(os.getenv("TRAFFIC_COUNTERS_MAX_MINUTES", "1440"))
+TRAFFIC_COUNTERS_PREFIX = os.getenv("TRAFFIC_COUNTERS_PREFIX", "traffic")
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -252,6 +264,163 @@ def close_redis():
 async def close_redis_async():
     """Close all Redis connections asynchronously."""
     await _redis_manager.close_async()
+
+
+def _clamp_int(value: Any, default: int, *, min_value: int, max_value: int) -> int:
+    try:
+        i = int(value)
+    except Exception:
+        i = default
+    if i < min_value:
+        return min_value
+    if i > max_value:
+        return max_value
+    return i
+
+
+def _traffic_bucket_id(now_s: Optional[float] = None) -> int:
+    bucket_seconds = max(1, TRAFFIC_COUNTERS_BUCKET_SECONDS)
+    now = time() if now_s is None else now_s
+    return int(now // bucket_seconds)
+
+
+def _traffic_key(suffix: str, bucket_id: int) -> str:
+    return f"{TRAFFIC_COUNTERS_PREFIX}:{suffix}:{bucket_id}"
+
+
+async def traffic_increment(
+    *,
+    ip: Optional[str],
+    route: Optional[str],
+    method: Optional[str],
+    status: int,
+    bytes_out: Optional[int],
+) -> None:
+    """Increment per-request traffic counters in Redis.
+
+    Uses per-bucket sorted sets for quick "top N" investigation without storing raw logs.
+    """
+
+    if not TRAFFIC_COUNTERS_ENABLED:
+        return
+
+    bucket_id = _traffic_bucket_id()
+    ttl_seconds = max(60, TRAFFIC_COUNTERS_TTL_HOURS * 3600)
+
+    ip_key = (ip or "").strip()[:64]
+    route_key = (route or "").strip()[:256]
+    method_key = (method or "").strip()[:16]
+    status_key = str(_clamp_int(status, 0, min_value=0, max_value=999))
+    bytes_out_value = max(0, int(bytes_out)) if bytes_out is not None else 0
+
+    # Avoid unbounded cardinality.
+    if not ip_key:
+        ip_key = "unknown"
+    if not route_key:
+        route_key = "unknown"
+
+    try:
+        client = await get_async_redis_client()
+
+        pipe = client.pipeline(transaction=False)
+
+        # Request counts
+        pipe.zincrby(_traffic_key("req:ip", bucket_id), 1, ip_key)
+        pipe.zincrby(_traffic_key("req:route", bucket_id), 1, route_key)
+        pipe.incr(_traffic_key("req:total", bucket_id))
+
+        # Bytes out (egress)
+        if bytes_out_value:
+            pipe.zincrby(
+                _traffic_key("bytes_out:ip", bucket_id), bytes_out_value, ip_key
+            )
+            pipe.zincrby(
+                _traffic_key("bytes_out:route", bucket_id), bytes_out_value, route_key
+            )
+            pipe.incrby(_traffic_key("bytes_out:total", bucket_id), bytes_out_value)
+
+        # Small additional breakdowns (low cardinality)
+        if method_key:
+            pipe.hincrby(_traffic_key("req:method", bucket_id), method_key, 1)
+        pipe.hincrby(_traffic_key("req:status", bucket_id), status_key, 1)
+
+        # TTL
+        pipe.expire(_traffic_key("req:ip", bucket_id), ttl_seconds)
+        pipe.expire(_traffic_key("req:route", bucket_id), ttl_seconds)
+        pipe.expire(_traffic_key("req:total", bucket_id), ttl_seconds)
+        pipe.expire(_traffic_key("req:method", bucket_id), ttl_seconds)
+        pipe.expire(_traffic_key("req:status", bucket_id), ttl_seconds)
+        pipe.expire(_traffic_key("bytes_out:ip", bucket_id), ttl_seconds)
+        pipe.expire(_traffic_key("bytes_out:route", bucket_id), ttl_seconds)
+        pipe.expire(_traffic_key("bytes_out:total", bucket_id), ttl_seconds)
+
+        await pipe.execute()
+    except Exception as e:
+        # Never break requests if Redis is degraded.
+        logger.warning(f"traffic_increment failed: {e}")
+
+
+async def _traffic_top_zset(
+    *,
+    suffix: str,
+    minutes: int,
+    limit: int,
+) -> list[tuple[str, float]]:
+    if not TRAFFIC_COUNTERS_ENABLED:
+        return []
+
+    minutes = _clamp_int(
+        minutes, 60, min_value=1, max_value=TRAFFIC_COUNTERS_MAX_MINUTES
+    )
+    limit = _clamp_int(limit, 25, min_value=1, max_value=200)
+
+    now_bucket = _traffic_bucket_id()
+    bucket_ids = list(range(now_bucket - minutes + 1, now_bucket + 1))
+    keys = [_traffic_key(suffix, b) for b in bucket_ids]
+
+    try:
+        client = await get_async_redis_client()
+        tmp_key = _traffic_key(f"tmp:{suffix}", now_bucket) + ":" + uuid.uuid4().hex
+
+        # Aggregate last N buckets into one temporary ZSET.
+        await client.zunionstore(tmp_key, keys, aggregate="SUM")
+        await client.expire(tmp_key, 60)
+
+        # redis-py returns bytes members when decode_responses=False
+        raw = await client.zrevrange(tmp_key, 0, limit - 1, withscores=True)
+        await client.delete(tmp_key)
+
+        out: list[tuple[str, float]] = []
+        for member, score in raw:
+            if isinstance(member, (bytes, bytearray)):
+                member_str = member.decode("utf-8", errors="replace")
+            else:
+                member_str = str(member)
+            out.append((member_str, float(score)))
+        return out
+    except Exception as e:
+        logger.warning(f"_traffic_top_zset failed: {e}")
+        return []
+
+
+async def traffic_top_ips(
+    *, minutes: int = 60, metric: str = "requests", limit: int = 25
+):
+    """Return top IPs by requests or bytes_out over the last N minutes."""
+    suffix = "req:ip" if metric != "bytes_out" else "bytes_out:ip"
+    rows = await _traffic_top_zset(suffix=suffix, minutes=minutes, limit=limit)
+    key = "requests" if metric != "bytes_out" else "bytes_out"
+    return [{"ip": member, key: score} for (member, score) in rows]
+
+
+async def traffic_top_routes(
+    *, minutes: int = 60, metric: str = "requests", limit: int = 25
+):
+    """Return top routes by requests or bytes_out over the last N minutes."""
+    suffix = "req:route" if metric != "bytes_out" else "bytes_out:route"
+    rows = await _traffic_top_zset(suffix=suffix, minutes=minutes, limit=limit)
+    key = "requests" if metric != "bytes_out" else "bytes_out"
+    return [{"route": member, key: score} for (member, score) in rows]
 
 
 def redis_health_check() -> bool:

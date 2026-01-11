@@ -109,7 +109,7 @@ SELECT create_hypertable('character_activity', 'timestamp');
 -- Add a retention policy to delete data older than 180 days
 SELECT add_retention_policy('character_activity', INTERVAL '180 days');
 
--- Add an index on the id column
+-- Add an index on the character_id column
 CREATE INDEX ON public."character_activity" (character_id);
 
 ALTER TABLE IF EXISTS public."character_activity"
