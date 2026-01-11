@@ -15,6 +15,18 @@ import uuid
 service_blueprint = Blueprint("service", url_prefix="/service", version=1)
 
 
+def _clamp_int(value, default: int, *, min_value: int, max_value: int) -> int:
+    try:
+        i = int(value)
+    except Exception:
+        i = default
+    if i < min_value:
+        return min_value
+    if i > max_value:
+        return max_value
+    return i
+
+
 # ===== Client-facing endpoints =====
 @service_blueprint.get("/health")
 async def get_health(request):
@@ -168,6 +180,66 @@ async def post_log(request: Request):
         return empty()
     except Exception as e:
         return json({"message": str(e)}, status=500)
+
+
+@service_blueprint.post("/traffic/top_ips")
+async def post_traffic_top_ips(request: Request):
+    """Protected endpoint: returns top IPs over a recent window.
+
+    Body (optional): {"minutes": 60, "limit": 25, "metric": "requests"|"bytes_out"}
+    """
+    body = request.json or {}
+    minutes = _clamp_int(
+        body.get("minutes") or request.args.get("minutes"),
+        60,
+        min_value=1,
+        max_value=1440,
+    )
+    limit = _clamp_int(
+        body.get("limit") or request.args.get("limit"), 25, min_value=1, max_value=200
+    )
+    metric = (
+        (body.get("metric") or request.args.get("metric") or "requests").strip().lower()
+    )
+    if metric not in {"requests", "bytes_out"}:
+        return json({"message": "metric must be 'requests' or 'bytes_out'"}, status=400)
+
+    data = await redis_client.traffic_top_ips(
+        minutes=minutes, metric=metric, limit=limit
+    )
+    return json(
+        {"data": data, "meta": {"minutes": minutes, "limit": limit, "metric": metric}}
+    )
+
+
+@service_blueprint.post("/traffic/top_routes")
+async def post_traffic_top_routes(request: Request):
+    """Protected endpoint: returns top routes over a recent window.
+
+    Body (optional): {"minutes": 60, "limit": 25, "metric": "requests"|"bytes_out"}
+    """
+    body = request.json or {}
+    minutes = _clamp_int(
+        body.get("minutes") or request.args.get("minutes"),
+        60,
+        min_value=1,
+        max_value=1440,
+    )
+    limit = _clamp_int(
+        body.get("limit") or request.args.get("limit"), 25, min_value=1, max_value=200
+    )
+    metric = (
+        (body.get("metric") or request.args.get("metric") or "requests").strip().lower()
+    )
+    if metric not in {"requests", "bytes_out"}:
+        return json({"message": "metric must be 'requests' or 'bytes_out'"}, status=400)
+
+    data = await redis_client.traffic_top_routes(
+        minutes=minutes, metric=metric, limit=limit
+    )
+    return json(
+        {"data": data, "meta": {"minutes": minutes, "limit": limit, "metric": metric}}
+    )
 
 
 # ===================================
