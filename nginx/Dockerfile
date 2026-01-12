@@ -15,6 +15,8 @@ COPY ./nginx/nginx.conf /etc/nginx/nginx.conf
 COPY ./nginx/api.conf /etc/nginx/conf.d/api.conf
 COPY ./nginx/www.conf /etc/nginx/conf.d/www.conf
 COPY ./nginx/pgadmin.conf /etc/nginx/conf.d/pgadmin.conf
+RUN mkdir -p /etc/nginx/denylist.d
+COPY ./nginx/denylist.d/denylist.conf /etc/nginx/denylist.d/denylist.conf
 
 RUN mkdir -p /etc/nginx/ssl
 
