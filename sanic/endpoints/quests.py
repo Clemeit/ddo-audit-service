@@ -11,6 +11,7 @@ from utils.areas import get_valid_area_ids
 from utils.quests import get_quests
 
 from models.quest import Quest
+from models.quest_session import QuestAnalytics
 
 quest_blueprint = Blueprint("quests", url_prefix="/quests", version=1)
 
@@ -32,6 +33,39 @@ async def get_quest_by_name(request: Request, quest_name: str):
     except Exception as e:
         return json({"message": str(e)}, status=500)
     return json({"data": quest.model_dump()})
+
+
+@quest_blueprint.get("/<quest_id:int>/analytics")
+async def get_quest_analytics(request: Request, quest_id: int):
+    """
+    Method: GET
+
+    Route: /quests/<quest_id:int>/analytics
+
+    Description: Get comprehensive analytics for a quest including duration statistics,
+    activity patterns, and time series data.
+    """
+
+    try:
+        # Verify quest exists
+        quest: Quest = postgres_client.get_quest_by_id(quest_id)
+        if not quest:
+            return json({"message": "quest not found"}, status=404)
+
+        # Get lookback days from query parameter (default 90)
+        lookback_days = int(request.args.get("lookback_days", 90))
+        lookback_days = max(1, min(lookback_days, 365))  # Clamp between 1 and 365
+
+        # Get analytics
+        analytics: QuestAnalytics = postgres_client.get_quest_analytics(
+            quest_id, lookback_days
+        )
+
+        return json({"data": analytics.model_dump()})
+    except ValueError as e:
+        return json({"message": str(e)}, status=400)
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
 
 
 @quest_blueprint.get("/<quest_id:int>")
