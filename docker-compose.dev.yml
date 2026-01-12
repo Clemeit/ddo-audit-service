@@ -96,6 +96,7 @@ services:
       - ./nginx/api.dev.conf:/etc/nginx/conf.d/api.conf:ro
       - ./nginx/www.dev.conf:/etc/nginx/conf.d/www.conf:ro
       - ./nginx/pgadmin.dev.conf:/etc/nginx/conf.d/pgadmin.conf:ro
+      - ./nginx/denylist.conf:/etc/nginx/conf.d/denylist.conf:ro
       - ./client:/usr/share/nginx/html:ro
       - /etc/letsencrypt:/etc/letsencrypt
 
