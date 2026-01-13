@@ -113,8 +113,9 @@ SELECT add_retention_policy('character_activity', INTERVAL '180 days');
 -- Add an index on the character_id column
 CREATE INDEX ON public."character_activity" (character_id);
 
--- Add an index for unprocessed location activities
-CREATE INDEX idx_character_activity_unprocessed ON public."character_activity" (quest_session_processed, character_id, "timestamp") 
+-- Add an index for unprocessed location activities aligned to query filter order
+CREATE INDEX idx_character_activity_unprocessed
+ON public."character_activity" ("timestamp", character_id)
 WHERE activity_type = 'location' AND quest_session_processed = false;
 
 ALTER TABLE IF EXISTS public."character_activity"

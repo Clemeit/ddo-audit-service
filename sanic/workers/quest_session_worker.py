@@ -56,7 +56,7 @@ def env_int(name: str, default: int) -> int:
     """Parse environment variable as integer with fallback."""
     try:
         return int(os.getenv(name, str(default)))
-    except Exception:
+    except (TypeError, ValueError):
         return default
 
 
@@ -64,7 +64,7 @@ def env_float(name: str, default: float) -> float:
     """Parse environment variable as float with fallback."""
     try:
         return float(os.getenv(name, str(default)))
-    except Exception:
+    except (TypeError, ValueError):
         return default
 
 
@@ -104,10 +104,6 @@ def process_character_activities(
             continue
 
         last_area_id = area_id
-
-        # Determine if we need to close current session and/or open new session
-        session_to_close = None
-        session_to_open = None
 
         # If character has an active session, check if they're leaving it
         if current_session is not None and current_quest_area != area_id:
@@ -332,9 +328,6 @@ def run_worker():
                 continue
 
             # Calculate processing rate
-            avg_time_per_activity = (
-                batch_duration / activities_count if activities_count > 0 else 0
-            )
             activities_per_second = (
                 activities_count / batch_duration if batch_duration > 0 else 0
             )
