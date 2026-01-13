@@ -3525,6 +3525,20 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
             )
             stats = cursor.fetchone()
 
+            if not stats or all(s is None for s in stats):
+                # No data found for this quest in the lookback period
+                return QuestAnalytics(
+                    average_duration_seconds=None,
+                    standard_deviation_seconds=None,
+                    histogram=[],
+                    activity_by_hour=[],
+                    activity_by_day_of_week=[],
+                    activity_over_time=[],
+                    total_sessions=0,
+                    completed_sessions=0,
+                    active_sessions=0,
+                )
+
             avg_duration = float(stats[0]) if stats[0] is not None else None
             stddev_duration = float(stats[1]) if stats[1] is not None else None
             min_duration = float(stats[2]) if stats[2] is not None else 0
