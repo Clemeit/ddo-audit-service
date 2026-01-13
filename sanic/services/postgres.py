@@ -2,7 +2,7 @@ import json
 import os
 import logging
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from time import time
 from typing import Optional, Generator
 
@@ -26,6 +26,7 @@ from constants.activity import (
 
 from models.quest import Quest
 from models.area import Area
+from models.quest_session import QuestSession, QuestAnalytics
 
 from utils.areas import get_valid_area_ids
 from utils.time import datetime_to_datetime_string
@@ -2625,6 +2626,32 @@ def build_area_from_row(row: tuple) -> Area:
     )
 
 
+def build_quest_session_from_row(row: tuple) -> QuestSession:
+    return QuestSession(
+        id=row[0],
+        character_id=row[1],
+        quest_id=row[2],
+        entry_timestamp=row[3],
+        exit_timestamp=row[4],
+        duration_seconds=float(row[5]) if row[5] is not None else None,
+        created_at=row[6],
+    )
+
+
+def get_quest_id_for_area(area_id: int) -> Optional[int]:
+    """Get quest_id for a given area_id, or None if area is not associated with a quest."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id FROM public.quests WHERE area_id = %s LIMIT 1
+                """,
+                (area_id,),
+            )
+            row = cursor.fetchone()
+            return int(row[0]) if row else None
+
+
 # Add some helper functions for common time ranges
 def get_game_population_last_hours(hours: int = 24) -> list[PopulationPointInTime]:
     """Get population data for the last N hours."""
@@ -3180,3 +3207,528 @@ def get_config_by_key(key: str) -> dict | None:
 #         raise ValueError(f"Invalid date format. Expected format: {date_format}. Error: {e}")
 
 #     return get_game_population(start_date=start_date, end_date=end_date)
+
+
+# ========================================
+# Quest Session Functions
+# ========================================
+
+
+def insert_quest_session(
+    character_id: int,
+    quest_id: int,
+    entry_timestamp: datetime,
+    exit_timestamp: Optional[datetime] = None,
+) -> int:
+    """Insert a new quest session and return its ID.
+
+    Args:
+        character_id: ID of the character
+        quest_id: ID of the quest
+        entry_timestamp: When the character entered the quest
+        exit_timestamp: When the character exited (None for active sessions)
+
+    Returns:
+        The ID of the newly created quest session
+    """
+    query = """
+        INSERT INTO public.quest_sessions 
+        (character_id, quest_id, entry_timestamp, exit_timestamp)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                query, (character_id, quest_id, entry_timestamp, exit_timestamp)
+            )
+            result = cursor.fetchone()
+            conn.commit()
+            return result[0] if result else None
+
+
+def update_quest_session_exit(session_id: int, exit_timestamp: datetime) -> None:
+    """Update a quest session with an exit timestamp (closing the session).
+
+    Args:
+        session_id: ID of the quest session to update
+        exit_timestamp: When the character exited the quest
+    """
+    query = """
+        UPDATE public.quest_sessions 
+        SET exit_timestamp = %s
+        WHERE id = %s
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, (exit_timestamp, session_id))
+            conn.commit()
+
+
+def get_active_quest_session(character_id: int) -> Optional[QuestSession]:
+    """Get the currently active quest session for a character.
+
+    Args:
+        character_id: ID of the character
+
+    Returns:
+        QuestSession if one is active, None otherwise
+    """
+    query = """
+        SELECT id, character_id, quest_id, entry_timestamp, exit_timestamp, 
+               duration_seconds, created_at
+        FROM public.quest_sessions
+        WHERE character_id = %s AND exit_timestamp IS NULL
+        ORDER BY entry_timestamp DESC
+        LIMIT 1
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, (character_id,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+            return QuestSession(
+                id=row[0],
+                character_id=row[1],
+                quest_id=row[2],
+                entry_timestamp=row[3],
+                exit_timestamp=row[4],
+                duration_seconds=float(row[5]) if row[5] is not None else None,
+                created_at=row[6],
+            )
+
+
+def get_quest_sessions_by_quest(
+    quest_id: int,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+) -> list[QuestSession]:
+    """Get all quest sessions for a specific quest within a date range.
+
+    Args:
+        quest_id: ID of the quest
+        start_date: Optional start date filter
+        end_date: Optional end date filter
+
+    Returns:
+        List of QuestSession objects
+    """
+    query = """
+        SELECT id, character_id, quest_id, entry_timestamp, exit_timestamp, 
+               duration_seconds, created_at
+        FROM public.quest_sessions
+        WHERE quest_id = %s
+    """
+    params = [quest_id]
+
+    if start_date:
+        query += " AND entry_timestamp >= %s"
+        params.append(start_date)
+    if end_date:
+        query += " AND entry_timestamp <= %s"
+        params.append(end_date)
+
+    query += " ORDER BY entry_timestamp DESC"
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+
+            return [
+                QuestSession(
+                    id=row[0],
+                    character_id=row[1],
+                    quest_id=row[2],
+                    entry_timestamp=row[3],
+                    exit_timestamp=row[4],
+                    duration_seconds=float(row[5]) if row[5] is not None else None,
+                    created_at=row[6],
+                )
+                for row in rows
+            ]
+
+
+def get_quest_sessions_by_character(
+    character_id: int,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+) -> list[QuestSession]:
+    """Get all quest sessions for a specific character within a date range.
+
+    Args:
+        character_id: ID of the character
+        start_date: Optional start date filter
+        end_date: Optional end date filter
+
+    Returns:
+        List of QuestSession objects
+    """
+    query = """
+        SELECT id, character_id, quest_id, entry_timestamp, exit_timestamp, 
+               duration_seconds, created_at
+        FROM public.quest_sessions
+        WHERE character_id = %s
+    """
+    params = [character_id]
+
+    if start_date:
+        query += " AND entry_timestamp >= %s"
+        params.append(start_date)
+    if end_date:
+        query += " AND entry_timestamp <= %s"
+        params.append(end_date)
+
+    query += " ORDER BY entry_timestamp DESC"
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+
+            return [
+                QuestSession(
+                    id=row[0],
+                    character_id=row[1],
+                    quest_id=row[2],
+                    entry_timestamp=row[3],
+                    exit_timestamp=row[4],
+                    duration_seconds=float(row[5]) if row[5] is not None else None,
+                    created_at=row[6],
+                )
+                for row in rows
+            ]
+
+
+def _generate_dynamic_bins(
+    min_duration: float, max_duration: float, num_bins: int = 8
+) -> list[tuple]:
+    """Generate dynamic histogram bins based on duration range.
+
+    Args:
+        min_duration: Minimum duration in seconds
+        max_duration: Maximum duration in seconds
+        num_bins: Target number of bins (default 8)
+
+    Returns:
+        List of tuples (bin_start, bin_end, label)
+    """
+    if min_duration >= max_duration or max_duration <= 0:
+        # Fallback to simple range
+        return [(0, float("inf"), "All durations")]
+
+    # Calculate the range and determine appropriate bin size
+    duration_range = max_duration - min_duration
+
+    # Use nice round numbers for bin sizes based on the range
+    if duration_range <= 600:  # Up to 10 minutes
+        # Use 1-minute bins
+        bin_size = 60
+    elif duration_range <= 1800:  # Up to 30 minutes
+        # Use 2 or 3-minute bins
+        bin_size = max(60, round(duration_range / num_bins / 60) * 60)
+    elif duration_range <= 3600:  # Up to 1 hour
+        # Use 5-minute bins
+        bin_size = 300
+    elif duration_range <= 7200:  # Up to 2 hours
+        # Use 10 or 15-minute bins
+        bin_size = max(300, round(duration_range / num_bins / 300) * 300)
+    else:
+        # Use 30-minute or 1-hour bins for longer quests
+        bin_size = max(1800, round(duration_range / num_bins / 1800) * 1800)
+
+    # Generate bins
+    bins = []
+    current = 0
+    bin_count = 0
+
+    while current < max_duration and bin_count < num_bins - 1:
+        next_boundary = current + bin_size
+        bins.append((current, next_boundary))
+        current = next_boundary
+        bin_count += 1
+
+    # Add final bin for remaining durations
+    bins.append((current, float("inf")))
+
+    # Generate labels
+    labeled_bins = []
+    for bin_start, bin_end in bins:
+        if bin_end == float("inf"):
+            label = _format_duration_label(bin_start, is_open_ended=True)
+        else:
+            label = (
+                f"{_format_duration_value(bin_start)}-{_format_duration_value(bin_end)}"
+            )
+        labeled_bins.append((bin_start, bin_end, label))
+
+    return labeled_bins
+
+
+def _format_duration_value(seconds: float) -> str:
+    """Format duration value for display."""
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    elif seconds < 3600:
+        minutes = int(seconds / 60)
+        return f"{minutes}m"
+    else:
+        hours = seconds / 3600
+        if hours == int(hours):
+            return f"{int(hours)}h"
+        else:
+            return f"{hours:.1f}h"
+
+
+def _format_duration_label(seconds: float, is_open_ended: bool = False) -> str:
+    """Format duration as a readable label."""
+    formatted = _format_duration_value(seconds)
+    if is_open_ended:
+        return f"{formatted}+"
+    return formatted
+
+
+def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytics:
+    """Get comprehensive analytics for a quest.
+
+    Args:
+        quest_id: ID of the quest
+        lookback_days: Number of days to look back (default 90)
+
+    Returns:
+        QuestAnalytics object with duration stats and activity patterns
+    """
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            # Get basic statistics including percentiles to exclude outliers
+            cursor.execute(
+                """
+                SELECT 
+                    AVG(duration_seconds) as avg_duration,
+                    STDDEV(duration_seconds) as stddev_duration,
+                    PERCENTILE_CONT(0.01) WITHIN GROUP (ORDER BY duration_seconds) as p01,
+                    PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY duration_seconds) as p99,
+                    COUNT(*) as total_sessions,
+                    COUNT(exit_timestamp) as completed_sessions,
+                    COUNT(*) - COUNT(exit_timestamp) as active_sessions
+                FROM public.quest_sessions
+                WHERE quest_id = %s 
+                  AND entry_timestamp >= %s
+                  AND exit_timestamp IS NOT NULL
+                  AND duration_seconds IS NOT NULL
+                """,
+                (quest_id, cutoff_date),
+            )
+            stats = cursor.fetchone()
+
+            avg_duration = float(stats[0]) if stats[0] is not None else None
+            stddev_duration = float(stats[1]) if stats[1] is not None else None
+            min_duration = float(stats[2]) if stats[2] is not None else 0
+            max_duration = float(stats[3]) if stats[3] is not None else 0
+            total_sessions = int(stats[4]) if stats[4] else 0
+            completed_sessions = int(stats[5]) if stats[5] else 0
+            active_sessions = int(stats[6]) if stats[6] else 0
+
+            # Generate dynamic bin ranges based on percentiles (excludes outliers)
+            bin_ranges = _generate_dynamic_bins(min_duration, max_duration)
+
+            # Build dynamic SQL CASE statement for binning
+            case_conditions = []
+            for i, (bin_start, bin_end, _) in enumerate(bin_ranges, start=1):
+                if bin_end == float("inf"):
+                    case_conditions.append(
+                        f"WHEN duration_seconds >= {bin_start} THEN {i}"
+                    )
+                else:
+                    case_conditions.append(
+                        f"WHEN duration_seconds >= {bin_start} AND duration_seconds < {bin_end} THEN {i}"
+                    )
+
+            case_statement = " ".join(case_conditions)
+
+            # Get histogram data (only completed sessions) with dynamic bins
+            histogram_query = f"""
+                WITH bins AS (
+                    SELECT 
+                        CASE 
+                            {case_statement}
+                            ELSE 0
+                        END as bin,
+                        COUNT(*) as count
+                    FROM public.quest_sessions
+                    WHERE quest_id = %s 
+                      AND entry_timestamp >= %s
+                      AND exit_timestamp IS NOT NULL
+                      AND duration_seconds IS NOT NULL
+                    GROUP BY bin
+                )
+                SELECT bin, count FROM bins WHERE bin > 0 ORDER BY bin
+            """
+
+            cursor.execute(histogram_query, (quest_id, cutoff_date))
+            histogram_rows = cursor.fetchall()
+
+            histogram = []
+            for row in histogram_rows:
+                bin_num = row[0]
+                count = row[1]
+                if 1 <= bin_num <= len(bin_ranges):
+                    bin_start, bin_end, _ = bin_ranges[bin_num - 1]
+                    histogram.append(
+                        {
+                            "bin_start": bin_start,
+                            "bin_end": bin_end if bin_end != float("inf") else None,
+                            "count": count,
+                        }
+                    )
+
+            # Get activity by hour
+            cursor.execute(
+                """
+                SELECT EXTRACT(HOUR FROM entry_timestamp)::int as hour, COUNT(*) as count
+                FROM public.quest_sessions
+                WHERE quest_id = %s AND entry_timestamp >= %s
+                GROUP BY hour
+                ORDER BY hour
+                """,
+                (quest_id, cutoff_date),
+            )
+            activity_by_hour = [
+                {"hour": int(row[0]), "count": int(row[1])} for row in cursor.fetchall()
+            ]
+
+            # Get activity by day of week (convert PostgreSQL's 0=Sunday to 0=Monday)
+            cursor.execute(
+                """
+                SELECT 
+                    (EXTRACT(DOW FROM entry_timestamp)::int + 6) % 7 as day,
+                    COUNT(*) as count
+                FROM public.quest_sessions
+                WHERE quest_id = %s AND entry_timestamp >= %s
+                GROUP BY day
+                ORDER BY day
+                """,
+                (quest_id, cutoff_date),
+            )
+            day_names = [
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday",
+            ]
+            dow_rows = cursor.fetchall()
+            activity_by_day_of_week = [
+                {
+                    "day": int(row[0]),
+                    "day_name": day_names[int(row[0])],
+                    "count": int(row[1]),
+                }
+                for row in dow_rows
+            ]
+
+            # Get activity over time (daily)
+            cursor.execute(
+                """
+                SELECT DATE(entry_timestamp) as date, COUNT(*) as count
+                FROM public.quest_sessions
+                WHERE quest_id = %s AND entry_timestamp >= %s
+                GROUP BY date
+                ORDER BY date
+                """,
+                (quest_id, cutoff_date),
+            )
+            activity_over_time = [
+                {"date": row[0].strftime("%Y-%m-%d"), "count": int(row[1])}
+                for row in cursor.fetchall()
+            ]
+
+            return QuestAnalytics(
+                average_duration_seconds=avg_duration,
+                standard_deviation_seconds=stddev_duration,
+                histogram=histogram,
+                activity_by_hour=activity_by_hour,
+                activity_by_day_of_week=activity_by_day_of_week,
+                activity_over_time=activity_over_time,
+                total_sessions=total_sessions,
+                completed_sessions=completed_sessions,
+                active_sessions=active_sessions,
+            )
+
+
+def bulk_insert_quest_sessions(sessions: list[tuple]) -> None:
+    """Bulk insert quest sessions for efficient batch processing.
+
+    Args:
+        sessions: List of tuples (character_id, quest_id, entry_timestamp, exit_timestamp)
+    """
+    if not sessions:
+        return
+
+    query = """
+        INSERT INTO public.quest_sessions 
+        (character_id, quest_id, entry_timestamp, exit_timestamp)
+        VALUES (%s, %s, %s, %s)
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.executemany(query, sessions)
+            conn.commit()
+
+
+def mark_activities_as_processed(activity_ids: list[tuple]) -> None:
+    """Mark character activities as processed for quest session tracking.
+
+    Args:
+        activity_ids: List of tuples (character_id, timestamp) identifying activities
+    """
+    if not activity_ids:
+        return
+
+    query = """
+        UPDATE public.character_activity 
+        SET quest_session_processed = true
+        WHERE character_id = %s AND timestamp = %s
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.executemany(query, activity_ids)
+            conn.commit()
+
+
+def get_unprocessed_location_activities(
+    last_timestamp: datetime, shard_count: int, shard_index: int, batch_size: int
+) -> list[tuple]:
+    """Fetch unprocessed location activities for quest session processing.
+
+    Args:
+        last_timestamp: Start processing from this timestamp
+        shard_count: Total number of shards
+        shard_index: Current shard index (0-based)
+        batch_size: Maximum number of activities to return
+
+    Returns:
+        List of tuples (character_id, timestamp, area_id)
+    """
+    query = """
+        SELECT character_id, timestamp, (data->>'value')::int as area_id
+        FROM public.character_activity
+        WHERE timestamp > %s
+          AND activity_type = 'location'
+          AND quest_session_processed = false
+          AND (character_id %% %s) = %s
+        ORDER BY character_id, timestamp ASC
+        LIMIT %s
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                query, (last_timestamp, shard_count, shard_index, batch_size)
+            )
+            return cursor.fetchall()
