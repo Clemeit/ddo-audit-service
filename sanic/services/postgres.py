@@ -3581,11 +3581,22 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
                 logger.debug("Generating dynamic bins...")
                 bin_ranges = _generate_dynamic_bins(min_duration, max_duration)
                 logger.debug(f"Generated {len(bin_ranges)} bin ranges: {bin_ranges}")
+                
+                # Verify bin_ranges structure
+                if bin_ranges and len(bin_ranges) > 0:
+                    logger.debug(f"First bin_range element: {bin_ranges[0]}, length: {len(bin_ranges[0])}")
+                    for idx, br in enumerate(bin_ranges):
+                        if len(br) != 3:
+                            logger.error(f"Invalid bin_range at index {idx}: {br} (length {len(br)})")
 
                 # Build dynamic SQL CASE statement for binning
                 logger.debug("Building dynamic SQL CASE statement...")
                 case_conditions = []
-                for i, (bin_start, bin_end, _) in enumerate(bin_ranges, start=1):
+                for i, bin_range_tuple in enumerate(bin_ranges, start=1):
+                    if len(bin_range_tuple) != 3:
+                        logger.error(f"Skipping invalid bin_range_tuple at index {i}: {bin_range_tuple}")
+                        continue
+                    bin_start, bin_end, _ = bin_range_tuple
                     if bin_end == float("inf"):
                         case_conditions.append(
                             f"WHEN duration_seconds >= {bin_start} THEN {i}"
