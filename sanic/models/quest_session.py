@@ -7,13 +7,13 @@ from pydantic import BaseModel, Field
 class QuestSession(BaseModel):
     """Model for quest session data from the database."""
 
-    id: int
+    id: Optional[int] = None
     character_id: int
     quest_id: int
     entry_timestamp: datetime
     exit_timestamp: Optional[datetime] = None
     duration_seconds: Optional[float] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 
 class QuestAnalytics(BaseModel):

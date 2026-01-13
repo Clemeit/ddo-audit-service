@@ -2,7 +2,7 @@ import json
 import os
 import logging
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from time import time
 from typing import Optional, Generator
 
@@ -2652,195 +2652,6 @@ def get_quest_id_for_area(area_id: int) -> Optional[int]:
             return int(row[0]) if row else None
 
 
-# Quest Analytics Functions
-
-
-def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytics:
-    """Get comprehensive analytics for a quest."""
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            start_date = datetime.now() - timedelta(days=lookback_days)
-
-            # Get basic counts
-            cursor.execute(
-                """
-                SELECT 
-                    COUNT(*) as total_sessions,
-                    COUNT(*) FILTER (WHERE exit_timestamp IS NOT NULL) as completed_sessions,
-                    COUNT(*) FILTER (WHERE exit_timestamp IS NULL) as active_sessions
-                FROM public.quest_sessions
-                WHERE quest_id = %s AND entry_timestamp >= %s
-                """,
-                (quest_id, start_date),
-            )
-            counts = cursor.fetchone()
-            total_sessions = counts[0] or 0
-            completed_sessions = counts[1] or 0
-            active_sessions = counts[2] or 0
-
-            # Get average duration and standard deviation (only completed sessions)
-            cursor.execute(
-                """
-                SELECT 
-                    AVG(duration_seconds) as avg_duration,
-                    STDDEV(duration_seconds) as stddev_duration
-                FROM public.quest_sessions
-                WHERE quest_id = %s 
-                  AND exit_timestamp IS NOT NULL 
-                  AND entry_timestamp >= %s
-                """,
-                (quest_id, start_date),
-            )
-            stats = cursor.fetchone()
-            avg_duration = float(stats[0]) if stats[0] is not None else None
-            stddev_duration = float(stats[1]) if stats[1] is not None else None
-
-            # Get histogram data (binned durations)
-            # Bins: 0-5min, 5-10min, 10-15min, 15-30min, 30-60min, 1-2hr, 2+hr
-            cursor.execute(
-                """
-                SELECT 
-                    CASE
-                        WHEN duration_seconds < 300 THEN '0-5min'
-                        WHEN duration_seconds < 600 THEN '5-10min'
-                        WHEN duration_seconds < 900 THEN '10-15min'
-                        WHEN duration_seconds < 1800 THEN '15-30min'
-                        WHEN duration_seconds < 3600 THEN '30-60min'
-                        WHEN duration_seconds < 7200 THEN '1-2hr'
-                        ELSE '2+hr'
-                    END as bin_label,
-                    CASE
-                        WHEN duration_seconds < 300 THEN 0
-                        WHEN duration_seconds < 600 THEN 300
-                        WHEN duration_seconds < 900 THEN 600
-                        WHEN duration_seconds < 1800 THEN 900
-                        WHEN duration_seconds < 3600 THEN 1800
-                        WHEN duration_seconds < 7200 THEN 3600
-                        ELSE 7200
-                    END as bin_start,
-                    CASE
-                        WHEN duration_seconds < 300 THEN 300
-                        WHEN duration_seconds < 600 THEN 600
-                        WHEN duration_seconds < 900 THEN 900
-                        WHEN duration_seconds < 1800 THEN 1800
-                        WHEN duration_seconds < 3600 THEN 3600
-                        WHEN duration_seconds < 7200 THEN 7200
-                        ELSE NULL
-                    END as bin_end,
-                    COUNT(*) as count
-                FROM public.quest_sessions
-                WHERE quest_id = %s 
-                  AND exit_timestamp IS NOT NULL 
-                  AND entry_timestamp >= %s
-                GROUP BY bin_label, bin_start, bin_end
-                ORDER BY bin_start
-                """,
-                (quest_id, start_date),
-            )
-            histogram_rows = cursor.fetchall()
-            histogram = []
-            for row in histogram_rows:
-                histogram.append(
-                    {
-                        "bin_start": int(row[1]) if row[1] is not None else None,
-                        "bin_end": int(row[2]) if row[2] is not None else None,
-                        "count": int(row[3]),
-                    }
-                )
-
-            # Get activity by hour of day (0-23)
-            cursor.execute(
-                """
-                SELECT 
-                    EXTRACT(HOUR FROM entry_timestamp)::int as hour,
-                    COUNT(*) as count
-                FROM public.quest_sessions
-                WHERE quest_id = %s AND entry_timestamp >= %s
-                GROUP BY hour
-                ORDER BY hour
-                """,
-                (quest_id, start_date),
-            )
-            hour_rows = cursor.fetchall()
-            activity_by_hour = [{"hour": 0, "count": 0} for _ in range(24)]
-            for row in hour_rows:
-                hour = int(row[0])
-                count = int(row[1])
-                activity_by_hour[hour] = {"hour": hour, "count": count}
-
-            # Get activity by day of week (0=Monday, 6=Sunday)
-            # PostgreSQL DOW: 0=Sunday, 6=Saturday, so we adjust: (DOW + 6) % 7 gives 0=Monday
-            cursor.execute(
-                """
-                SELECT 
-                    (EXTRACT(DOW FROM entry_timestamp)::int + 6) % 7 as day_of_week,
-                    COUNT(*) as count
-                FROM public.quest_sessions
-                WHERE quest_id = %s AND entry_timestamp >= %s
-                GROUP BY day_of_week
-                ORDER BY day_of_week
-                """,
-                (quest_id, start_date),
-            )
-            dow_rows = cursor.fetchall()
-            day_names = [
-                "Monday",
-                "Tuesday",
-                "Wednesday",
-                "Thursday",
-                "Friday",
-                "Saturday",
-                "Sunday",
-            ]
-            activity_by_dow = [
-                {"day": i, "day_name": day_names[i], "count": 0} for i in range(7)
-            ]
-            for row in dow_rows:
-                day = int(row[0])
-                count = int(row[1])
-                activity_by_dow[day] = {
-                    "day": day,
-                    "day_name": day_names[day],
-                    "count": count,
-                }
-
-            # Get activity over time (daily counts)
-            cursor.execute(
-                """
-                SELECT 
-                    DATE(entry_timestamp) as date,
-                    COUNT(*) as count
-                FROM public.quest_sessions
-                WHERE quest_id = %s AND entry_timestamp >= %s
-                GROUP BY DATE(entry_timestamp)
-                ORDER BY date ASC
-                """,
-                (quest_id, start_date),
-            )
-            time_rows = cursor.fetchall()
-            activity_over_time = []
-            for row in time_rows:
-                date_obj = row[0]
-                # Handle both date and datetime objects from PostgreSQL
-                if hasattr(date_obj, "strftime"):
-                    date_str = date_obj.strftime("%Y-%m-%d")
-                else:
-                    date_str = str(date_obj)
-                activity_over_time.append({"date": date_str, "count": int(row[1])})
-
-            return QuestAnalytics(
-                average_duration_seconds=avg_duration,
-                standard_deviation_seconds=stddev_duration,
-                histogram=histogram,
-                activity_by_hour=activity_by_hour,
-                activity_by_day_of_week=activity_by_dow,
-                activity_over_time=activity_over_time,
-                total_sessions=total_sessions,
-                completed_sessions=completed_sessions,
-                active_sessions=active_sessions,
-            )
-
-
 # Add some helper functions for common time ranges
 def get_game_population_last_hours(hours: int = 24) -> list[PopulationPointInTime]:
     """Get population data for the last N hours."""
@@ -3601,7 +3412,7 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
     Returns:
         QuestAnalytics object with duration stats and activity patterns
     """
-    cutoff_date = datetime.now() - timedelta(days=lookback_days)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=lookback_days)
 
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
@@ -3716,13 +3527,14 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
                 "Saturday",
                 "Sunday",
             ]
+            dow_rows = cursor.fetchall()
             activity_by_day_of_week = [
                 {
                     "day": int(row[0]),
                     "day_name": day_names[int(row[0])],
                     "count": int(row[1]),
                 }
-                for row in cursor.fetchall()
+                for row in dow_rows
             ]
 
             # Get activity over time (daily)
