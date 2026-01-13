@@ -43,7 +43,7 @@ app.config.REQUEST_MAX_SIZE = 500 * 1024 * 1024  # 500 MB
 # Emit JSON access logs to stdout. (If the app is run under a process manager that
 # already configures logging handlers, we won't override it.)
 if not logging.getLogger().handlers:
-    logging.basicConfig(level=os.getenv("LOG_LEVEL", "DEBUG"), format="%(message)s")
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(message)s")
 
 access_logger = logging.getLogger("access")
 
