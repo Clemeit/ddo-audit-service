@@ -3525,8 +3525,22 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
             )
             stats = cursor.fetchone()
 
-            if stats is None or all(s is None for s in stats):
-                # No data found for this quest in the lookback period
+            if stats is None or len(stats) < 7:
+                # No data found for this quest in the lookback period or malformed result
+                return QuestAnalytics(
+                    average_duration_seconds=None,
+                    standard_deviation_seconds=None,
+                    histogram=[],
+                    activity_by_hour=[],
+                    activity_by_day_of_week=[],
+                    activity_over_time=[],
+                    total_sessions=0,
+                    completed_sessions=0,
+                    active_sessions=0,
+                )
+
+            if all(s is None for s in stats):
+                # All values are None
                 return QuestAnalytics(
                     average_duration_seconds=None,
                     standard_deviation_seconds=None,
@@ -3588,17 +3602,20 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
 
             histogram = []
             for row in histogram_rows:
+                if len(row) < 2:
+                    continue  # Skip malformed rows
                 bin_num = row[0]
                 count = row[1]
                 if 1 <= bin_num <= len(bin_ranges):
-                    bin_start, bin_end, _ = bin_ranges[bin_num - 1]
-                    histogram.append(
-                        {
-                            "bin_start": bin_start,
-                            "bin_end": bin_end if bin_end != float("inf") else None,
-                            "count": count,
-                        }
-                    )
+                    if bin_num - 1 < len(bin_ranges) and len(bin_ranges[bin_num - 1]) >= 2:
+                        bin_start, bin_end, _ = bin_ranges[bin_num - 1]
+                        histogram.append(
+                            {
+                                "bin_start": bin_start,
+                                "bin_end": bin_end if bin_end != float("inf") else None,
+                                "count": count,
+                            }
+                        )
 
             # Get activity by hour
             cursor.execute(
@@ -3612,7 +3629,8 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
                 (quest_id, cutoff_date),
             )
             activity_by_hour = [
-                {"hour": int(row[0]), "count": int(row[1])} for row in cursor.fetchall()
+                {"hour": int(row[0]), "count": int(row[1])} 
+                for row in cursor.fetchall() if len(row) >= 2
             ]
 
             # Get activity by day of week (convert PostgreSQL's 0=Sunday to 0=Monday)
@@ -3638,14 +3656,18 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
                 "Sunday",
             ]
             dow_rows = cursor.fetchall()
-            activity_by_day_of_week = [
-                {
-                    "day": int(row[0]),
-                    "day_name": day_names[int(row[0])],
-                    "count": int(row[1]),
-                }
-                for row in dow_rows
-            ]
+            activity_by_day_of_week = []
+            for row in dow_rows:
+                if len(row) < 2:
+                    continue  # Skip malformed rows
+                day_num = int(row[0])
+                if 0 <= day_num < 7:
+                    activity_by_day_of_week.append({
+                        "day": day_num,
+                        "day_name": day_names[day_num],
+                        "count": int(row[1]),
+                    })
+
 
             # Get activity over time (daily)
             cursor.execute(
@@ -3660,7 +3682,7 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
             )
             activity_over_time = [
                 {"date": row[0].strftime("%Y-%m-%d"), "count": int(row[1])}
-                for row in cursor.fetchall()
+                for row in cursor.fetchall() if len(row) >= 2 and row[0] is not None
             ]
 
             return QuestAnalytics(
