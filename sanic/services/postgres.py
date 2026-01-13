@@ -3671,6 +3671,37 @@ def bulk_insert_quest_sessions(sessions: list[tuple]) -> None:
     if not sessions:
         return
 
+    # Extract unique character IDs from the sessions
+    character_ids = list(set(session[0] for session in sessions))
+    
+    # Query which character IDs actually exist in the database
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            # Check which character IDs exist
+            cursor.execute(
+                "SELECT id FROM public.characters WHERE id = ANY(%s)",
+                (character_ids,)
+            )
+            existing_character_ids = set(row[0] for row in cursor.fetchall())
+    
+    # Filter sessions to only include those with existing character IDs
+    valid_sessions = [
+        session for session in sessions 
+        if session[0] in existing_character_ids
+    ]
+    
+    # Log if we're skipping any sessions
+    skipped_count = len(sessions) - len(valid_sessions)
+    if skipped_count > 0:
+        missing_char_ids = set(session[0] for session in sessions if session[0] not in existing_character_ids)
+        logging.warning(
+            f"Skipping {skipped_count} quest sessions with non-existent character IDs: {missing_char_ids}"
+        )
+    
+    if not valid_sessions:
+        logging.warning("No valid quest sessions to insert after filtering")
+        return
+
     query = """
         INSERT INTO public.quest_sessions 
         (character_id, quest_id, entry_timestamp, exit_timestamp)
@@ -3678,7 +3709,7 @@ def bulk_insert_quest_sessions(sessions: list[tuple]) -> None:
     """
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            cursor.executemany(query, sessions)
+            cursor.executemany(query, valid_sessions)
             conn.commit()
 
 
