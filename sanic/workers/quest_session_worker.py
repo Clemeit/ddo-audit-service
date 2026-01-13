@@ -113,17 +113,29 @@ def process_character_activities(
 
         # If character has an active session, check if they're leaving it
         if current_session is not None and current_quest_area != area_id:
-            # Character is leaving the quest area
-            sessions_to_insert.append(
-                (
-                    current_session.character_id,
-                    current_session.quest_id,
-                    current_session.entry_timestamp,
-                    timestamp,  # exit_timestamp
+            # Only close the session if exit_timestamp would be >= entry_timestamp
+            # This prevents negative durations from out-of-order or clock-skewed data
+            if timestamp >= current_session.entry_timestamp:
+                # Character is leaving the quest area
+                sessions_to_insert.append(
+                    (
+                        current_session.character_id,
+                        current_session.quest_id,
+                        current_session.entry_timestamp,
+                        timestamp,  # exit_timestamp
+                    )
                 )
-            )
-            current_session = None
-            current_quest_area = None
+                current_session = None
+                current_quest_area = None
+            else:
+                # Skip this activity if it's before the session start (out-of-order data)
+                logger.warning(
+                    f"Skipping out-of-order activity for character {character_id}: "
+                    f"activity timestamp {timestamp} is before active session start "
+                    f"{current_session.entry_timestamp} (quest_id={current_session.quest_id})"
+                )
+                activities_to_mark.append((character_id, timestamp))
+                continue
 
         # Check if new area is a quest area
         new_quest_id = get_quest_id_for_area(area_id)
