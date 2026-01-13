@@ -3748,9 +3748,10 @@ def mark_activities_as_processed(activity_ids: list[tuple]) -> None:
                     """
                     UPDATE public.character_activity AS ca
                     SET quest_session_processed = true
-                    FROM (VALUES %s) AS v(character_id, timestamp)
-                    WHERE ca.character_id = v.character_id::bigint
-                      AND ca.timestamp = v.timestamp::timestamptz
+                    FROM (VALUES %s) AS v(character_id, ts)
+                    WHERE ca.character_id = v.character_id
+                        AND ca.timestamp = v.ts
+                        AND ca.quest_session_processed = false
                     """,
                     activity_ids,
                     template="(%s, %s)",
