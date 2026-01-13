@@ -3500,7 +3500,9 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
     Returns:
         QuestAnalytics object with duration stats and activity patterns
     """
+    logger.info(f"Getting quest analytics for quest_id={quest_id}, lookback_days={lookback_days}")
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+    logger.debug(f"Cutoff date for analytics: {cutoff_date}")
 
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
@@ -3524,9 +3526,11 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
                 (quest_id, cutoff_date),
             )
             stats = cursor.fetchone()
+            logger.debug(f"Basic stats query returned: {stats}")
 
             if stats is None or len(stats) < 7:
                 # No data found for this quest in the lookback period or malformed result
+                logger.warning(f"No data or malformed result for quest_id={quest_id}: stats={stats}")
                 return QuestAnalytics(
                     average_duration_seconds=None,
                     standard_deviation_seconds=None,
@@ -3541,6 +3545,7 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
 
             if all(s is None for s in stats):
                 # All values are None
+                logger.warning(f"All stats are None for quest_id={quest_id}")
                 return QuestAnalytics(
                     average_duration_seconds=None,
                     standard_deviation_seconds=None,
@@ -3561,8 +3566,13 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
             completed_sessions = int(stats[5]) if stats[5] else 0
             active_sessions = int(stats[6]) if stats[6] else 0
 
+            logger.debug(f"Computed stats - avg_duration={avg_duration}, stddev={stddev_duration}, "
+                        f"min={min_duration}, max={max_duration}, total={total_sessions}, "
+                        f"completed={completed_sessions}, active={active_sessions}")
+
             # Generate dynamic bin ranges based on percentiles (excludes outliers)
             bin_ranges = _generate_dynamic_bins(min_duration, max_duration)
+            logger.debug(f"Generated {len(bin_ranges)} bin ranges: {bin_ranges}")
 
             # Build dynamic SQL CASE statement for binning
             case_conditions = []
@@ -3599,15 +3609,17 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
 
             cursor.execute(histogram_query, (quest_id, cutoff_date))
             histogram_rows = cursor.fetchall()
+            logger.debug(f"Retrieved {len(histogram_rows)} histogram rows")
 
             histogram = []
             for row in histogram_rows:
                 if len(row) < 2:
+                    logger.warning(f"Skipping malformed histogram row: {row}")
                     continue  # Skip malformed rows
                 bin_num = row[0]
                 count = row[1]
                 if 1 <= bin_num <= len(bin_ranges):
-                    if bin_num - 1 < len(bin_ranges) and len(bin_ranges[bin_num - 1]) >= 2:
+                    if bin_num - 1 < len(bin_ranges) and len(bin_ranges[bin_num - 1]) >= 3:
                         bin_start, bin_end, _ = bin_ranges[bin_num - 1]
                         histogram.append(
                             {
@@ -3616,6 +3628,12 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
                                 "count": count,
                             }
                         )
+                    else:
+                        logger.warning(f"Invalid bin configuration for bin_num={bin_num}, "
+                                      f"bin_ranges length={len(bin_ranges)}, "
+                                      f"tuple length={len(bin_ranges[bin_num - 1]) if bin_num - 1 < len(bin_ranges) else 'N/A'}")
+                else:
+                    logger.warning(f"Bin number {bin_num} out of range [1, {len(bin_ranges)}]")
 
             # Get activity by hour
             cursor.execute(
@@ -3628,9 +3646,11 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
                 """,
                 (quest_id, cutoff_date),
             )
+            hour_rows = cursor.fetchall()
+            logger.debug(f"Retrieved {len(hour_rows)} activity by hour rows")
             activity_by_hour = [
                 {"hour": int(row[0]), "count": int(row[1])} 
-                for row in cursor.fetchall() if len(row) >= 2
+                for row in hour_rows if len(row) >= 2
             ]
 
             # Get activity by day of week (convert PostgreSQL's 0=Sunday to 0=Monday)
@@ -3656,9 +3676,11 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
                 "Sunday",
             ]
             dow_rows = cursor.fetchall()
+            logger.debug(f"Retrieved {len(dow_rows)} activity by day of week rows")
             activity_by_day_of_week = []
             for row in dow_rows:
                 if len(row) < 2:
+                    logger.warning(f"Skipping malformed day of week row: {row}")
                     continue  # Skip malformed rows
                 day_num = int(row[0])
                 if 0 <= day_num < 7:
@@ -3680,10 +3702,18 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
                 """,
                 (quest_id, cutoff_date),
             )
+            time_rows = cursor.fetchall()
+            logger.debug(f"Retrieved {len(time_rows)} activity over time rows")
             activity_over_time = [
                 {"date": row[0].strftime("%Y-%m-%d"), "count": int(row[1])}
-                for row in cursor.fetchall() if len(row) >= 2 and row[0] is not None
+                for row in time_rows if len(row) >= 2 and row[0] is not None
             ]
+
+            logger.info(f"Quest analytics completed for quest_id={quest_id}: "
+                       f"total_sessions={total_sessions}, histogram_bins={len(histogram)}, "
+                       f"hour_data_points={len(activity_by_hour)}, "
+                       f"dow_data_points={len(activity_by_day_of_week)}, "
+                       f"time_series_points={len(activity_over_time)}")
 
             return QuestAnalytics(
                 average_duration_seconds=avg_duration,
