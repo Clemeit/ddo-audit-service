@@ -3402,6 +3402,94 @@ def get_quest_sessions_by_character(
             ]
 
 
+def _generate_dynamic_bins(
+    min_duration: float, max_duration: float, num_bins: int = 8
+) -> list[tuple]:
+    """Generate dynamic histogram bins based on duration range.
+
+    Args:
+        min_duration: Minimum duration in seconds
+        max_duration: Maximum duration in seconds
+        num_bins: Target number of bins (default 8)
+
+    Returns:
+        List of tuples (bin_start, bin_end, label)
+    """
+    if min_duration >= max_duration or max_duration <= 0:
+        # Fallback to simple range
+        return [(0, float("inf"), "All durations")]
+
+    # Calculate the range and determine appropriate bin size
+    duration_range = max_duration - min_duration
+
+    # Use nice round numbers for bin sizes based on the range
+    if duration_range <= 600:  # Up to 10 minutes
+        # Use 1-minute bins
+        bin_size = 60
+    elif duration_range <= 1800:  # Up to 30 minutes
+        # Use 2 or 3-minute bins
+        bin_size = max(60, round(duration_range / num_bins / 60) * 60)
+    elif duration_range <= 3600:  # Up to 1 hour
+        # Use 5-minute bins
+        bin_size = 300
+    elif duration_range <= 7200:  # Up to 2 hours
+        # Use 10 or 15-minute bins
+        bin_size = max(300, round(duration_range / num_bins / 300) * 300)
+    else:
+        # Use 30-minute or 1-hour bins for longer quests
+        bin_size = max(1800, round(duration_range / num_bins / 1800) * 1800)
+
+    # Generate bins
+    bins = []
+    current = 0
+    bin_count = 0
+
+    while current < max_duration and bin_count < num_bins - 1:
+        next_boundary = current + bin_size
+        bins.append((current, next_boundary))
+        current = next_boundary
+        bin_count += 1
+
+    # Add final bin for remaining durations
+    bins.append((current, float("inf")))
+
+    # Generate labels
+    labeled_bins = []
+    for bin_start, bin_end in bins:
+        if bin_end == float("inf"):
+            label = _format_duration_label(bin_start, is_open_ended=True)
+        else:
+            label = (
+                f"{_format_duration_value(bin_start)}-{_format_duration_value(bin_end)}"
+            )
+        labeled_bins.append((bin_start, bin_end, label))
+
+    return labeled_bins
+
+
+def _format_duration_value(seconds: float) -> str:
+    """Format duration value for display."""
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    elif seconds < 3600:
+        minutes = int(seconds / 60)
+        return f"{minutes}m"
+    else:
+        hours = seconds / 3600
+        if hours == int(hours):
+            return f"{int(hours)}h"
+        else:
+            return f"{hours:.1f}h"
+
+
+def _format_duration_label(seconds: float, is_open_ended: bool = False) -> str:
+    """Format duration as a readable label."""
+    formatted = _format_duration_value(seconds)
+    if is_open_ended:
+        return f"{formatted}+"
+    return formatted
+
+
 def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytics:
     """Get comprehensive analytics for a quest.
 
@@ -3416,17 +3504,22 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
 
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            # Get basic statistics
+            # Get basic statistics including percentiles to exclude outliers
             cursor.execute(
                 """
                 SELECT 
                     AVG(duration_seconds) as avg_duration,
                     STDDEV(duration_seconds) as stddev_duration,
+                    PERCENTILE_CONT(0.01) WITHIN GROUP (ORDER BY duration_seconds) as p01,
+                    PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY duration_seconds) as p99,
                     COUNT(*) as total_sessions,
                     COUNT(exit_timestamp) as completed_sessions,
                     COUNT(*) - COUNT(exit_timestamp) as active_sessions
                 FROM public.quest_sessions
-                WHERE quest_id = %s AND entry_timestamp >= %s
+                WHERE quest_id = %s 
+                  AND entry_timestamp >= %s
+                  AND exit_timestamp IS NOT NULL
+                  AND duration_seconds IS NOT NULL
                 """,
                 (quest_id, cutoff_date),
             )
@@ -3434,47 +3527,50 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
 
             avg_duration = float(stats[0]) if stats[0] is not None else None
             stddev_duration = float(stats[1]) if stats[1] is not None else None
-            total_sessions = int(stats[2]) if stats[2] else 0
-            completed_sessions = int(stats[3]) if stats[3] else 0
-            active_sessions = int(stats[4]) if stats[4] else 0
+            min_duration = float(stats[2]) if stats[2] is not None else 0
+            max_duration = float(stats[3]) if stats[3] is not None else 0
+            total_sessions = int(stats[4]) if stats[4] else 0
+            completed_sessions = int(stats[5]) if stats[5] else 0
+            active_sessions = int(stats[6]) if stats[6] else 0
 
-            # Get histogram data (only completed sessions)
-            cursor.execute(
-                """
+            # Generate dynamic bin ranges based on percentiles (excludes outliers)
+            bin_ranges = _generate_dynamic_bins(min_duration, max_duration)
+
+            # Build dynamic SQL CASE statement for binning
+            case_conditions = []
+            for i, (bin_start, bin_end, _) in enumerate(bin_ranges, start=1):
+                if bin_end == float("inf"):
+                    case_conditions.append(
+                        f"WHEN duration_seconds >= {bin_start} THEN {i}"
+                    )
+                else:
+                    case_conditions.append(
+                        f"WHEN duration_seconds >= {bin_start} AND duration_seconds < {bin_end} THEN {i}"
+                    )
+
+            case_statement = " ".join(case_conditions)
+
+            # Get histogram data (only completed sessions) with dynamic bins
+            histogram_query = f"""
                 WITH bins AS (
                     SELECT 
                         CASE 
-                            WHEN duration_seconds < 300 THEN 1
-                            WHEN duration_seconds < 600 THEN 2
-                            WHEN duration_seconds < 900 THEN 3
-                            WHEN duration_seconds < 1800 THEN 4
-                            WHEN duration_seconds < 3600 THEN 5
-                            WHEN duration_seconds < 7200 THEN 6
-                            ELSE 7
+                            {case_statement}
+                            ELSE 0
                         END as bin,
                         COUNT(*) as count
                     FROM public.quest_sessions
                     WHERE quest_id = %s 
                       AND entry_timestamp >= %s
                       AND exit_timestamp IS NOT NULL
+                      AND duration_seconds IS NOT NULL
                     GROUP BY bin
                 )
-                SELECT bin, count FROM bins ORDER BY bin
-                """,
-                (quest_id, cutoff_date),
-            )
-            histogram_rows = cursor.fetchall()
+                SELECT bin, count FROM bins WHERE bin > 0 ORDER BY bin
+            """
 
-            # Define bin ranges
-            bin_ranges = [
-                (0, 300, "0-5 min"),
-                (300, 600, "5-10 min"),
-                (600, 900, "10-15 min"),
-                (900, 1800, "15-30 min"),
-                (1800, 3600, "30-60 min"),
-                (3600, 7200, "1-2 hr"),
-                (7200, float("inf"), "2+ hr"),
-            ]
+            cursor.execute(histogram_query, (quest_id, cutoff_date))
+            histogram_rows = cursor.fetchall()
 
             histogram = []
             for row in histogram_rows:
