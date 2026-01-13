@@ -3727,10 +3727,8 @@ def mark_activities_as_processed(activity_ids: list[tuple]) -> None:
         SET quest_session_processed = true
         WHERE character_id = %s AND timestamp = %s
     """
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.executemany(query, activity_ids)
-            conn.commit()
+    with get_db_cursor(commit=True) as cursor:
+        cursor.executemany(query, activity_ids)
 
 
 def get_unprocessed_location_activities(

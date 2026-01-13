@@ -223,27 +223,7 @@ def process_batch(
     return new_last_timestamp, len(activities), len(all_sessions_to_insert)
 
 
-def get_estimated_remaining_activities(
-    last_timestamp: datetime, shard_count: int, shard_index: int
-) -> int:
-    """Estimate number of remaining unprocessed activities for this shard."""
-    query = """
-        SELECT COUNT(*) 
-        FROM public.character_activity
-        WHERE timestamp > %s
-          AND activity_type = 'location'
-          AND quest_session_processed = false
-          AND (character_id %% %s) = %s
-    """
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(query, (last_timestamp, shard_count, shard_index))
-                result = cursor.fetchone()
-                return result[0] if result else 0
-    except Exception as e:
-        logger.warning(f"Failed to estimate remaining activities: {e}")
-        return -1  # Unknown
+
 
 
 def format_duration(seconds: float) -> str:
@@ -283,14 +263,6 @@ def run_worker():
     total_activities_processed = 0
     total_sessions_created = 0
     batch_count = 0
-
-    # Estimate initial workload
-    logger.info("Estimating initial workload...")
-    initial_estimate = get_estimated_remaining_activities(
-        last_timestamp, shard_count, shard_index
-    )
-    if initial_estimate > 0:
-        logger.info(f"Estimated {initial_estimate:,} unprocessed activities to process")
 
     while True:
         try:
@@ -332,11 +304,6 @@ def run_worker():
                 activities_count / batch_duration if batch_duration > 0 else 0
             )
 
-            # Estimate remaining work
-            remaining_estimate = get_estimated_remaining_activities(
-                new_last_timestamp, shard_count, shard_index
-            )
-
             # Build progress log message
             log_parts = [
                 f"Batch {batch_count} complete:",
@@ -344,30 +311,9 @@ def run_worker():
                 f"{sessions_count:,} sessions created",
                 f"batch took {format_duration(batch_duration)}",
                 f"rate: {activities_per_second:.1f} activities/sec",
+                f"total processed: {total_activities_processed:,} activities",
+                f"runtime: {format_duration(total_runtime)}",
             ]
-
-            if remaining_estimate >= 0:
-                total_estimate = (
-                    initial_estimate
-                    if initial_estimate > 0
-                    else total_activities_processed + remaining_estimate
-                )
-                progress_pct = (
-                    (total_activities_processed / total_estimate * 100)
-                    if total_estimate > 0
-                    else 0
-                )
-                log_parts.append(
-                    f"progress: {total_activities_processed:,}/{total_estimate:,} ({progress_pct:.1f}%)"
-                )
-                log_parts.append(f"remaining: ~{remaining_estimate:,} activities")
-
-                # Estimate time remaining
-                if activities_per_second > 0 and remaining_estimate > 0:
-                    eta_seconds = remaining_estimate / activities_per_second
-                    log_parts.append(f"ETA: ~{format_duration(eta_seconds)}")
-
-            log_parts.append(f"runtime: {format_duration(total_runtime)}")
 
             logger.info(" | ".join(log_parts))
 
