@@ -129,7 +129,7 @@ def process_character_activities(
                 current_quest_area = None
             else:
                 # Skip this activity if it's before the session start (out-of-order data)
-                logger.warning(
+                logger.debug(
                     f"Skipping out-of-order activity for character {character_id}: "
                     f"activity timestamp {timestamp} is before active session start "
                     f"{current_session.entry_timestamp} (quest_id={current_session.quest_id})"
@@ -202,7 +202,9 @@ def process_batch(
                     id=None,
                     character_id=character_id,
                     quest_id=int(state.get("quest_id")),
-                    entry_timestamp=datetime.fromisoformat(state.get("entry_timestamp")),
+                    entry_timestamp=datetime.fromisoformat(
+                        state.get("entry_timestamp")
+                    ),
                     exit_timestamp=None,
                     duration_seconds=None,
                     created_at=None,
