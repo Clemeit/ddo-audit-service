@@ -15,7 +15,6 @@ from models.redis import (
     KnownQuestsModel,
     RedisKeys,
     REDIS_KEY_TYPE_MAPPING,
-    DictDict,
 )
 from time import time
 from models.area import Area

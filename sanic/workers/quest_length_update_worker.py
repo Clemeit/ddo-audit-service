@@ -18,6 +18,7 @@ The worker uses environment variables for configuration:
 - LOOKBACK_DAYS: Days of historical data to analyze (default: 90)
 - UPDATE_INTERVAL_DAYS: Days between update runs (default: 1)
 - BATCH_SIZE: Number of quests to process per batch (default: 50)
+- MIN_SESSIONS: Minimum completed sessions required to estimate length (default: 100)
 """
 
 import os
@@ -25,7 +26,7 @@ import sys
 import time
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 # Ensure relative imports work when invoked as module or script
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
