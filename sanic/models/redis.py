@@ -93,6 +93,7 @@ class RedisKeys(Enum):
     LFMS = "{server}:lfms"
     NEWS = "news"
     PAGE_MESSAGES = "page_messages"
+    ACTIVE_QUEST_SESSIONS = "active_quest_sessions"
 
 
 class VerificationChallengesModel(BaseModel):
@@ -109,6 +110,7 @@ REDIS_KEY_TYPE_MAPPING: Dict[RedisKeys, type] = {
     RedisKeys.KNOWN_QUESTS: KnownQuestsModel,
     RedisKeys.NEWS: NewsModel,
     RedisKeys.PAGE_MESSAGES: PageMessagesModel,
+    RedisKeys.ACTIVE_QUEST_SESSIONS: DictDict,
     **{
         RedisKeys.CHARACTERS.value.format(server=server): DictDict
         for server in SERVER_NAMES_LOWERCASE

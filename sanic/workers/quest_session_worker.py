@@ -41,6 +41,12 @@ from services.postgres import (  # type: ignore
     get_unprocessed_location_activities,
     get_quest_by_id,
 )
+from services.redis import (  # type: ignore
+    initialize_redis,
+    get_active_quest_session_state,
+    set_active_quest_session_state,
+    clear_active_quest_session_state,
+)
 from utils.quest_sessions import get_quest_id_for_area  # type: ignore
 from models.quest_session import QuestSession  # type: ignore
 
@@ -72,7 +78,7 @@ def process_character_activities(
     character_id: int,
     activities: List[Tuple[datetime, int]],
     initial_session: Optional[QuestSession],
-) -> Tuple[List[Tuple], List[Tuple]]:
+) -> Tuple[List[Tuple], List[Tuple], Optional[QuestSession]]:
     """Process all activities for a single character and generate session changes.
 
     Args:
@@ -136,9 +142,9 @@ def process_character_activities(
         activities_to_mark.append((character_id, timestamp))
 
     # Do not persist sessions without an exit_timestamp
-    # Active sessions will be closed and persisted when a leave event is observed
+    # Active sessions will be tracked via Redis and closed when a leave event is observed
 
-    return sessions_to_insert, activities_to_mark
+    return sessions_to_insert, activities_to_mark, current_session
 
 
 def process_batch(
@@ -173,10 +179,26 @@ def process_batch(
     for character_id, timestamp, area_id in activities:
         by_character[character_id].append((timestamp, area_id))
 
-    # Get initial active sessions for all characters
+    # Get initial active sessions for all characters from Redis (not DB)
     character_sessions = {}
     for character_id in by_character.keys():
-        session = get_active_quest_session(character_id)
+        state = get_active_quest_session_state(character_id)
+        if state:
+            # Build a lightweight QuestSession object for processing continuity
+            try:
+                session = QuestSession(
+                    id=None,
+                    character_id=character_id,
+                    quest_id=int(state.get("quest_id")),
+                    entry_timestamp=datetime.fromisoformat(state.get("entry_timestamp")),
+                    exit_timestamp=None,
+                    duration_seconds=None,
+                    created_at=None,
+                )
+            except Exception:
+                session = None
+        else:
+            session = None
         character_sessions[character_id] = session
 
     # Process each character's activities
@@ -188,12 +210,22 @@ def process_batch(
         char_activities.sort(key=lambda x: x[0])
 
         initial_session = character_sessions.get(character_id)
-        sessions, activities_marked = process_character_activities(
+        sessions, activities_marked, final_session = process_character_activities(
             character_id, char_activities, initial_session
         )
 
         all_sessions_to_insert.extend(sessions)
         all_activities_to_mark.extend(activities_marked)
+
+        # Update Redis active session state for the character
+        if final_session is not None:
+            set_active_quest_session_state(
+                character_id,
+                final_session.quest_id,
+                final_session.entry_timestamp,
+            )
+        else:
+            clear_active_quest_session_state(character_id)
 
     # Bulk insert quest sessions
     if all_sessions_to_insert:
@@ -242,8 +274,9 @@ def run_worker():
         f"batch_size={batch_size}, lookback_days={lookback_days})"
     )
 
-    # Initialize database connection
+    # Initialize database and Redis connections
     initialize_postgres()
+    initialize_redis()
 
     # Start processing from lookback_days ago
     start_time = time.time()
