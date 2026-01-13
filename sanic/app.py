@@ -145,7 +145,7 @@ async def log_request_response(request: Request, response):
             request_id=request_id,
             duration_ms=duration_ms,
         )
-        access_logger.info(dumps_event(event))
+        # access_logger.info(dumps_event(event))
 
     return response
 
