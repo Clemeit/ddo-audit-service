@@ -3738,41 +3738,27 @@ def mark_activities_as_processed(activity_ids: list[tuple]) -> None:
     if not activity_ids:
         return
 
-    # Create a temporary table with the activity IDs to mark, then UPDATE from it
-    # This is more efficient and reliable than executemany for large batches
+    # Use execute_values for efficient batch update
     try:
-        with get_db_cursor(commit=True) as cursor:
-            # Create temp table (use BIGINT for character_id to match actual column type)
-            cursor.execute(
-                """
-                CREATE TEMP TABLE temp_activities_to_mark (
-                    character_id BIGINT NOT NULL,
-                    timestamp TIMESTAMPTZ NOT NULL
-                ) ON COMMIT DROP
-            """
-            )
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                # Use a CTE with VALUES to avoid temp table complexity
+                psycopg2.extras.execute_values(
+                    cursor,
+                    """
+                    UPDATE public.character_activity AS ca
+                    SET quest_session_processed = true
+                    FROM (VALUES %s) AS v(character_id, timestamp)
+                    WHERE ca.character_id = v.character_id::bigint
+                      AND ca.timestamp = v.timestamp::timestamptz
+                    """,
+                    activity_ids,
+                    template="(%s, %s)",
+                    fetch=False,
+                )
 
-            # Bulk insert into temp table
-            psycopg2.extras.execute_values(
-                cursor,
-                "INSERT INTO temp_activities_to_mark (character_id, timestamp) VALUES %s",
-                activity_ids,
-                template="(%s, %s)",
-                fetch=False,
-            )
-
-            # Update from temp table
-            cursor.execute(
-                """
-                UPDATE public.character_activity ca
-                SET quest_session_processed = true
-                FROM temp_activities_to_mark t
-                WHERE ca.character_id = t.character_id 
-                  AND ca.timestamp = t.timestamp
-            """
-            )
-
-            logger.info(f"Activities marked processed: {cursor.rowcount}")
+                logger.info(f"Activities marked processed: {cursor.rowcount}")
+            conn.commit()
     except Exception as e:
         logger.error(f"Failed to mark activities as processed: {e}")
 
