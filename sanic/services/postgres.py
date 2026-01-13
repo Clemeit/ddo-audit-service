@@ -3742,32 +3742,36 @@ def mark_activities_as_processed(activity_ids: list[tuple]) -> None:
     # This is more efficient and reliable than executemany for large batches
     try:
         with get_db_cursor(commit=True) as cursor:
-            # Create temp table
-            cursor.execute("""
+            # Create temp table (use BIGINT for character_id to match actual column type)
+            cursor.execute(
+                """
                 CREATE TEMP TABLE temp_activities_to_mark (
-                    character_id INTEGER NOT NULL,
+                    character_id BIGINT NOT NULL,
                     timestamp TIMESTAMPTZ NOT NULL
                 ) ON COMMIT DROP
-            """)
-            
+            """
+            )
+
             # Bulk insert into temp table
             psycopg2.extras.execute_values(
                 cursor,
                 "INSERT INTO temp_activities_to_mark (character_id, timestamp) VALUES %s",
                 activity_ids,
                 template="(%s, %s)",
-                fetch=False
+                fetch=False,
             )
-            
+
             # Update from temp table
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE public.character_activity ca
                 SET quest_session_processed = true
                 FROM temp_activities_to_mark t
                 WHERE ca.character_id = t.character_id 
                   AND ca.timestamp = t.timestamp
-            """)
-            
+            """
+            )
+
             logger.info(f"Activities marked processed: {cursor.rowcount}")
     except Exception as e:
         logger.error(f"Failed to mark activities as processed: {e}")
