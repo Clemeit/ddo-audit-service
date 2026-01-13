@@ -145,6 +145,34 @@ services:
       postgres:
         condition: service_healthy
 
+  quest_length_update_worker:
+    build:
+      context: ./sanic
+      dockerfile: Dockerfile
+    image: clemeit/ddoaudit-sanic:latest
+    restart: always
+    command: ["python", "-m", "workers.quest_length_update_worker"]
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_MIN_CONN=${POSTGRES_MIN_CONN}
+      - POSTGRES_MAX_CONN=${POSTGRES_MAX_CONN}
+      - LOOKBACK_DAYS=${QUEST_LENGTH_LOOKBACK_DAYS:-90}
+      - UPDATE_INTERVAL_DAYS=${QUEST_LENGTH_UPDATE_INTERVAL_DAYS:-1}
+      - BATCH_SIZE=${QUEST_LENGTH_BATCH_SIZE:-50}
+      - MIN_SESSIONS=${QUEST_LENGTH_MIN_SESSIONS:-100}
+      - WORKER_LOG_LEVEL=${WORKER_LOG_LEVEL:-INFO}
+    expose:
+      - 0
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   nginx:
     build:
       context: .

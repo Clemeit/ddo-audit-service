@@ -1189,7 +1189,8 @@ def store_one_time_user_settings(user_id: str, settings: dict):
 # Active Quest Sessions (state tracking)
 # ========================================
 
-def get_active_quest_sessions_map() -> DictDict:
+
+def get_active_quest_sessions_map() -> dict:
     """Return the entire active quest sessions map (character_id -> session dict)."""
     with get_redis_client() as client:
         data = client.json().get(RedisKeys.ACTIVE_QUEST_SESSIONS.value)
