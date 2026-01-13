@@ -135,16 +135,8 @@ def process_character_activities(
         # Mark this activity as processed
         activities_to_mark.append((character_id, timestamp))
 
-    # If there's still an active session at the end, insert it without exit_timestamp
-    if current_session and current_session != initial_session:
-        sessions_to_insert.append(
-            (
-                current_session.character_id,
-                current_session.quest_id,
-                current_session.entry_timestamp,
-                None,  # exit_timestamp (still active)
-            )
-        )
+    # Do not persist sessions without an exit_timestamp
+    # Active sessions will be closed and persisted when a leave event is observed
 
     return sessions_to_insert, activities_to_mark
 
@@ -221,9 +213,6 @@ def process_batch(
     )
 
     return new_last_timestamp, len(activities), len(all_sessions_to_insert)
-
-
-
 
 
 def format_duration(seconds: float) -> str:

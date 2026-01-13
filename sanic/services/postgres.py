@@ -3673,31 +3673,47 @@ def bulk_insert_quest_sessions(sessions: list[tuple]) -> None:
 
     # Extract unique character IDs from the sessions
     character_ids = list(set(session[0] for session in sessions))
-    
+
     # Query which character IDs actually exist in the database
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             # Check which character IDs exist
             cursor.execute(
-                "SELECT id FROM public.characters WHERE id = ANY(%s)",
-                (character_ids,)
+                "SELECT id FROM public.characters WHERE id = ANY(%s)", (character_ids,)
             )
             existing_character_ids = set(row[0] for row in cursor.fetchall())
-    
+
     # Filter sessions to only include those with existing character IDs
+    # and an exit_timestamp (we only persist completed sessions)
     valid_sessions = [
-        session for session in sessions 
-        if session[0] in existing_character_ids
+        session
+        for session in sessions
+        if session[0] in existing_character_ids and session[3] is not None
     ]
-    
+
     # Log if we're skipping any sessions
     skipped_count = len(sessions) - len(valid_sessions)
     if skipped_count > 0:
-        missing_char_ids = set(session[0] for session in sessions if session[0] not in existing_character_ids)
-        logging.warning(
-            f"Skipping {skipped_count} quest sessions with non-existent character IDs: {missing_char_ids}"
+        missing_char_ids = set(
+            session[0]
+            for session in sessions
+            if session[0] not in existing_character_ids
         )
-    
+        missing_char_msg = (
+            f"Skipping {len(missing_char_ids)} sessions with non-existent character IDs: {missing_char_ids}"
+            if missing_char_ids
+            else ""
+        )
+        incomplete_sessions_count = sum(1 for s in sessions if s[3] is None)
+        incomplete_msg = (
+            f"Skipping {incomplete_sessions_count} incomplete sessions without exit_timestamp"
+            if incomplete_sessions_count
+            else ""
+        )
+        logging.warning(
+            " | ".join(msg for msg in [missing_char_msg, incomplete_msg] if msg)
+        )
+
     if not valid_sessions:
         logging.warning("No valid quest sessions to insert after filtering")
         return
@@ -3722,13 +3738,40 @@ def mark_activities_as_processed(activity_ids: list[tuple]) -> None:
     if not activity_ids:
         return
 
-    query = """
-        UPDATE public.character_activity 
+    bulk_update_query = """
+        UPDATE public.character_activity AS ca
         SET quest_session_processed = true
-        WHERE character_id = %s AND timestamp = %s
+        FROM (VALUES %s) AS v(character_id, ts)
+        WHERE ca.character_id = v.character_id AND ca.timestamp = v.ts
     """
-    with get_db_cursor(commit=True) as cursor:
-        cursor.executemany(query, activity_ids)
+    try:
+        with get_db_connection() as conn:
+            try:
+                conn.autocommit = True
+            except Exception:
+                pass
+            with conn.cursor() as cursor:
+                try:
+                    psycopg2.extras.execute_values(
+                        cursor,
+                        bulk_update_query,
+                        activity_ids,
+                        template="(%s, %s)",
+                        page_size=1000,
+                    )
+                    logger.info(f"Activities marked processed: {cursor.rowcount}")
+                except Exception as e:
+                    logger.warning(f"Bulk UPDATE via VALUES failed, falling back: {e}")
+                    fallback_query = (
+                        "UPDATE public.character_activity SET quest_session_processed = true "
+                        "WHERE character_id = %s AND timestamp = %s"
+                    )
+                    cursor.executemany(fallback_query, activity_ids)
+                    logger.info(
+                        f"Activities marked processed (fallback): {cursor.rowcount}"
+                    )
+    except Exception as e:
+        logger.error(f"Failed to mark activities as processed: {e}")
 
 
 def get_unprocessed_location_activities(
