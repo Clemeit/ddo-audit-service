@@ -3738,38 +3738,37 @@ def mark_activities_as_processed(activity_ids: list[tuple]) -> None:
     if not activity_ids:
         return
 
-    bulk_update_query = """
-        UPDATE public.character_activity AS ca
-        SET quest_session_processed = true
-        FROM (VALUES %s) AS v(character_id, ts)
-        WHERE ca.character_id = v.character_id AND ca.timestamp = v.ts
-    """
+    # Create a temporary table with the activity IDs to mark, then UPDATE from it
+    # This is more efficient and reliable than executemany for large batches
     try:
-        with get_db_connection() as conn:
-            try:
-                conn.autocommit = True
-            except Exception:
-                pass
-            with conn.cursor() as cursor:
-                try:
-                    psycopg2.extras.execute_values(
-                        cursor,
-                        bulk_update_query,
-                        activity_ids,
-                        template="(%s, %s)",
-                        page_size=1000,
-                    )
-                    logger.info(f"Activities marked processed: {cursor.rowcount}")
-                except Exception as e:
-                    logger.warning(f"Bulk UPDATE via VALUES failed, falling back: {e}")
-                    fallback_query = (
-                        "UPDATE public.character_activity SET quest_session_processed = true "
-                        "WHERE character_id = %s AND timestamp = %s"
-                    )
-                    cursor.executemany(fallback_query, activity_ids)
-                    logger.info(
-                        f"Activities marked processed (fallback): {cursor.rowcount}"
-                    )
+        with get_db_cursor(commit=True) as cursor:
+            # Create temp table
+            cursor.execute("""
+                CREATE TEMP TABLE temp_activities_to_mark (
+                    character_id INTEGER NOT NULL,
+                    timestamp TIMESTAMPTZ NOT NULL
+                ) ON COMMIT DROP
+            """)
+            
+            # Bulk insert into temp table
+            psycopg2.extras.execute_values(
+                cursor,
+                "INSERT INTO temp_activities_to_mark (character_id, timestamp) VALUES %s",
+                activity_ids,
+                template="(%s, %s)",
+                fetch=False
+            )
+            
+            # Update from temp table
+            cursor.execute("""
+                UPDATE public.character_activity ca
+                SET quest_session_processed = true
+                FROM temp_activities_to_mark t
+                WHERE ca.character_id = t.character_id 
+                  AND ca.timestamp = t.timestamp
+            """)
+            
+            logger.info(f"Activities marked processed: {cursor.rowcount}")
     except Exception as e:
         logger.error(f"Failed to mark activities as processed: {e}")
 
@@ -3788,6 +3787,9 @@ def get_unprocessed_location_activities(
     Returns:
         List of tuples (character_id, timestamp, area_id)
     """
+    # Use timestamp + ctid (physical row ID) for keyset pagination to avoid skipping rows
+    # This ensures that even if multiple characters have events at the same timestamp,
+    # we don't miss any when advancing the pagination cursor
     query = """
         SELECT character_id, timestamp, (data->>'value')::int as area_id
         FROM public.character_activity
@@ -3795,7 +3797,7 @@ def get_unprocessed_location_activities(
           AND activity_type = 'location'
           AND quest_session_processed = false
           AND (character_id %% %s) = %s
-        ORDER BY character_id, timestamp ASC
+        ORDER BY timestamp ASC, ctid ASC
         LIMIT %s
     """
     with get_db_connection() as conn:

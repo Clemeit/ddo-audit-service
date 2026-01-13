@@ -238,6 +238,7 @@ def process_batch(
         mark_activities_as_processed(all_activities_to_mark)
 
     # Update last_timestamp to the latest processed
+    # Query uses > so max timestamp can be used directly (no duplicates at boundary)
     new_last_timestamp = (
         max(ts for _, ts in all_activities_to_mark)
         if all_activities_to_mark
