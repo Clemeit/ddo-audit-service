@@ -96,7 +96,10 @@ def process_quest_batch(
         try:
             analytics = get_quest_analytics(quest_id, lookback_days)
 
-            if analytics.total_sessions >= min_sessions and analytics.average_duration_seconds is not None:
+            if (
+                analytics.total_sessions >= min_sessions
+                and analytics.average_duration_seconds is not None
+            ):
                 # Sufficient data - update with clamped value
                 length_seconds = clamp_to_smallint(analytics.average_duration_seconds)
                 updates_with_value.append((quest_id, length_seconds))
@@ -214,10 +217,12 @@ def main():
     min_sessions = env_int("MIN_SESSIONS", 100)
 
     logger.info("Quest Length Update Worker starting")
-    logger.info(f"Configuration: lookback_days={lookback_days}, "
-                f"update_interval_days={update_interval_days}, "
-                f"batch_size={batch_size}, "
-                f"min_sessions={min_sessions}")
+    logger.info(
+        f"Configuration: lookback_days={lookback_days}, "
+        f"update_interval_days={update_interval_days}, "
+        f"batch_size={batch_size}, "
+        f"min_sessions={min_sessions}"
+    )
 
     # Initialize database connection
     initialize_postgres()
@@ -231,8 +236,12 @@ def main():
 
         # Sleep until next update
         sleep_seconds = update_interval_days * 86400
-        next_run = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(seconds=sleep_seconds)
-        logger.info(f"Sleeping for {update_interval_days} day(s) until next run at {next_run}")
+        next_run = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(
+            seconds=sleep_seconds
+        )
+        logger.info(
+            f"Sleeping for {update_interval_days} day(s) until next run at {next_run}"
+        )
         time.sleep(sleep_seconds)
 
 
