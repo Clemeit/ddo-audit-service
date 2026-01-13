@@ -1201,34 +1201,46 @@ def get_active_quest_session_state(character_id: int) -> Optional[dict]:
 
     Returns a dict: {"quest_id": int, "entry_timestamp": str} or None.
     """
-    sessions = get_active_quest_sessions_map()
-    key = str(character_id)
-    return sessions.get(key)
+    try:
+        sessions = get_active_quest_sessions_map()
+        key = str(character_id)
+        return sessions.get(key)
+    except Exception:
+        # Redis unavailable, return None
+        return None
 
 
 def set_active_quest_session_state(
     character_id: int, quest_id: int, entry_timestamp: datetime
 ) -> None:
     """Set or update the active quest session state for a character."""
-    obj = {
-        "quest_id": int(quest_id),
-        "entry_timestamp": entry_timestamp.isoformat(),
-    }
-    with get_redis_client() as client:
-        data = client.json().get(RedisKeys.ACTIVE_QUEST_SESSIONS.value) or {}
-        data[str(character_id)] = obj
-        client.json().set(RedisKeys.ACTIVE_QUEST_SESSIONS.value, path="$", obj=data)
+    try:
+        obj = {
+            "quest_id": int(quest_id),
+            "entry_timestamp": entry_timestamp.isoformat(),
+        }
+        with get_redis_client() as client:
+            data = client.json().get(RedisKeys.ACTIVE_QUEST_SESSIONS.value) or {}
+            data[str(character_id)] = obj
+            client.json().set(RedisKeys.ACTIVE_QUEST_SESSIONS.value, path="$", obj=data)
+    except Exception:
+        # Redis unavailable, silently continue
+        pass
 
 
 def clear_active_quest_session_state(character_id: int) -> None:
     """Clear active quest session state for a character."""
-    with get_redis_client() as client:
-        data = client.json().get(RedisKeys.ACTIVE_QUEST_SESSIONS.value) or {}
-        if str(character_id) in data:
-            del data[str(character_id)]
-            client.json().set(
-                RedisKeys.ACTIVE_QUEST_SESSIONS.value, path="$", obj=data
-            )
+    try:
+        with get_redis_client() as client:
+            data = client.json().get(RedisKeys.ACTIVE_QUEST_SESSIONS.value) or {}
+            if str(character_id) in data:
+                del data[str(character_id)]
+                client.json().set(
+                    RedisKeys.ACTIVE_QUEST_SESSIONS.value, path="$", obj=data
+                )
+    except Exception:
+        # Redis unavailable, silently continue
+        pass
 
 
 def get_one_time_user_settings(user_id: str) -> Optional[dict]:

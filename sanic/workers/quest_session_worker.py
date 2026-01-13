@@ -274,9 +274,16 @@ def run_worker():
         f"batch_size={batch_size}, lookback_days={lookback_days})"
     )
 
-    # Initialize database and Redis connections
+    # Initialize database connection
     initialize_postgres()
-    initialize_redis()
+
+    # Initialize Redis (non-fatal if unavailable)
+    try:
+        initialize_redis()
+    except Exception as e:
+        logger.warning(
+            f"Redis initialization failed, active session tracking across batches disabled: {e}"
+        )
 
     # Start processing from lookback_days ago
     start_time = time.time()
