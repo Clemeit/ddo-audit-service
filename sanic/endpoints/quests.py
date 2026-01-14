@@ -91,7 +91,9 @@ async def get_quest_analytics(request: Request, quest_id: int):
                         "heroic_popularity_relative": cached_metrics[
                             "heroic_popularity_relative"
                         ],
-                        "epic_popularity_relative": cached_metrics["epic_popularity_relative"],
+                        "epic_popularity_relative": cached_metrics[
+                            "epic_popularity_relative"
+                        ],
                     }
                     return json(result)
 
