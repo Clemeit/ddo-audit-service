@@ -32,3 +32,14 @@ class QuestAnalytics(BaseModel):
     total_sessions: int = 0
     completed_sessions: int = 0
     active_sessions: int = 0
+
+
+class QuestMetrics(BaseModel):
+    """Model for cached quest metrics with relative performance scores."""
+
+    quest_id: int
+    heroic_xp_per_minute_relative: Optional[float] = None  # 0-1 normalized
+    epic_xp_per_minute_relative: Optional[float] = None  # 0-1 normalized
+    popularity_relative: Optional[float] = None  # 0-1 normalized
+    analytics_data: QuestAnalytics
+    updated_at: datetime

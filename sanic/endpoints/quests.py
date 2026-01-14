@@ -4,11 +4,13 @@ Quest endpoints.
 
 import services.postgres as postgres_client
 
+from datetime import datetime, timedelta, timezone
 from sanic import Blueprint
 from sanic.response import json
 from sanic.request import Request
 from utils.areas import get_valid_area_ids
 from utils.quests import get_quests
+from utils.quest_metrics_calc import get_quest_metrics_single
 
 from models.quest import Quest
 from models.quest_session import QuestAnalytics
@@ -43,7 +45,10 @@ async def get_quest_analytics(request: Request, quest_id: int):
     Route: /quests/<quest_id:int>/analytics
 
     Description: Get comprehensive analytics for a quest including duration statistics,
-    activity patterns, and time series data.
+    activity patterns, and time series data. Data is cached with 90-day lookback.
+
+    Query Parameters:
+    - refresh=true: Force recalculation and update of metrics (optional)
     """
 
     try:
@@ -52,18 +57,86 @@ async def get_quest_analytics(request: Request, quest_id: int):
         if not quest:
             return json({"message": "quest not found"}, status=404)
 
-        # Get lookback days from query parameter (default 90)
-        lookback_days = int(request.args.get("lookback_days", 90))
-        lookback_days = max(1, min(lookback_days, 365))  # Clamp between 1 and 365
+        # Check if refresh is requested
+        refresh = request.args.get("refresh", "false").lower() == "true"
 
-        # Get analytics
-        analytics: QuestAnalytics = postgres_client.get_quest_analytics(
-            quest_id, lookback_days
+        # Try to get cached metrics
+        cached_metrics = None
+        if not refresh:
+            cached_metrics = postgres_client.get_quest_metrics(quest_id)
+
+            # Check if cache is fresh (updated in last 24 hours)
+            if cached_metrics:
+                updated_at = cached_metrics["updated_at"]
+                # Ensure updated_at is timezone-aware to avoid TypeError on subtraction
+                if isinstance(updated_at, datetime):
+                    if updated_at.tzinfo is None:
+                        updated_at = updated_at.replace(tzinfo=timezone.utc)
+                time_since_update = datetime.now(timezone.utc) - updated_at
+                if time_since_update < timedelta(days=1):
+                    # Cache is fresh, return it
+                    analytics_dict = cached_metrics["analytics_data"]
+                    analytics = (
+                        QuestAnalytics(**analytics_dict)
+                        if isinstance(analytics_dict, dict)
+                        else analytics_dict
+                    )
+
+                    result = {
+                        "data": analytics.model_dump(),
+                        "cached": True,
+                        "updated_at": cached_metrics["updated_at"].isoformat(),
+                        "heroic_xp_per_minute_relative": cached_metrics[
+                            "heroic_xp_per_minute_relative"
+                        ],
+                        "epic_xp_per_minute_relative": cached_metrics[
+                            "epic_xp_per_minute_relative"
+                        ],
+                        "heroic_popularity_relative": cached_metrics[
+                            "heroic_popularity_relative"
+                        ],
+                        "epic_popularity_relative": cached_metrics[
+                            "epic_popularity_relative"
+                        ],
+                    }
+                    return json(result)
+
+        # Cache miss or refresh requested: calculate metrics for this quest only
+        quest_metrics = get_quest_metrics_single(quest_id)
+
+        if not quest_metrics:
+            return json({"message": "insufficient data for metrics"}, status=404)
+
+        # Upsert to database
+        postgres_client.upsert_quest_metrics(
+            quest_id,
+            quest_metrics["heroic_xp_per_minute_relative"],
+            quest_metrics["epic_xp_per_minute_relative"],
+            quest_metrics["heroic_popularity_relative"],
+            quest_metrics["epic_popularity_relative"],
+            quest_metrics["analytics_data"],
         )
 
-        return json({"data": analytics.model_dump()})
-    except ValueError as e:
-        return json({"message": str(e)}, status=400)
+        analytics_dict = quest_metrics["analytics_data"]
+        analytics = (
+            QuestAnalytics(**analytics_dict)
+            if isinstance(analytics_dict, dict)
+            else analytics_dict
+        )
+
+        result = {
+            "data": analytics.model_dump(),
+            "cached": False,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "heroic_xp_per_minute_relative": quest_metrics[
+                "heroic_xp_per_minute_relative"
+            ],
+            "epic_xp_per_minute_relative": quest_metrics["epic_xp_per_minute_relative"],
+            "heroic_popularity_relative": quest_metrics["heroic_popularity_relative"],
+            "epic_popularity_relative": quest_metrics["epic_popularity_relative"],
+        }
+        return json(result)
+
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
