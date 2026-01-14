@@ -4,6 +4,7 @@ Service to interface with the Redis server.
 
 import os
 from datetime import datetime
+from typing import Dict, List, Optional
 
 from constants.server import SERVER_NAMES_LOWERCASE
 from models.character import Character
@@ -1238,6 +1239,61 @@ def clear_active_quest_session_state(character_id: int) -> None:
                 client.json().set(
                     RedisKeys.ACTIVE_QUEST_SESSIONS.value, path="$", obj=data
                 )
+    except Exception:
+        # Redis unavailable, silently continue
+        pass
+
+
+def batch_get_active_quest_session_states(
+    character_ids: List[int],
+) -> Dict[int, Optional[dict]]:
+    """Batch get active quest session states for multiple characters.
+
+    Args:
+        character_ids: List of character IDs to fetch
+
+    Returns:
+        Dict mapping character_id -> session dict (or None if no active session)
+    """
+    try:
+        sessions_map = get_active_quest_sessions_map()
+        result = {}
+        for char_id in character_ids:
+            key = str(char_id)
+            result[char_id] = sessions_map.get(key)
+        return result
+    except Exception:
+        # Redis unavailable, return empty dict for all
+        return {char_id: None for char_id in character_ids}
+
+
+def batch_update_active_quest_session_states(
+    updates_set: Dict[int, dict], updates_clear: List[int]
+) -> None:
+    """Batch update active quest session states for multiple characters.
+
+    Args:
+        updates_set: Dict mapping character_id -> {"quest_id": int, "entry_timestamp": str}
+        updates_clear: List of character_ids to clear (no active session)
+    """
+    if not updates_set and not updates_clear:
+        return
+
+    try:
+        with get_redis_client() as client:
+            # Get current data once
+            data = client.json().get(RedisKeys.ACTIVE_QUEST_SESSIONS.value) or {}
+
+            # Apply all updates
+            for char_id, session_data in updates_set.items():
+                data[str(char_id)] = session_data
+
+            # Apply all clears
+            for char_id in updates_clear:
+                data.pop(str(char_id), None)
+
+            # Write back once
+            client.json().set(RedisKeys.ACTIVE_QUEST_SESSIONS.value, path="$", obj=data)
     except Exception:
         # Redis unavailable, silently continue
         pass

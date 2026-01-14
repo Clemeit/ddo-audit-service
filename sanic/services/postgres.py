@@ -3868,6 +3868,7 @@ def mark_activities_as_processed(activity_ids: list[tuple]) -> None:
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 # Use a CTE with VALUES to avoid temp table complexity
+                # Set page_size to handle large batches efficiently
                 psycopg2.extras.execute_values(
                     cursor,
                     """
@@ -3880,10 +3881,14 @@ def mark_activities_as_processed(activity_ids: list[tuple]) -> None:
                     """,
                     activity_ids,
                     template="(%s, %s)",
+                    page_size=1000,  # Process in batches of 1000 for efficiency
                     fetch=False,
                 )
 
-                logger.info(f"Activities marked processed: {cursor.rowcount}")
+                # Log the total number of activities passed (cursor.rowcount only shows last batch)
+                logger.info(
+                    f"Activities marked processed: {len(activity_ids)} activities submitted, {cursor.rowcount} rows updated in final batch"
+                )
             conn.commit()
     except Exception as e:
         logger.error(f"Failed to mark activities as processed: {e}")
