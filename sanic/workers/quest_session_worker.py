@@ -43,9 +43,8 @@ from services.postgres import (  # type: ignore
 )
 from services.redis import (  # type: ignore
     initialize_redis,
-    get_active_quest_session_state,
-    set_active_quest_session_state,
-    clear_active_quest_session_state,
+    batch_get_active_quest_session_states,
+    batch_update_active_quest_session_states,
 )
 from utils.quest_sessions import get_quest_id_for_area  # type: ignore
 from models.quest_session import QuestSession  # type: ignore
@@ -191,10 +190,12 @@ def process_batch(
     for character_id, timestamp, area_id in activities:
         by_character[character_id].append((timestamp, area_id))
 
-    # Get initial active sessions for all characters from Redis (not DB)
+    # Batch fetch initial active sessions for all characters from Redis
+    character_ids = list(by_character.keys())
+    session_states = batch_get_active_quest_session_states(character_ids)
+
     character_sessions = {}
-    for character_id in by_character.keys():
-        state = get_active_quest_session_state(character_id)
+    for character_id, state in session_states.items():
         if state:
             # Build a lightweight QuestSession object for processing continuity
             try:
@@ -215,9 +216,11 @@ def process_batch(
             session = None
         character_sessions[character_id] = session
 
-    # Process each character's activities
+    # Process each character's activities and collect Redis updates
     all_sessions_to_insert = []
     all_activities_to_mark = []
+    redis_updates_set = {}
+    redis_updates_clear = []
 
     for character_id, char_activities in by_character.items():
         # Sort chronologically (should already be sorted, but ensure it)
@@ -231,15 +234,18 @@ def process_batch(
         all_sessions_to_insert.extend(sessions)
         all_activities_to_mark.extend(activities_marked)
 
-        # Update Redis active session state for the character
+        # Collect Redis updates instead of applying immediately
         if final_session is not None:
-            set_active_quest_session_state(
-                character_id,
-                final_session.quest_id,
-                final_session.entry_timestamp,
-            )
+            redis_updates_set[character_id] = {
+                "quest_id": int(final_session.quest_id),
+                "entry_timestamp": final_session.entry_timestamp.isoformat(),
+            }
         else:
-            clear_active_quest_session_state(character_id)
+            redis_updates_clear.append(character_id)
+
+    # Batch apply all Redis updates in a single operation
+    if redis_updates_set or redis_updates_clear:
+        batch_update_active_quest_session_states(redis_updates_set, redis_updates_clear)
 
     # Bulk insert quest sessions
     if all_sessions_to_insert:
