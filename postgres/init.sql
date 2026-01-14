@@ -278,3 +278,22 @@ ALTER TABLE IF EXISTS public."config"
 
 -- Create an index on is_enabled for quick feature toggles
 CREATE INDEX idx_config_enabled ON public."config" (is_enabled);
+
+CREATE TABLE IF NOT EXISTS public."quest_metrics"
+(
+    quest_id integer NOT NULL,
+    heroic_xp_per_minute_relative numeric,
+    epic_xp_per_minute_relative numeric,
+    popularity_relative numeric,
+    analytics_data jsonb,
+    updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    PRIMARY KEY (quest_id),
+    CONSTRAINT fk_quest_metrics_quest FOREIGN KEY (quest_id) REFERENCES public."quests"(id) ON DELETE CASCADE
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."quest_metrics"
+    OWNER to pgadmin;
+
+CREATE INDEX idx_quest_metrics_updated_at ON public."quest_metrics" (updated_at);

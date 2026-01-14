@@ -38,7 +38,9 @@ from services.postgres import (  # type: ignore
     initialize_postgres,
     get_db_connection,
     get_quest_analytics,
+    upsert_quest_metrics_batch,
 )
+from utils.quest_metrics_calc import get_all_quest_metrics_data  # type: ignore
 
 
 logger = logging.getLogger("quest_length_update_worker")
@@ -142,6 +144,41 @@ def bulk_update_quest_lengths(
             conn.commit()
 
 
+def run_metrics_update() -> None:
+    """
+    Compute and update quest metrics for all quests.
+
+    This includes:
+    - Heroic and Epic XP/min relative scores
+    - Popularity relative score
+    - Cached quest analytics (90-day lookback)
+    """
+    logger.info("Starting quest metrics calculation")
+    start_time = time.time()
+
+    try:
+        # Calculate metrics for all quests
+        metrics_data = get_all_quest_metrics_data()
+
+        if not metrics_data:
+            logger.warning("No metrics data generated")
+            return
+
+        logger.info(f"Calculated metrics for {len(metrics_data)} quests")
+
+        # Batch upsert to database
+        rows_upserted = upsert_quest_metrics_batch(metrics_data)
+
+        elapsed_time = time.time() - start_time
+        logger.info(
+            f"Quest metrics update complete in {elapsed_time:.1f}s - "
+            f"Calculated: {len(metrics_data)} quests, Upserted: {rows_upserted} rows"
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to update quest metrics: {e}", exc_info=True)
+
+
 def run_full_update(lookback_days: int, batch_size: int, min_sessions: int) -> None:
     """
     Run a full update cycle for all quests.
@@ -228,13 +265,17 @@ def main():
     # Initialize database connection
     initialize_postgres()
 
-    # Main loop: run on startup, then repeat at configured interval
-    while True:
-        try:
-            run_full_update(lookback_days, batch_size, min_sessions)
-        except Exception as e:
-            logger.error(f"Update cycle failed: {e}", exc_info=True)
+    # Cold start: Pre-populate metrics table on first run
+    logger.info("Starting cold-start: computing metrics for all quests")
+    try:
+        run_metrics_update()
+        run_full_update(lookback_days, batch_size, min_sessions)
+    except Exception as e:
+        logger.error(f"Cold-start failed: {e}", exc_info=True)
+        raise
 
+    # Main loop: repeat at configured interval
+    while True:
         # Sleep until next update
         sleep_seconds = update_interval_days * 86400
         next_run = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(
@@ -244,6 +285,12 @@ def main():
             f"Sleeping for {update_interval_days} day(s) until next run at {next_run}"
         )
         time.sleep(sleep_seconds)
+
+        try:
+            run_metrics_update()
+            run_full_update(lookback_days, batch_size, min_sessions)
+        except Exception as e:
+            logger.error(f"Update cycle failed: {e}", exc_info=True)
 
 
 if __name__ == "__main__":

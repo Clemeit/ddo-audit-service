@@ -3894,6 +3894,130 @@ def mark_activities_as_processed(activity_ids: list[tuple]) -> None:
         logger.error(f"Failed to mark activities as processed: {e}")
 
 
+def upsert_quest_metrics(
+    quest_id: int,
+    heroic_xp_per_minute_relative: float | None,
+    epic_xp_per_minute_relative: float | None,
+    popularity_relative: float | None,
+    analytics_data: dict,
+) -> None:
+    """Upsert quest metrics and cached analytics.
+
+    Args:
+        quest_id: ID of the quest
+        heroic_xp_per_minute_relative: Normalized 0-1 heroic XP/min score
+        epic_xp_per_minute_relative: Normalized 0-1 epic XP/min score
+        popularity_relative: Normalized 0-1 popularity score
+        analytics_data: QuestAnalytics dict to cache
+    """
+    query = """
+        INSERT INTO public.quest_metrics 
+        (quest_id, heroic_xp_per_minute_relative, epic_xp_per_minute_relative, 
+         popularity_relative, analytics_data, updated_at)
+        VALUES (%s, %s, %s, %s, %s, NOW())
+        ON CONFLICT (quest_id) DO UPDATE
+        SET heroic_xp_per_minute_relative = EXCLUDED.heroic_xp_per_minute_relative,
+            epic_xp_per_minute_relative = EXCLUDED.epic_xp_per_minute_relative,
+            popularity_relative = EXCLUDED.popularity_relative,
+            analytics_data = EXCLUDED.analytics_data,
+            updated_at = NOW()
+    """
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                query,
+                (
+                    quest_id,
+                    heroic_xp_per_minute_relative,
+                    epic_xp_per_minute_relative,
+                    popularity_relative,
+                    json.dumps(analytics_data),
+                ),
+            )
+            conn.commit()
+
+
+def upsert_quest_metrics_batch(metrics_data: dict) -> int:
+    """Batch upsert quest metrics for all quests.
+
+    Args:
+        metrics_data: Dict mapping quest_id to metrics dict with keys:
+                      heroic_xp_per_minute_relative, epic_xp_per_minute_relative,
+                      popularity_relative, analytics_data
+
+    Returns:
+        Number of rows upserted
+    """
+    if not metrics_data:
+        return 0
+
+    query = """
+        INSERT INTO public.quest_metrics 
+        (quest_id, heroic_xp_per_minute_relative, epic_xp_per_minute_relative, 
+         popularity_relative, analytics_data, updated_at)
+        VALUES (%s, %s, %s, %s, %s, NOW())
+        ON CONFLICT (quest_id) DO UPDATE
+        SET heroic_xp_per_minute_relative = EXCLUDED.heroic_xp_per_minute_relative,
+            epic_xp_per_minute_relative = EXCLUDED.epic_xp_per_minute_relative,
+            popularity_relative = EXCLUDED.popularity_relative,
+            analytics_data = EXCLUDED.analytics_data,
+            updated_at = NOW()
+    """
+
+    rows_to_insert = [
+        (
+            quest_id,
+            metrics["heroic_xp_per_minute_relative"],
+            metrics["epic_xp_per_minute_relative"],
+            metrics["popularity_relative"],
+            json.dumps(metrics["analytics_data"]),
+        )
+        for quest_id, metrics in metrics_data.items()
+    ]
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.executemany(query, rows_to_insert)
+            conn.commit()
+            return cursor.rowcount
+
+
+def get_quest_metrics(quest_id: int) -> dict | None:
+    """Get cached quest metrics and analytics.
+
+    Args:
+        quest_id: ID of the quest
+
+    Returns:
+        Dict with keys: heroic_xp_per_minute_relative, epic_xp_per_minute_relative,
+                        popularity_relative, analytics_data, updated_at
+        or None if not found
+    """
+    query = """
+        SELECT quest_id, heroic_xp_per_minute_relative, epic_xp_per_minute_relative,
+               popularity_relative, analytics_data, updated_at
+        FROM public.quest_metrics
+        WHERE quest_id = %s
+    """
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, (quest_id,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+            return {
+                "quest_id": row[0],
+                "heroic_xp_per_minute_relative": row[1],
+                "epic_xp_per_minute_relative": row[2],
+                "popularity_relative": row[3],
+                "analytics_data": row[4],  # Already parsed as JSONB
+                "updated_at": row[5],
+            }
+
+
 def get_unprocessed_location_activities(
     last_timestamp: datetime, shard_count: int, shard_index: int, batch_size: int
 ) -> list[tuple]:
