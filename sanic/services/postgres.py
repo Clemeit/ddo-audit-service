@@ -4078,7 +4078,7 @@ def get_quest_metrics(quest_id: int) -> dict | None:
 
     Returns:
         Dict with keys: heroic_xp_per_minute_relative, epic_xp_per_minute_relative,
-                        popularity_relative, analytics_data, updated_at
+                        popularity_relative, analytics_data, updated_at (datetime object)
         or None if not found
     """
     query = """
@@ -4095,13 +4095,19 @@ def get_quest_metrics(quest_id: int) -> dict | None:
             if not row:
                 return None
 
+            updated_at = row[5]
+            # Ensure updated_at is a datetime object (psycopg2 should return it as such)
+            if isinstance(updated_at, str):
+                # Defensive: parse if string (shouldn't happen with proper psycopg2 setup)
+                updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+
             return {
                 "quest_id": row[0],
                 "heroic_xp_per_minute_relative": row[1],
                 "epic_xp_per_minute_relative": row[2],
                 "popularity_relative": row[3],
                 "analytics_data": row[4],  # Already parsed as JSONB
-                "updated_at": row[5],
+                "updated_at": updated_at,
             }
 
 

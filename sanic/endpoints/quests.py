@@ -68,12 +68,6 @@ async def get_quest_analytics(request: Request, quest_id: int):
             # Check if cache is fresh (updated in last 24 hours)
             if cached_metrics:
                 updated_at = cached_metrics["updated_at"]
-                if isinstance(updated_at, str):
-                    # Parse ISO format string
-                    updated_at = datetime.fromisoformat(
-                        updated_at.replace("Z", "+00:00")
-                    )
-
                 time_since_update = datetime.now(timezone.utc) - updated_at
                 if time_since_update < timedelta(days=1):
                     # Cache is fresh, return it

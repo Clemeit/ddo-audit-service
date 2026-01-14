@@ -286,11 +286,24 @@ def main():
         logger.error(f"Cold-start full update failed: {e}", exc_info=True)
         full_update_failed = True
 
-    # Raise if both operations failed
+    # Log warning if both operations failed, but continue to main loop
     if metrics_failed and full_update_failed:
-        raise RuntimeError(
-            "Cold-start failed: both metrics update and full update encountered errors"
+        logger.warning(
+            "Cold-start: both metrics update and full update encountered errors. "
+            "Worker will continue with periodic updates - data may be stale until next successful run."
         )
+    elif metrics_failed:
+        logger.warning(
+            "Cold-start: metrics update failed but full update succeeded. "
+            "Quest length estimates are available but performance metrics are unavailable."
+        )
+    elif full_update_failed:
+        logger.warning(
+            "Cold-start: full update failed but metrics update succeeded. "
+            "Performance metrics are available but quest length estimates may be stale."
+        )
+    else:
+        logger.info("Cold-start completed successfully.")
 
     # Main loop: repeat at configured interval
     while True:

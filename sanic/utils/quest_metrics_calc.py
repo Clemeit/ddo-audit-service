@@ -36,7 +36,7 @@ def calculate_xp_per_minute(
 
 
 def calculate_relative_metric(
-    value: Optional[float], peer_values: list[float]
+    value: Optional[float], peer_values: list[float | None]
 ) -> Optional[float]:
     """Normalize a metric to 0-1 scale based on peer comparison.
 
@@ -217,17 +217,24 @@ def get_quest_metrics_single(quest_id: int) -> Optional[dict]:
                 quest_metrics["epic_xp_per_minute_relative"] = relative
 
         # Calculate popularity relative metric using pre-fetched analytics
-        all_heroic_sessions = []
+        # Use heroic CR if available, fall back to epic CR if not
+        all_peer_sessions = []
 
         if quest.heroic_normal_cr is not None:
             for peer_quest in heroic_peers:
                 peer_analytics = heroic_analytics.get(peer_quest.id)
                 if peer_analytics is not None:
-                    all_heroic_sessions.append(peer_analytics.total_sessions)
+                    all_peer_sessions.append(peer_analytics.total_sessions)
+        elif quest.epic_normal_cr is not None:
+            # Fall back to epic CR if no heroic CR
+            for peer_quest in epic_peers:
+                peer_analytics = epic_analytics.get(peer_quest.id)
+                if peer_analytics is not None:
+                    all_peer_sessions.append(peer_analytics.total_sessions)
 
-        if analytics.total_sessions > 0 and all_heroic_sessions:
+        if analytics.total_sessions > 0 and all_peer_sessions:
             popularity_relative = calculate_relative_metric(
-                float(analytics.total_sessions), all_heroic_sessions
+                float(analytics.total_sessions), all_peer_sessions
             )
             quest_metrics["popularity_relative"] = popularity_relative
 
@@ -307,11 +314,17 @@ def get_all_quest_metrics_data() -> dict:
         for quest in all_quests:
             logger.debug(f"Processing quest {quest.id}: {quest.name}")
 
-            # Get analytics for this quest
-            try:
-                analytics = get_quest_analytics(quest.id, lookback_days=LOOKBACK_DAYS)
-            except Exception as e:
-                logger.error(f"Failed to get analytics for quest {quest.id}: {e}")
+            # Get analytics from pre-fetched data based on CR level
+            analytics = None
+            if quest.heroic_normal_cr is not None:
+                cr = quest.heroic_normal_cr
+                analytics = heroic_analytics_by_cr.get(cr, {}).get(quest.id)
+            elif quest.epic_normal_cr is not None:
+                cr = quest.epic_normal_cr
+                analytics = epic_analytics_by_cr.get(cr, {}).get(quest.id)
+
+            if analytics is None:
+                logger.debug(f"No analytics found for quest {quest.id}")
                 continue
 
             # Skip if insufficient data
@@ -393,7 +406,8 @@ def get_all_quest_metrics_data() -> dict:
                     quest_metrics["epic_xp_per_minute_relative"] = relative
 
             # Calculate popularity relative metric using pre-fetched analytics
-            all_heroic_sessions = []
+            # Use heroic CR if available, fall back to epic CR if not
+            all_peer_sessions = []
 
             if quest.heroic_normal_cr is not None:
                 cr = quest.heroic_normal_cr
@@ -402,11 +416,20 @@ def get_all_quest_metrics_data() -> dict:
                 for peer_quest in heroic_cr_groups.get(cr, []):
                     peer_analytics = cr_analytics.get(peer_quest.id)
                     if peer_analytics is not None:
-                        all_heroic_sessions.append(peer_analytics.total_sessions)
+                        all_peer_sessions.append(peer_analytics.total_sessions)
+            elif quest.epic_normal_cr is not None:
+                # Fall back to epic CR if no heroic CR
+                cr = quest.epic_normal_cr
+                # Use pre-fetched analytics for this CR group
+                cr_analytics = epic_analytics_by_cr.get(cr, {})
+                for peer_quest in epic_cr_groups.get(cr, []):
+                    peer_analytics = cr_analytics.get(peer_quest.id)
+                    if peer_analytics is not None:
+                        all_peer_sessions.append(peer_analytics.total_sessions)
 
-            if analytics.total_sessions > 0 and all_heroic_sessions:
+            if analytics.total_sessions > 0 and all_peer_sessions:
                 popularity_relative = calculate_relative_metric(
-                    float(analytics.total_sessions), all_heroic_sessions
+                    float(analytics.total_sessions), all_peer_sessions
                 )
                 quest_metrics["popularity_relative"] = popularity_relative
 
