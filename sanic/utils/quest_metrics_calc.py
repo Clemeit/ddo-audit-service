@@ -122,17 +122,14 @@ def get_quest_metrics_single(quest_id: int) -> Optional[dict]:
         # Get peer quests for CR groups (only needed CR groups, not all)
         heroic_peers = []
         epic_peers = []
+        all_quests = get_all_quests()
 
         if quest.heroic_normal_cr is not None:
-            # Fetch all quests to find peers (optimized: could add CR-specific query)
-            all_quests = get_all_quests()
             heroic_peers = [
                 q for q in all_quests if q.heroic_normal_cr == quest.heroic_normal_cr
             ]
 
         if quest.epic_normal_cr is not None:
-            if not heroic_peers:  # Only fetch all quests if not already fetched
-                all_quests = get_all_quests()
             epic_peers = [
                 q for q in all_quests if q.epic_normal_cr == quest.epic_normal_cr
             ]

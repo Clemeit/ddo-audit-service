@@ -68,6 +68,10 @@ async def get_quest_analytics(request: Request, quest_id: int):
             # Check if cache is fresh (updated in last 24 hours)
             if cached_metrics:
                 updated_at = cached_metrics["updated_at"]
+                # Ensure updated_at is timezone-aware to avoid TypeError on subtraction
+                if isinstance(updated_at, datetime):
+                    if updated_at.tzinfo is None:
+                        updated_at = updated_at.replace(tzinfo=timezone.utc)
                 time_since_update = datetime.now(timezone.utc) - updated_at
                 if time_since_update < timedelta(days=1):
                     # Cache is fresh, return it
@@ -81,7 +85,7 @@ async def get_quest_analytics(request: Request, quest_id: int):
                     result = {
                         "data": analytics.model_dump(),
                         "cached": True,
-                        "updated_at": cached_metrics["updated_at"],
+                        "updated_at": cached_metrics["updated_at"].isoformat(),
                         "heroic_xp_per_minute_relative": cached_metrics[
                             "heroic_xp_per_minute_relative"
                         ],
