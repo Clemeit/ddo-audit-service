@@ -88,7 +88,10 @@ async def get_quest_analytics(request: Request, quest_id: int):
                         "epic_xp_per_minute_relative": cached_metrics[
                             "epic_xp_per_minute_relative"
                         ],
-                        "popularity_relative": cached_metrics["popularity_relative"],
+                        "heroic_popularity_relative": cached_metrics[
+                            "heroic_popularity_relative"
+                        ],
+                        "epic_popularity_relative": cached_metrics["epic_popularity_relative"],
                     }
                     return json(result)
 
@@ -103,7 +106,8 @@ async def get_quest_analytics(request: Request, quest_id: int):
             quest_id,
             quest_metrics["heroic_xp_per_minute_relative"],
             quest_metrics["epic_xp_per_minute_relative"],
-            quest_metrics["popularity_relative"],
+            quest_metrics["heroic_popularity_relative"],
+            quest_metrics["epic_popularity_relative"],
             quest_metrics["analytics_data"],
         )
 
@@ -122,7 +126,8 @@ async def get_quest_analytics(request: Request, quest_id: int):
                 "heroic_xp_per_minute_relative"
             ],
             "epic_xp_per_minute_relative": quest_metrics["epic_xp_per_minute_relative"],
-            "popularity_relative": quest_metrics["popularity_relative"],
+            "heroic_popularity_relative": quest_metrics["heroic_popularity_relative"],
+            "epic_popularity_relative": quest_metrics["epic_popularity_relative"],
         }
         return json(result)
 

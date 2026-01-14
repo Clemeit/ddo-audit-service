@@ -3985,7 +3985,8 @@ def upsert_quest_metrics(
     quest_id: int,
     heroic_xp_per_minute_relative: float | None,
     epic_xp_per_minute_relative: float | None,
-    popularity_relative: float | None,
+    heroic_popularity_relative: float | None,
+    epic_popularity_relative: float | None,
     analytics_data: dict,
 ) -> None:
     """Upsert quest metrics and cached analytics.
@@ -3994,18 +3995,20 @@ def upsert_quest_metrics(
         quest_id: ID of the quest
         heroic_xp_per_minute_relative: Normalized 0-1 heroic XP/min score
         epic_xp_per_minute_relative: Normalized 0-1 epic XP/min score
-        popularity_relative: Normalized 0-1 popularity score
+        heroic_popularity_relative: Normalized 0-1 heroic popularity score
+        epic_popularity_relative: Normalized 0-1 epic popularity score (currently null)
         analytics_data: QuestAnalytics dict to cache
     """
     query = """
         INSERT INTO public.quest_metrics 
         (quest_id, heroic_xp_per_minute_relative, epic_xp_per_minute_relative, 
-         popularity_relative, analytics_data, updated_at)
-        VALUES (%s, %s, %s, %s, %s, NOW())
+         heroic_popularity_relative, epic_popularity_relative, analytics_data, updated_at)
+        VALUES (%s, %s, %s, %s, %s, %s, NOW())
         ON CONFLICT (quest_id) DO UPDATE
         SET heroic_xp_per_minute_relative = EXCLUDED.heroic_xp_per_minute_relative,
             epic_xp_per_minute_relative = EXCLUDED.epic_xp_per_minute_relative,
-            popularity_relative = EXCLUDED.popularity_relative,
+            heroic_popularity_relative = EXCLUDED.heroic_popularity_relative,
+            epic_popularity_relative = EXCLUDED.epic_popularity_relative,
             analytics_data = EXCLUDED.analytics_data,
             updated_at = NOW()
     """
@@ -4018,7 +4021,8 @@ def upsert_quest_metrics(
                     quest_id,
                     heroic_xp_per_minute_relative,
                     epic_xp_per_minute_relative,
-                    popularity_relative,
+                    heroic_popularity_relative,
+                    epic_popularity_relative,
                     json.dumps(analytics_data),
                 ),
             )
@@ -4031,7 +4035,8 @@ def upsert_quest_metrics_batch(metrics_data: dict) -> int:
     Args:
         metrics_data: Dict mapping quest_id to metrics dict with keys:
                       heroic_xp_per_minute_relative, epic_xp_per_minute_relative,
-                      popularity_relative, analytics_data
+                      heroic_popularity_relative, epic_popularity_relative,
+                      analytics_data
 
     Returns:
         Number of rows upserted
@@ -4042,12 +4047,13 @@ def upsert_quest_metrics_batch(metrics_data: dict) -> int:
     query = """
         INSERT INTO public.quest_metrics 
         (quest_id, heroic_xp_per_minute_relative, epic_xp_per_minute_relative, 
-         popularity_relative, analytics_data, updated_at)
-        VALUES (%s, %s, %s, %s, %s, NOW())
+         heroic_popularity_relative, epic_popularity_relative, analytics_data, updated_at)
+        VALUES (%s, %s, %s, %s, %s, %s, NOW())
         ON CONFLICT (quest_id) DO UPDATE
         SET heroic_xp_per_minute_relative = EXCLUDED.heroic_xp_per_minute_relative,
             epic_xp_per_minute_relative = EXCLUDED.epic_xp_per_minute_relative,
-            popularity_relative = EXCLUDED.popularity_relative,
+            heroic_popularity_relative = EXCLUDED.heroic_popularity_relative,
+            epic_popularity_relative = EXCLUDED.epic_popularity_relative,
             analytics_data = EXCLUDED.analytics_data,
             updated_at = NOW()
     """
@@ -4057,7 +4063,8 @@ def upsert_quest_metrics_batch(metrics_data: dict) -> int:
             quest_id,
             metrics["heroic_xp_per_minute_relative"],
             metrics["epic_xp_per_minute_relative"],
-            metrics["popularity_relative"],
+            metrics["heroic_popularity_relative"],
+            metrics["epic_popularity_relative"],
             json.dumps(metrics["analytics_data"]),
         )
         for quest_id, metrics in metrics_data.items()
@@ -4078,12 +4085,13 @@ def get_quest_metrics(quest_id: int) -> dict | None:
 
     Returns:
         Dict with keys: heroic_xp_per_minute_relative, epic_xp_per_minute_relative,
-                        popularity_relative, analytics_data, updated_at (datetime object)
+                        heroic_popularity_relative, epic_popularity_relative,
+                        analytics_data, updated_at (datetime object)
         or None if not found
     """
     query = """
         SELECT quest_id, heroic_xp_per_minute_relative, epic_xp_per_minute_relative,
-               popularity_relative, analytics_data, updated_at
+               heroic_popularity_relative, epic_popularity_relative, analytics_data, updated_at
         FROM public.quest_metrics
         WHERE quest_id = %s
     """
@@ -4095,7 +4103,7 @@ def get_quest_metrics(quest_id: int) -> dict | None:
             if not row:
                 return None
 
-            updated_at = row[5]
+            updated_at = row[6]
             # Ensure updated_at is a datetime object (psycopg2 should return it as such)
             if isinstance(updated_at, str):
                 # Defensive: parse if string (shouldn't happen with proper psycopg2 setup)
@@ -4105,8 +4113,9 @@ def get_quest_metrics(quest_id: int) -> dict | None:
                 "quest_id": row[0],
                 "heroic_xp_per_minute_relative": row[1],
                 "epic_xp_per_minute_relative": row[2],
-                "popularity_relative": row[3],
-                "analytics_data": row[4],  # Already parsed as JSONB
+                "heroic_popularity_relative": row[3],
+                "epic_popularity_relative": row[4],
+                "analytics_data": row[5],  # Already parsed as JSONB
                 "updated_at": updated_at,
             }
 

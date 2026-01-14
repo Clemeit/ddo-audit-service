@@ -114,7 +114,8 @@ def get_quest_metrics_single(quest_id: int) -> Optional[dict]:
         quest_metrics = {
             "heroic_xp_per_minute_relative": None,
             "epic_xp_per_minute_relative": None,
-            "popularity_relative": None,
+            "heroic_popularity_relative": None,
+            "epic_popularity_relative": None,
             "analytics_data": analytics.model_dump(),
         }
 
@@ -236,7 +237,8 @@ def get_quest_metrics_single(quest_id: int) -> Optional[dict]:
             popularity_relative = calculate_relative_metric(
                 float(analytics.total_sessions), all_peer_sessions
             )
-            quest_metrics["popularity_relative"] = popularity_relative
+            quest_metrics["heroic_popularity_relative"] = popularity_relative
+            # epic_popularity_relative remains None (future feature)
 
         logger.debug(f"Metrics calculated for quest {quest_id}")
         return quest_metrics
@@ -337,7 +339,8 @@ def get_all_quest_metrics_data() -> dict:
             quest_metrics = {
                 "heroic_xp_per_minute_relative": None,
                 "epic_xp_per_minute_relative": None,
-                "popularity_relative": None,
+                "heroic_popularity_relative": None,
+                "epic_popularity_relative": None,
                 "analytics_data": analytics.model_dump(),
             }
 
@@ -431,7 +434,8 @@ def get_all_quest_metrics_data() -> dict:
                 popularity_relative = calculate_relative_metric(
                     float(analytics.total_sessions), all_peer_sessions
                 )
-                quest_metrics["popularity_relative"] = popularity_relative
+                quest_metrics["heroic_popularity_relative"] = popularity_relative
+                # epic_popularity_relative remains None (future feature)
 
             metrics_data[quest.id] = quest_metrics
             logger.debug(f"Metrics calculated for quest {quest.id}")
