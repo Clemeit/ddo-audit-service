@@ -288,26 +288,36 @@ def get_all_quest_metrics_data() -> dict:
         metrics_data = {}
 
         # Pre-fetch analytics for all quests in each CR group to avoid N+1 queries
+        # Use sub-batching to prevent query timeouts on large CR groups
         heroic_analytics_by_cr = {}  # Map of CR -> Map of quest_id -> QuestAnalytics
         epic_analytics_by_cr = {}  # Map of CR -> Map of quest_id -> QuestAnalytics
+        BATCH_SIZE = 25  # Max quests per analytics batch query
 
         for cr, quests in heroic_cr_groups.items():
             quest_ids = [q.id for q in quests]
             logger.debug(
-                f"Pre-fetching analytics for {len(quest_ids)} heroic CR {cr} quests"
+                f"Pre-fetching analytics for {len(quest_ids)} heroic CR {cr} quests (batching in groups of {BATCH_SIZE})"
             )
-            heroic_analytics_by_cr[cr] = get_quest_analytics_batch(
-                quest_ids, LOOKBACK_DAYS
-            )
+            heroic_analytics_by_cr[cr] = {}
+
+            # Process in sub-batches to avoid query timeout
+            for batch_start in range(0, len(quest_ids), BATCH_SIZE):
+                batch_ids = quest_ids[batch_start : batch_start + BATCH_SIZE]
+                batch_analytics = get_quest_analytics_batch(batch_ids, LOOKBACK_DAYS)
+                heroic_analytics_by_cr[cr].update(batch_analytics)
 
         for cr, quests in epic_cr_groups.items():
             quest_ids = [q.id for q in quests]
             logger.debug(
-                f"Pre-fetching analytics for {len(quest_ids)} epic CR {cr} quests"
+                f"Pre-fetching analytics for {len(quest_ids)} epic CR {cr} quests (batching in groups of {BATCH_SIZE})"
             )
-            epic_analytics_by_cr[cr] = get_quest_analytics_batch(
-                quest_ids, LOOKBACK_DAYS
-            )
+            epic_analytics_by_cr[cr] = {}
+
+            # Process in sub-batches to avoid query timeout
+            for batch_start in range(0, len(quest_ids), BATCH_SIZE):
+                batch_ids = quest_ids[batch_start : batch_start + BATCH_SIZE]
+                batch_analytics = get_quest_analytics_batch(batch_ids, LOOKBACK_DAYS)
+                epic_analytics_by_cr[cr].update(batch_analytics)
 
         # Process each quest
         for quest in all_quests:
