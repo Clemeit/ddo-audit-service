@@ -266,13 +266,31 @@ def main():
     initialize_postgres()
 
     # Cold start: Pre-populate metrics table on first run
-    logger.info("Starting cold-start: computing metrics for all quests")
+    logger.info(
+        "Starting cold-start: computing metrics and quest lengths for all quests"
+    )
+    metrics_failed = False
+    full_update_failed = False
+
+    # Attempt metrics update - continue even if it fails
     try:
         run_metrics_update()
+    except Exception as e:
+        logger.error(f"Cold-start metrics update failed: {e}", exc_info=True)
+        metrics_failed = True
+
+    # Attempt full length update - continue even if metrics failed
+    try:
         run_full_update(lookback_days, batch_size, min_sessions)
     except Exception as e:
-        logger.error(f"Cold-start failed: {e}", exc_info=True)
-        raise
+        logger.error(f"Cold-start full update failed: {e}", exc_info=True)
+        full_update_failed = True
+
+    # Raise if both operations failed
+    if metrics_failed and full_update_failed:
+        raise RuntimeError(
+            "Cold-start failed: both metrics update and full update encountered errors"
+        )
 
     # Main loop: repeat at configured interval
     while True:
@@ -286,11 +304,17 @@ def main():
         )
         time.sleep(sleep_seconds)
 
+        # Attempt metrics update - continue even if it fails
         try:
             run_metrics_update()
+        except Exception as e:
+            logger.error(f"Update cycle metrics update failed: {e}", exc_info=True)
+
+        # Attempt full length update - continue even if metrics failed
+        try:
             run_full_update(lookback_days, batch_size, min_sessions)
         except Exception as e:
-            logger.error(f"Update cycle failed: {e}", exc_info=True)
+            logger.error(f"Update cycle full update failed: {e}", exc_info=True)
 
 
 if __name__ == "__main__":

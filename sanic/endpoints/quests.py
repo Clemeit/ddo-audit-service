@@ -10,7 +10,7 @@ from sanic.response import json
 from sanic.request import Request
 from utils.areas import get_valid_area_ids
 from utils.quests import get_quests
-from utils.quest_metrics_calc import get_all_quest_metrics_data
+from utils.quest_metrics_calc import get_quest_metrics_single
 
 from models.quest import Quest
 from models.quest_session import QuestAnalytics
@@ -98,13 +98,11 @@ async def get_quest_analytics(request: Request, quest_id: int):
                     }
                     return json(result)
 
-        # Cache miss or refresh requested: calculate metrics now
-        metrics_data = get_all_quest_metrics_data()
+        # Cache miss or refresh requested: calculate metrics for this quest only
+        quest_metrics = get_quest_metrics_single(quest_id)
 
-        if quest_id not in metrics_data:
+        if not quest_metrics:
             return json({"message": "insufficient data for metrics"}, status=404)
-
-        quest_metrics = metrics_data[quest_id]
 
         # Upsert to database
         postgres_client.upsert_quest_metrics(

@@ -3787,6 +3787,93 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
         raise
 
 
+def get_quest_analytics_batch(
+    quest_ids: list[int], lookback_days: int = 90
+) -> dict[int, QuestAnalytics]:
+    """Get analytics for multiple quests in a single batch operation.
+
+    Efficiently fetches total_sessions for multiple quests to avoid N+1 query pattern.
+
+    Args:
+        quest_ids: List of quest IDs to fetch analytics for
+        lookback_days: Number of days to look back (default 90)
+
+    Returns:
+        Dictionary mapping quest_id to QuestAnalytics object
+    """
+    if not quest_ids:
+        return {}
+
+    logger.info(
+        f"Getting batch quest analytics for {len(quest_ids)} quests, lookback_days={lookback_days}"
+    )
+
+    try:
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+    except Exception as e:
+        logger.error(f"Error calculating cutoff date: {e}", exc_info=True)
+        raise
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                # Fetch total_sessions for all quests in one query
+                logger.debug(f"Executing batch query for {len(quest_ids)} quests...")
+                cursor.execute(
+                    """
+                    SELECT 
+                        quest_id,
+                        COUNT(*) as total_sessions
+                    FROM public.quest_sessions
+                    WHERE quest_id = ANY(%s) 
+                      AND entry_timestamp >= %s
+                      AND exit_timestamp IS NOT NULL
+                    GROUP BY quest_id
+                    """,
+                    (quest_ids, cutoff_date),
+                )
+                rows = cursor.fetchall()
+                logger.debug(f"Batch query returned {len(rows)} rows")
+
+                # Build result dictionary with minimal QuestAnalytics objects (only total_sessions populated)
+                result = {}
+                for row in rows:
+                    quest_id, total_sessions = row
+                    result[quest_id] = QuestAnalytics(
+                        average_duration_seconds=None,
+                        standard_deviation_seconds=None,
+                        histogram=[],
+                        activity_by_hour=[],
+                        activity_by_day_of_week=[],
+                        activity_over_time=[],
+                        total_sessions=total_sessions,
+                        completed_sessions=0,
+                        active_sessions=0,
+                    )
+
+                # Add quests with no sessions
+                for quest_id in quest_ids:
+                    if quest_id not in result:
+                        result[quest_id] = QuestAnalytics(
+                            average_duration_seconds=None,
+                            standard_deviation_seconds=None,
+                            histogram=[],
+                            activity_by_hour=[],
+                            activity_by_day_of_week=[],
+                            activity_over_time=[],
+                            total_sessions=0,
+                            completed_sessions=0,
+                            active_sessions=0,
+                        )
+
+                logger.info(f"Batch analytics completed for {len(result)} quests")
+                return result
+
+    except Exception as e:
+        logger.error(f"Error in get_quest_analytics_batch: {e}", exc_info=True)
+        raise
+
+
 def bulk_insert_quest_sessions(sessions: list[tuple]) -> None:
     """Bulk insert quest sessions for efficient batch processing.
 

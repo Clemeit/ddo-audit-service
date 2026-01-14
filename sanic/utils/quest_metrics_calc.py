@@ -5,7 +5,9 @@ from typing import Optional
 
 from services.postgres import (
     get_quest_analytics,
+    get_quest_analytics_batch,
     get_all_quests,
+    get_quest_by_id,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,7 +51,7 @@ def calculate_relative_metric(
     Returns:
         Normalized value 0-1, or None if insufficient data
     """
-    if value is None or not peer_values or len(peer_values) == 0:
+    if value is None or not peer_values:
         return None
 
     # Filter out None values
@@ -70,6 +72,173 @@ def calculate_relative_metric(
 
     # Clamp to 0-1
     return max(0.0, min(1.0, normalized))
+
+
+def get_quest_metrics_single(quest_id: int) -> Optional[dict]:
+    """Calculate metrics for a single quest efficiently.
+
+    Only fetches analytics for the target quest and its CR group peers,
+    avoiding full dataset calculations when only one quest is needed.
+
+    Args:
+        quest_id: The quest ID to calculate metrics for
+
+    Returns:
+        Dictionary containing metrics or None if quest not found/insufficient data
+    """
+    logger.info(f"Calculating metrics for single quest {quest_id}")
+
+    try:
+        # Fetch the specific quest
+        quest = get_quest_by_id(quest_id)
+        if not quest:
+            logger.warning(f"Quest {quest_id} not found")
+            return None
+
+        logger.debug(f"Processing quest {quest.id}: {quest.name}")
+
+        # Get analytics for this quest
+        try:
+            analytics = get_quest_analytics(quest_id, lookback_days=LOOKBACK_DAYS)
+        except Exception as e:
+            logger.error(f"Failed to get analytics for quest {quest_id}: {e}")
+            return None
+
+        # Skip if insufficient data
+        if analytics.total_sessions < MIN_SESSIONS_FOR_METRICS:
+            logger.debug(
+                f"Quest {quest_id} skipped: insufficient sessions ({analytics.total_sessions} < {MIN_SESSIONS_FOR_METRICS})"
+            )
+            return None
+
+        quest_metrics = {
+            "heroic_xp_per_minute_relative": None,
+            "epic_xp_per_minute_relative": None,
+            "popularity_relative": None,
+            "analytics_data": analytics.model_dump(),
+        }
+
+        # Get peer quests for CR groups (only needed CR groups, not all)
+        heroic_peers = []
+        epic_peers = []
+
+        if quest.heroic_normal_cr is not None:
+            # Fetch all quests to find peers (optimized: could add CR-specific query)
+            all_quests = get_all_quests()
+            heroic_peers = [
+                q for q in all_quests if q.heroic_normal_cr == quest.heroic_normal_cr
+            ]
+
+        if quest.epic_normal_cr is not None:
+            if not heroic_peers:  # Only fetch all quests if not already fetched
+                all_quests = get_all_quests()
+            epic_peers = [
+                q for q in all_quests if q.epic_normal_cr == quest.epic_normal_cr
+            ]
+
+        # Batch fetch analytics for heroic peers
+        if heroic_peers:
+            heroic_peer_ids = [q.id for q in heroic_peers]
+            logger.debug(
+                f"Pre-fetching analytics for {len(heroic_peer_ids)} heroic CR {quest.heroic_normal_cr} peers"
+            )
+            heroic_analytics = get_quest_analytics_batch(heroic_peer_ids, LOOKBACK_DAYS)
+        else:
+            heroic_analytics = {}
+
+        # Batch fetch analytics for epic peers
+        if epic_peers:
+            epic_peer_ids = [q.id for q in epic_peers]
+            logger.debug(
+                f"Pre-fetching analytics for {len(epic_peer_ids)} epic CR {quest.epic_normal_cr} peers"
+            )
+            epic_analytics = get_quest_analytics_batch(epic_peer_ids, LOOKBACK_DAYS)
+        else:
+            epic_analytics = {}
+
+        # Calculate Heroic XP/min relative metric
+        if (
+            quest.heroic_normal_cr is not None
+            and quest.xp
+            and "heroic_elite" in quest.xp
+            and quest.length is not None
+        ):
+            heroic_xp_per_min = calculate_xp_per_minute(
+                quest.xp.get("heroic_elite"), quest.length
+            )
+
+            if heroic_xp_per_min is not None:
+                # Collect peer XP/min values
+                peer_xp_per_mins = []
+                for peer_quest in heroic_peers:
+                    if (
+                        peer_quest.xp
+                        and "heroic_elite" in peer_quest.xp
+                        and peer_quest.length is not None
+                    ):
+                        peer_xpm = calculate_xp_per_minute(
+                            peer_quest.xp.get("heroic_elite"), peer_quest.length
+                        )
+                        if peer_xpm is not None:
+                            peer_xp_per_mins.append(peer_xpm)
+
+                relative = calculate_relative_metric(
+                    heroic_xp_per_min, peer_xp_per_mins
+                )
+                quest_metrics["heroic_xp_per_minute_relative"] = relative
+
+        # Calculate Epic XP/min relative metric
+        if (
+            quest.epic_normal_cr is not None
+            and quest.xp
+            and "epic_elite" in quest.xp
+            and quest.length is not None
+        ):
+            epic_xp_per_min = calculate_xp_per_minute(
+                quest.xp.get("epic_elite"), quest.length
+            )
+
+            if epic_xp_per_min is not None:
+                # Collect peer XP/min values
+                peer_xp_per_mins = []
+                for peer_quest in epic_peers:
+                    if (
+                        peer_quest.xp
+                        and "epic_elite" in peer_quest.xp
+                        and peer_quest.length is not None
+                    ):
+                        peer_xpm = calculate_xp_per_minute(
+                            peer_quest.xp.get("epic_elite"), peer_quest.length
+                        )
+                        if peer_xpm is not None:
+                            peer_xp_per_mins.append(peer_xpm)
+
+                relative = calculate_relative_metric(epic_xp_per_min, peer_xp_per_mins)
+                quest_metrics["epic_xp_per_minute_relative"] = relative
+
+        # Calculate popularity relative metric using pre-fetched analytics
+        all_heroic_sessions = []
+
+        if quest.heroic_normal_cr is not None:
+            for peer_quest in heroic_peers:
+                peer_analytics = heroic_analytics.get(peer_quest.id)
+                if peer_analytics is not None:
+                    all_heroic_sessions.append(peer_analytics.total_sessions)
+
+        if analytics.total_sessions > 0 and all_heroic_sessions:
+            popularity_relative = calculate_relative_metric(
+                float(analytics.total_sessions), all_heroic_sessions
+            )
+            quest_metrics["popularity_relative"] = popularity_relative
+
+        logger.debug(f"Metrics calculated for quest {quest_id}")
+        return quest_metrics
+
+    except Exception as e:
+        logger.error(
+            f"Error calculating metrics for quest {quest_id}: {e}", exc_info=True
+        )
+        return None
 
 
 def get_all_quest_metrics_data() -> dict:
@@ -111,6 +280,28 @@ def get_all_quest_metrics_data() -> dict:
                 epic_cr_groups[cr].append(quest)
 
         metrics_data = {}
+
+        # Pre-fetch analytics for all quests in each CR group to avoid N+1 queries
+        heroic_analytics_by_cr = {}  # Map of CR -> Map of quest_id -> QuestAnalytics
+        epic_analytics_by_cr = {}  # Map of CR -> Map of quest_id -> QuestAnalytics
+
+        for cr, quests in heroic_cr_groups.items():
+            quest_ids = [q.id for q in quests]
+            logger.debug(
+                f"Pre-fetching analytics for {len(quest_ids)} heroic CR {cr} quests"
+            )
+            heroic_analytics_by_cr[cr] = get_quest_analytics_batch(
+                quest_ids, LOOKBACK_DAYS
+            )
+
+        for cr, quests in epic_cr_groups.items():
+            quest_ids = [q.id for q in quests]
+            logger.debug(
+                f"Pre-fetching analytics for {len(quest_ids)} epic CR {cr} quests"
+            )
+            epic_analytics_by_cr[cr] = get_quest_analytics_batch(
+                quest_ids, LOOKBACK_DAYS
+            )
 
         # Process each quest
         for quest in all_quests:
@@ -201,24 +392,17 @@ def get_all_quest_metrics_data() -> dict:
                     )
                     quest_metrics["epic_xp_per_minute_relative"] = relative
 
-            # Calculate popularity relative metric
-            # Group all quests by heroic CR for popularity comparison
+            # Calculate popularity relative metric using pre-fetched analytics
             all_heroic_sessions = []
-            all_heroic_quests = []
 
             if quest.heroic_normal_cr is not None:
                 cr = quest.heroic_normal_cr
+                # Use pre-fetched analytics for this CR group
+                cr_analytics = heroic_analytics_by_cr.get(cr, {})
                 for peer_quest in heroic_cr_groups.get(cr, []):
-                    all_heroic_quests.append(peer_quest.id)
-                    try:
-                        peer_analytics = get_quest_analytics(
-                            peer_quest.id, lookback_days=LOOKBACK_DAYS
-                        )
+                    peer_analytics = cr_analytics.get(peer_quest.id)
+                    if peer_analytics is not None:
                         all_heroic_sessions.append(peer_analytics.total_sessions)
-                    except Exception as e:
-                        logger.debug(
-                            f"Could not get analytics for peer quest {peer_quest.id}: {e}"
-                        )
 
             if analytics.total_sessions > 0 and all_heroic_sessions:
                 popularity_relative = calculate_relative_metric(
