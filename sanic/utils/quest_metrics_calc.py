@@ -136,7 +136,7 @@ def get_quest_metrics_single(quest_id: int) -> Optional[dict]:
 
         # Batch fetch analytics for heroic peers
         # Use sub-batching to prevent query timeouts on large CR groups
-        BATCH_SIZE = 25  # Max quests per analytics batch query
+        BATCH_SIZE = 15  # Max quests per analytics batch query
         if heroic_peers:
             heroic_peer_ids = [q.id for q in heroic_peers]
             logger.debug(
@@ -303,7 +303,7 @@ def get_all_quest_metrics_data() -> dict:
         # Use sub-batching to prevent query timeouts on large CR groups
         heroic_analytics_by_cr = {}  # Map of CR -> Map of quest_id -> QuestAnalytics
         epic_analytics_by_cr = {}  # Map of CR -> Map of quest_id -> QuestAnalytics
-        BATCH_SIZE = 25  # Max quests per analytics batch query
+        BATCH_SIZE = 15  # Max quests per analytics batch query
 
         for cr, quests in heroic_cr_groups.items():
             quest_ids = [q.id for q in quests]

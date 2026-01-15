@@ -142,6 +142,7 @@ CREATE INDEX idx_quest_sessions_character_id ON public."quest_sessions" (charact
 CREATE INDEX idx_quest_sessions_quest_id ON public."quest_sessions" (quest_id);
 CREATE INDEX idx_quest_sessions_entry_timestamp ON public."quest_sessions" (entry_timestamp);
 CREATE INDEX idx_quest_sessions_character_entry ON public."quest_sessions" (character_id, entry_timestamp);
+CREATE INDEX idx_quest_sessions_quest_entry ON public."quest_sessions" (quest_id, entry_timestamp);
 CREATE INDEX idx_quest_sessions_active ON public."quest_sessions" (character_id, quest_id) WHERE exit_timestamp IS NULL;
 
 -- Function to calculate duration_seconds when exit_timestamp is set
