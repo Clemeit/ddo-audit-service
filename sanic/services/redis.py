@@ -1218,7 +1218,7 @@ def set_active_quest_session_state(
     character_id: int, quest_id: int, entry_timestamp: datetime
 ) -> None:
     """Set or update the active quest session state for a character.
-    
+
     Session is stored with a 48-hour TTL for automatic cleanup.
     """
     try:
@@ -1264,9 +1264,9 @@ def batch_get_active_quest_session_states(
             for char_id in character_ids:
                 key = f"active_quest_session:{char_id}"
                 pipe.get(key)
-            
+
             results = pipe.execute()
-            
+
             # Parse results
             result = {}
             for char_id, raw_value in zip(character_ids, results):
@@ -1300,17 +1300,19 @@ def batch_update_active_quest_session_states(
     try:
         with get_redis_client() as client:
             pipe = client.pipeline()
-            
+
             # Set new/updated sessions with 48-hour TTL
             for char_id, session_data in updates_set.items():
                 key = f"active_quest_session:{char_id}"
-                pipe.setex(key, 172800, json.dumps(session_data))  # 48 hours = 172800 seconds
-            
+                pipe.setex(
+                    key, 172800, json.dumps(session_data)
+                )  # 48 hours = 172800 seconds
+
             # Delete cleared sessions
             for char_id in updates_clear:
                 key = f"active_quest_session:{char_id}"
                 pipe.delete(key)
-            
+
             pipe.execute()
     except Exception:
         # Redis unavailable, silently continue
