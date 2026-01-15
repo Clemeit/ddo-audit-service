@@ -34,8 +34,6 @@ if PROJECT_ROOT not in sys.path:
 
 from services.postgres import (  # type: ignore
     initialize_postgres,
-    get_db_connection,
-    get_active_quest_session,
     bulk_insert_quest_sessions,
     mark_activities_as_processed,
     get_unprocessed_location_activities,
@@ -313,10 +311,8 @@ def run_worker():
         f"time_window_hours={time_window_hours}, lookback_days={lookback_days})"
     )
 
-    # Initialize database connection
+    # Initialize database and Redis connections
     initialize_postgres()
-
-    # Initialize Redis
     initialize_redis()
 
     # Start processing from lookback_days ago
