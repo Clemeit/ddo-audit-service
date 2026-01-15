@@ -4132,6 +4132,51 @@ def get_quest_metrics(quest_id: int) -> dict | None:
             }
 
 
+def get_quest_metrics_bulk(quest_ids: list[int]) -> dict[int, dict]:
+    """Get cached quest metrics and analytics for multiple quests.
+
+    Args:
+        quest_ids: List of quest IDs to fetch
+
+    Returns:
+        Dict keyed by quest_id with the same shape as get_quest_metrics
+    """
+    if not quest_ids:
+        return {}
+
+    query = """
+        SELECT quest_id, heroic_xp_per_minute_relative, epic_xp_per_minute_relative,
+               heroic_popularity_relative, epic_popularity_relative, analytics_data, updated_at
+        FROM public.quest_metrics
+        WHERE quest_id = ANY(%s)
+    """
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, (quest_ids,))
+            rows = cursor.fetchall()
+
+            results: dict[int, dict] = {}
+            for row in rows:
+                updated_at = row[6]
+                if isinstance(updated_at, str):
+                    updated_at = datetime.fromisoformat(
+                        updated_at.replace("Z", "+00:00")
+                    )
+
+                results[row[0]] = {
+                    "quest_id": row[0],
+                    "heroic_xp_per_minute_relative": row[1],
+                    "epic_xp_per_minute_relative": row[2],
+                    "heroic_popularity_relative": row[3],
+                    "epic_popularity_relative": row[4],
+                    "analytics_data": row[5],
+                    "updated_at": updated_at,
+                }
+
+            return results
+
+
 def get_unprocessed_location_activities(
     last_timestamp: datetime,
     shard_count: int,

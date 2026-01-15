@@ -1,24 +1,28 @@
 """
-Quest Length Update Worker - Periodic batch processing to update quest length estimates.
+Quest Length Update Worker - Periodic batch processing to update quest metrics and length estimates.
 
-This worker updates the 'length' column in the quests table based on historical
-analytics from completed quest sessions. It runs on startup and then repeats daily.
+This worker runs daily (at midnight UTC) and performs two main operations:
 
-Processing Logic:
-1. Fetch all quest IDs from the quests table
-2. Process in batches of 50 quests
-3. For each quest:
-   - Get analytics from quest_sessions (using configurable lookback period)
-   - If total_sessions >= 100: extract average_duration_seconds, round and clamp to 0-32767
-   - If total_sessions < 100: set length to null
-4. Bulk update quest rows with new length values
-5. Sleep for configured interval (default 1 day) and repeat
+1. Quest Metrics Update (Two-Pass Approach):
+   Pass 1: Fetch analytics data from quest_sessions for all quests
+           - Calculates total_sessions, average_duration, histograms, etc.
+           - Stores intermediate results in Redis cache
+   Pass 2: Calculate relative metrics using cached analytics
+           - Computes heroic/epic XP per minute relative scores
+           - Computes popularity relative scores by comparing to peer quests
+   Final: Bulk write all metrics to quest_metrics table
+
+2. Quest Length Update:
+   - Batch process all quests
+   - Extract average_duration_seconds from analytics
+   - Update 'length' column in quests table
 
 The worker uses environment variables for configuration:
 - LOOKBACK_DAYS: Days of historical data to analyze (default: 90)
 - UPDATE_INTERVAL_DAYS: Days between update runs (default: 1)
 - BATCH_SIZE: Number of quests to process per batch (default: 50)
 - MIN_SESSIONS: Minimum completed sessions required to estimate length (default: 100)
+- QUEST_METRICS_DELAY_SECS: Delay between quest processing in Pass 1 (default: 0.1)
 """
 
 import os
@@ -40,6 +44,7 @@ from services.postgres import (  # type: ignore
     get_quest_analytics,
     upsert_quest_metrics_batch,
 )
+from services.redis import initialize_redis  # type: ignore
 from utils.quest_metrics_calc import get_all_quest_metrics_data  # type: ignore
 
 
@@ -161,11 +166,16 @@ def bulk_update_quest_lengths(
 
 def run_metrics_update() -> None:
     """
-    Compute and update quest metrics for all quests.
+    Compute and update quest metrics for all quests using two-pass approach.
 
-    This includes:
-    - Heroic and Epic XP/min relative scores
-    - Popularity relative score
+    Pass 1: Fetch analytics data (total sessions, durations, histograms) for all quests
+            and cache in Redis
+    Pass 2: Calculate relative metrics (XP/min, popularity) using cached analytics
+    Final: Bulk upsert all metrics to quest_metrics table
+
+    Metrics calculated:
+    - Heroic and Epic XP/min relative scores (0-1 normalized vs peers)
+    - Popularity relative score (0-1 normalized vs peers)
     - Cached quest analytics (90-day lookback)
     """
     logger.info("Starting quest metrics calculation")
@@ -277,8 +287,9 @@ def main():
         f"min_sessions={min_sessions}"
     )
 
-    # Initialize database connection
+    # Initialize database and Redis connections
     initialize_postgres()
+    initialize_redis()
 
     # Calculate time until next midnight (UTC)
     now = datetime.now(timezone.utc)

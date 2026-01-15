@@ -1,5 +1,6 @@
 """Shared functions for calculating quest metrics and analytics."""
 
+import json
 import logging
 import os
 import time
@@ -9,13 +10,21 @@ from services.postgres import (
     get_quest_analytics,
     get_all_quests,
     get_quest_by_id,
+    get_quest_metrics,
+    get_quest_metrics_bulk,
 )
+from services.redis import get_redis_client
+
+from models.quest_session import QuestAnalytics
 
 logger = logging.getLogger(__name__)
 
 # Constants for normalization
 LOOKBACK_DAYS = 90
 MIN_SESSIONS_FOR_METRICS = 100
+
+# Redis key for intermediate analytics cache during bulk calculation
+REDIS_QUEST_ANALYTICS_CACHE_KEY = "quest_metrics:analytics_cache"
 
 
 def _coerce_to_number(value: Optional[object]) -> Optional[float]:
@@ -104,14 +113,15 @@ def calculate_relative_metric(
     return max(0.0, min(1.0, normalized))
 
 
-def get_quest_metrics_single(quest_id: int) -> Optional[dict]:
-    """Calculate metrics for a single quest efficiently.
-
-    Only fetches analytics for the target quest and its CR group peers,
-    avoiding full dataset calculations when only one quest is needed.
+def get_quest_metrics_single(
+    quest_id: int, force_refresh: bool = False, cached_metrics: Optional[dict] = None
+) -> Optional[dict]:
+    """Calculate metrics for a single quest efficiently using cached analytics when available.
 
     Args:
         quest_id: The quest ID to calculate metrics for
+        force_refresh: When True, recompute analytics; otherwise prefer cached analytics_data
+        cached_metrics: Optional pre-fetched cache entry to avoid duplicate lookups
 
     Returns:
         Dictionary containing metrics or None if quest not found/insufficient data
@@ -127,12 +137,22 @@ def get_quest_metrics_single(quest_id: int) -> Optional[dict]:
 
         logger.debug(f"Processing quest {quest.id}: {quest.name}")
 
-        # Get analytics for this quest
-        try:
-            analytics = get_quest_analytics(quest_id, lookback_days=LOOKBACK_DAYS)
-        except Exception as e:
-            logger.error(f"Failed to get analytics for quest {quest_id}: {e}")
-            return None
+        # Try cached analytics first unless a refresh is requested
+        analytics: QuestAnalytics | None = None
+        metrics_source = None if force_refresh else cached_metrics
+        if metrics_source is None and not force_refresh:
+            metrics_source = get_quest_metrics(quest_id)
+
+        if metrics_source and metrics_source.get("analytics_data"):
+            analytics = QuestAnalytics(**metrics_source["analytics_data"])
+
+        # Fallback to live analytics when missing or forced
+        if analytics is None:
+            try:
+                analytics = get_quest_analytics(quest_id, lookback_days=LOOKBACK_DAYS)
+            except Exception as e:
+                logger.error(f"Failed to get analytics for quest {quest_id}: {e}")
+                return None
 
         # Skip if insufficient data
         if analytics.total_sessions < MIN_SESSIONS_FOR_METRICS:
@@ -164,28 +184,9 @@ def get_quest_metrics_single(quest_id: int) -> Optional[dict]:
                 q for q in all_quests if q.epic_normal_cr == quest.epic_normal_cr
             ]
 
-        # Fetch analytics individually for peer quests
-        heroic_analytics = {}
-        for peer in heroic_peers:
-            try:
-                heroic_analytics[peer.id] = get_quest_analytics(
-                    peer.id, lookback_days=LOOKBACK_DAYS
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to get analytics for heroic peer quest {peer.id}: {e}"
-                )
-
-        epic_analytics = {}
-        for peer in epic_peers:
-            try:
-                epic_analytics[peer.id] = get_quest_analytics(
-                    peer.id, lookback_days=LOOKBACK_DAYS
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to get analytics for epic peer quest {peer.id}: {e}"
-                )
+        # Fetch cached analytics for peer quests in a single query
+        peer_ids = list({peer.id for peer in heroic_peers + epic_peers})
+        peer_metrics_map = get_quest_metrics_bulk(peer_ids) if peer_ids else {}
 
         # Calculate Heroic XP/min relative metric
         if (
@@ -247,21 +248,41 @@ def get_quest_metrics_single(quest_id: int) -> Optional[dict]:
                 relative = calculate_relative_metric(epic_xp_per_min, peer_xp_per_mins)
                 quest_metrics["epic_xp_per_minute_relative"] = relative
 
-        # Calculate popularity relative metric using pre-fetched analytics
+        # Calculate popularity relative metric using cached peer analytics
         # Use heroic CR if available, fall back to epic CR if not
         all_peer_sessions = []
 
+        def _peer_total_sessions(peer_id: int) -> Optional[float]:
+            peer_metrics = peer_metrics_map.get(peer_id)
+            if not peer_metrics:
+                return None
+
+            peer_data = peer_metrics.get("analytics_data")
+            if not peer_data:
+                return None
+
+            try:
+                peer_analytics = (
+                    QuestAnalytics(**peer_data)
+                    if isinstance(peer_data, dict)
+                    else peer_data
+                )
+                return peer_analytics.total_sessions
+            except Exception:
+                logger.debug("Failed to parse peer analytics for quest %s", peer_id)
+                return None
+
         if quest.heroic_normal_cr is not None:
             for peer_quest in heroic_peers:
-                peer_analytics = heroic_analytics.get(peer_quest.id)
-                if peer_analytics is not None:
-                    all_peer_sessions.append(peer_analytics.total_sessions)
+                peer_sessions = _peer_total_sessions(peer_quest.id)
+                if peer_sessions is not None:
+                    all_peer_sessions.append(peer_sessions)
         elif quest.epic_normal_cr is not None:
             # Fall back to epic CR if no heroic CR
             for peer_quest in epic_peers:
-                peer_analytics = epic_analytics.get(peer_quest.id)
-                if peer_analytics is not None:
-                    all_peer_sessions.append(peer_analytics.total_sessions)
+                peer_sessions = _peer_total_sessions(peer_quest.id)
+                if peer_sessions is not None:
+                    all_peer_sessions.append(peer_sessions)
 
         if analytics.total_sessions > 0 and all_peer_sessions:
             popularity_relative = calculate_relative_metric(
@@ -280,26 +301,106 @@ def get_quest_metrics_single(quest_id: int) -> Optional[dict]:
         return None
 
 
-def get_all_quest_metrics_data() -> dict:
-    """Calculate metrics for all quests with sufficient data.
+def compute_all_quest_analytics_pass1() -> dict:
+    """Pass 1: Fetch and cache analytics data for all quests in Redis.
+
+    This pass queries the quest_sessions table for each quest to compute
+    analytics_data (total sessions, average duration, histograms, etc.).
+    Results are stored in Redis for use in Pass 2.
 
     Returns:
-        Dictionary mapping quest_id to metrics dict containing:
-        - heroic_xp_per_minute_relative
-        - epic_xp_per_minute_relative
-        - popularity_relative
-        - analytics_data (QuestAnalytics as dict)
+        Dictionary mapping quest_id to QuestAnalytics dict
     """
-    logger.info("Calculating quest metrics for all quests")
+    logger.info("[PASS 1] Fetching analytics for all quests")
 
     try:
-        # Fetch all quests
         all_quests = get_all_quests()
         if not all_quests:
             logger.warning("No quests found in database")
             return {}
 
-        logger.info(f"Processing {len(all_quests)} quests")
+        logger.info(f"[PASS 1] Processing {len(all_quests)} quests")
+
+        # Get delay between quest processing to reduce postgres load
+        delay_between_quests = float(os.getenv("QUEST_METRICS_DELAY_SECS", "0.1"))
+
+        analytics_by_id = {}
+
+        for quest in all_quests:
+            try:
+                analytics = get_quest_analytics(quest.id, lookback_days=LOOKBACK_DAYS)
+                analytics_by_id[quest.id] = analytics.model_dump()
+
+                # Sleep between quest processing to reduce load on postgres
+                if delay_between_quests > 0:
+                    time.sleep(delay_between_quests)
+
+            except Exception as e:
+                logger.error(
+                    f"[PASS 1] Failed to get analytics for quest {quest.id}: {e}",
+                    exc_info=True,
+                )
+
+        # Store analytics in Redis for Pass 2
+        logger.info(f"[PASS 1] Storing {len(analytics_by_id)} quest analytics in Redis")
+        with get_redis_client() as redis_client:
+            # Convert dict to JSON and store as a single hash
+            for quest_id, analytics_data in analytics_by_id.items():
+                redis_client.hset(
+                    REDIS_QUEST_ANALYTICS_CACHE_KEY,
+                    str(quest_id),
+                    json.dumps(analytics_data),
+                )
+
+            # Set expiration to 24 hours (cleanup in case pass 2 fails)
+            redis_client.expire(REDIS_QUEST_ANALYTICS_CACHE_KEY, 86400)
+
+        logger.info(
+            f"[PASS 1] Complete. Fetched analytics for {len(analytics_by_id)} quests"
+        )
+        return analytics_by_id
+
+    except Exception as e:
+        logger.error(f"[PASS 1] Error fetching quest analytics: {e}", exc_info=True)
+        raise
+
+
+def compute_all_quest_relative_metrics_pass2() -> dict:
+    """Pass 2: Calculate relative metrics for all quests using cached analytics.
+
+    This pass uses the analytics data cached in Redis from Pass 1 to compute
+    relative XP/min and popularity metrics by comparing each quest to its peers.
+
+    Returns:
+        Dictionary mapping quest_id to complete metrics dict ready for DB upsert
+    """
+    logger.info("[PASS 2] Calculating relative metrics for all quests")
+
+    try:
+        # Load analytics from Redis
+        logger.info("[PASS 2] Loading cached analytics from Redis")
+        analytics_by_id = {}
+
+        with get_redis_client() as redis_client:
+            cached_data = redis_client.hgetall(REDIS_QUEST_ANALYTICS_CACHE_KEY)
+            if not cached_data:
+                logger.error("[PASS 2] No cached analytics found in Redis")
+                raise RuntimeError(
+                    "Pass 2 requires Pass 1 analytics cache in Redis. Run Pass 1 first."
+                )
+
+            for quest_id_bytes, analytics_json_bytes in cached_data.items():
+                quest_id = int(quest_id_bytes.decode("utf-8"))
+                analytics_dict = json.loads(analytics_json_bytes.decode("utf-8"))
+                analytics_by_id[quest_id] = QuestAnalytics(**analytics_dict)
+
+        logger.info(f"[PASS 2] Loaded analytics for {len(analytics_by_id)} quests")
+
+        # Fetch all quests metadata
+        all_quests = get_all_quests()
+        if not all_quests:
+            logger.warning("No quests found in database")
+            return {}
 
         # Group quests by CR level (both heroic and epic)
         heroic_cr_groups = {}
@@ -320,41 +421,21 @@ def get_all_quest_metrics_data() -> dict:
 
         metrics_data = {}
 
-        # Get delay between quest processing to reduce postgres load
-        delay_between_quests = float(os.getenv("QUEST_METRICS_DELAY_SECS", "0.1"))
-
-        # Fetch analytics individually for all quests and cache by quest id
-        analytics_by_id = {}
-        for quest in all_quests:
-            try:
-                analytics_by_id[quest.id] = get_quest_analytics(
-                    quest.id, lookback_days=LOOKBACK_DAYS
-                )
-                
-                # Sleep between quest processing to reduce load on postgres
-                if delay_between_quests > 0:
-                    time.sleep(delay_between_quests)
-                    
-            except Exception as e:
-                logger.error(
-                    f"Failed to get analytics for quest {quest.id}: {e}", exc_info=True
-                )
-
         # Process each quest
         for quest in all_quests:
-            logger.debug(f"Processing quest {quest.id}: {quest.name}")
+            logger.debug(f"[PASS 2] Processing quest {quest.id}: {quest.name}")
 
-            # Get analytics from pre-fetched data based on CR level
             analytics = analytics_by_id.get(quest.id)
 
             if analytics is None:
-                logger.debug(f"No analytics found for quest {quest.id}")
+                logger.debug(f"[PASS 2] No analytics found for quest {quest.id}")
                 continue
 
             # Skip if insufficient data
             if analytics.total_sessions < MIN_SESSIONS_FOR_METRICS:
                 logger.debug(
-                    f"Quest {quest.id} skipped: insufficient sessions ({analytics.total_sessions} < {MIN_SESSIONS_FOR_METRICS})"
+                    f"[PASS 2] Quest {quest.id} skipped: insufficient sessions "
+                    f"({analytics.total_sessions} < {MIN_SESSIONS_FOR_METRICS})"
                 )
                 continue
 
@@ -378,7 +459,6 @@ def get_all_quest_metrics_data() -> dict:
                 )
 
                 if heroic_xp_per_min is not None:
-                    # Get all heroic XP/min for peers at same CR
                     cr = quest.heroic_normal_cr
                     peer_xp_per_mins = []
                     for peer_quest in heroic_cr_groups.get(cr, []):
@@ -410,7 +490,6 @@ def get_all_quest_metrics_data() -> dict:
                 )
 
                 if epic_xp_per_min is not None:
-                    # Get all epic XP/min for peers at same CR
                     cr = quest.epic_normal_cr
                     peer_xp_per_mins = []
                     for peer_quest in epic_cr_groups.get(cr, []):
@@ -430,7 +509,7 @@ def get_all_quest_metrics_data() -> dict:
                     )
                     quest_metrics["epic_xp_per_minute_relative"] = relative
 
-            # Calculate popularity relative metric using pre-fetched analytics
+            # Calculate popularity relative metric using cached analytics
             # Use heroic CR if available, fall back to epic CR if not
             all_peer_sessions = []
 
@@ -441,7 +520,6 @@ def get_all_quest_metrics_data() -> dict:
                     if peer_analytics is not None:
                         all_peer_sessions.append(peer_analytics.total_sessions)
             elif quest.epic_normal_cr is not None:
-                # Fall back to epic CR if no heroic CR
                 cr = quest.epic_normal_cr
                 for peer_quest in epic_cr_groups.get(cr, []):
                     peer_analytics = analytics_by_id.get(peer_quest.id)
@@ -456,13 +534,51 @@ def get_all_quest_metrics_data() -> dict:
                 # epic_popularity_relative remains None (future feature)
 
             metrics_data[quest.id] = quest_metrics
-            logger.debug(f"Metrics calculated for quest {quest.id}")
+            logger.debug(f"[PASS 2] Metrics calculated for quest {quest.id}")
+
+        # Clean up Redis cache
+        logger.info("[PASS 2] Cleaning up Redis analytics cache")
+        with get_redis_client() as redis_client:
+            redis_client.delete(REDIS_QUEST_ANALYTICS_CACHE_KEY)
 
         logger.info(
-            f"Quest metrics calculation complete. Processed {len(metrics_data)} quests"
+            f"[PASS 2] Complete. Calculated metrics for {len(metrics_data)} quests"
         )
         return metrics_data
 
     except Exception as e:
-        logger.error(f"Error calculating quest metrics: {e}", exc_info=True)
+        logger.error(f"[PASS 2] Error calculating relative metrics: {e}", exc_info=True)
+        raise
+
+
+def get_all_quest_metrics_data() -> dict:
+    """Calculate complete metrics for all quests using two-pass approach.
+
+    Pass 1: Fetch analytics data from quest_sessions for each quest
+    Pass 2: Calculate relative metrics using cached analytics from Pass 1
+
+    Returns:
+        Dictionary mapping quest_id to metrics dict containing:
+        - heroic_xp_per_minute_relative
+        - epic_xp_per_minute_relative
+        - heroic_popularity_relative
+        - epic_popularity_relative
+        - analytics_data (QuestAnalytics as dict)
+    """
+    logger.info("Starting two-pass quest metrics calculation")
+
+    try:
+        # Pass 1: Fetch and cache analytics
+        compute_all_quest_analytics_pass1()
+
+        # Pass 2: Calculate relative metrics using cached analytics
+        metrics_data = compute_all_quest_relative_metrics_pass2()
+
+        logger.info(
+            f"Two-pass calculation complete. Final metrics for {len(metrics_data)} quests"
+        )
+        return metrics_data
+
+    except Exception as e:
+        logger.error(f"Error in two-pass quest metrics calculation: {e}", exc_info=True)
         raise
