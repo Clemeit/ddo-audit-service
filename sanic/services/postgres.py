@@ -3953,40 +3953,39 @@ def bulk_insert_quest_sessions(sessions: list[tuple]) -> None:
             conn.commit()
 
 
-def mark_activities_as_processed(activity_ids: list[tuple]) -> None:
+def mark_activities_as_processed(activity_ctids: list[str]) -> None:
     """Mark character activities as processed for quest session tracking.
 
+    Uses CTIDs to avoid ambiguity when multiple activities share the same
+    (character_id, timestamp).
+
     Args:
-        activity_ids: List of tuples (character_id, timestamp) identifying activities
+        activity_ctids: List of CTID strings like "(block,offset)" identifying activities
     """
-    if not activity_ids:
+    if not activity_ctids:
         return
 
     # Use execute_values for efficient batch update
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
-                # Use a CTE with VALUES to avoid temp table complexity
-                # Set page_size to handle large batches efficiently
                 psycopg2.extras.execute_values(
                     cursor,
                     """
                     UPDATE public.character_activity AS ca
                     SET quest_session_processed = true
-                    FROM (VALUES %s) AS v(character_id, ts)
-                    WHERE ca.character_id = v.character_id
-                        AND ca.timestamp = v.ts
+                    FROM (VALUES %s) AS v(ctid_text)
+                    WHERE ca.ctid = v.ctid_text::tid
                         AND ca.quest_session_processed = false
                     """,
-                    activity_ids,
-                    template="(%s, %s)",
-                    page_size=1000,  # Process in batches of 1000 for efficiency
+                    [(ctid,) for ctid in activity_ctids],
+                    template="(%s)",
+                    page_size=1000,
                     fetch=False,
                 )
 
-                # Log the total number of activities passed (cursor.rowcount only shows last batch)
                 logger.info(
-                    f"Activities marked processed: {len(activity_ids)} activities submitted, {cursor.rowcount} rows updated in final batch"
+                    f"Activities marked processed: {len(activity_ctids)} ctids submitted, {cursor.rowcount} rows updated in final batch"
                 )
             conn.commit()
     except Exception as e:
@@ -4163,6 +4162,61 @@ def get_unprocessed_location_activities(
         with conn.cursor() as cursor:
             cursor.execute(
                 query, (last_timestamp, shard_count, shard_index, batch_size)
+            )
+            return cursor.fetchall()
+
+
+def get_unprocessed_quest_session_activities(
+    last_timestamp: datetime,
+    last_ctid: str,
+    shard_count: int,
+    shard_index: int,
+    batch_size: int,
+) -> list[tuple]:
+    """Fetch unprocessed quest-session-relevant activities (location + status).
+
+    This uses keyset pagination on (timestamp, ctid) to avoid skipping rows when
+    multiple activities share the same timestamp.
+
+    Args:
+        last_timestamp: Cursor timestamp (inclusive boundary handled via ctid)
+        last_ctid: Cursor ctid string like "(block,offset)" (use "(0,0)" initially)
+        shard_count: Total number of shards
+        shard_index: Current shard index (0-based)
+        batch_size: Maximum number of activities to return
+
+    Returns:
+        List of tuples:
+            (character_id, timestamp, activity_type, area_id, is_online, ctid_text)
+    """
+    query = """
+        SELECT
+            character_id,
+            timestamp,
+            activity_type,
+            CASE WHEN activity_type = 'location' THEN (data->>'value')::int END AS area_id,
+            CASE WHEN activity_type = 'status' THEN (data->>'value')::boolean END AS is_online,
+            ctid::text AS ctid_text
+        FROM public.character_activity
+        WHERE (timestamp > %s OR (timestamp = %s AND ctid > %s::tid))
+          AND activity_type IN ('location', 'status')
+          AND quest_session_processed = false
+          AND (character_id %% %s) = %s
+        ORDER BY timestamp ASC, ctid ASC
+        LIMIT %s
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                query,
+                (
+                    last_timestamp,
+                    last_timestamp,
+                    last_ctid,
+                    shard_count,
+                    shard_index,
+                    batch_size,
+                ),
             )
             return cursor.fetchall()
 

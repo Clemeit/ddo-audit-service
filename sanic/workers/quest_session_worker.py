@@ -36,8 +36,7 @@ from services.postgres import (  # type: ignore
     initialize_postgres,
     bulk_insert_quest_sessions,
     mark_activities_as_processed,
-    get_unprocessed_location_activities,
-    get_unprocessed_status_activities,
+    get_unprocessed_quest_session_activities,
     get_quest_by_id,
 )
 from services.redis import (  # type: ignore
@@ -204,49 +203,55 @@ def process_character_activities(
 
 def process_batch(
     last_timestamp: datetime,
+    last_ctid: str,
     shard_count: int,
     shard_index: int,
     batch_size: int,
-) -> Tuple[datetime, int, int]:
+) -> Tuple[datetime, str, int, int]:
     """Process a batch of unprocessed location and status activities.
 
     Args:
         last_timestamp: Start processing from this timestamp
+        last_ctid: Cursor ctid string like "(block,offset)" for keyset pagination
         shard_count: Total number of worker shards
         shard_index: Current shard index (0-based)
-        batch_size: Maximum activities to process per type
+        batch_size: Maximum activities to process
 
     Returns:
-        Tuple of (new_last_timestamp, activities_processed, sessions_created)
+        Tuple of (new_last_timestamp, new_last_ctid, activities_processed, sessions_created)
     """
-    # Fetch both location and status activities
-    location_activities = get_unprocessed_location_activities(
-        last_timestamp, shard_count, shard_index, batch_size
-    )
-    status_activities = get_unprocessed_status_activities(
-        last_timestamp, shard_count, shard_index, batch_size
+    activities = get_unprocessed_quest_session_activities(
+        last_timestamp, last_ctid, shard_count, shard_index, batch_size
     )
 
-    total_activities = len(location_activities) + len(status_activities)
-    if total_activities == 0:
-        return last_timestamp, 0, 0
+    if not activities:
+        return last_timestamp, last_ctid, 0, 0
 
-    logger.info(
-        f"Processing {len(location_activities)} location + {len(status_activities)} status activities"
-    )
+    logger.info(f"Processing {len(activities)} location/status activities")
 
     # Group activities by character_id, merging location and status activities
     by_character: Dict[int, List[Tuple[datetime, Optional[int], Optional[bool]]]] = (
         defaultdict(list)
     )
 
-    # Add location activities (timestamp, area_id, None)
-    for character_id, timestamp, area_id in location_activities:
-        by_character[character_id].append((timestamp, area_id, None))
-
-    # Add status activities (timestamp, None, is_online)
-    for character_id, timestamp, is_online in status_activities:
-        by_character[character_id].append((timestamp, None, is_online))
+    # Add activities (timestamp, area_id, is_online) - type determines which value is set
+    activity_ctids: List[str] = []
+    for (
+        character_id,
+        timestamp,
+        activity_type,
+        area_id,
+        is_online,
+        ctid_text,
+    ) in activities:
+        if activity_type == "location":
+            by_character[character_id].append((timestamp, area_id, None))
+        elif activity_type == "status":
+            by_character[character_id].append((timestamp, None, is_online))
+        else:
+            # Defensive; query is filtered so this should not happen
+            continue
+        activity_ctids.append(ctid_text)
 
     # Batch fetch initial active sessions for all characters from Redis
     character_ids = list(by_character.keys())
@@ -312,19 +317,20 @@ def process_batch(
         bulk_insert_quest_sessions(all_sessions_to_insert)
 
     # Mark activities as processed
-    if all_activities_to_mark:
-        logger.info(f"Marking {len(all_activities_to_mark)} activities as processed")
-        mark_activities_as_processed(all_activities_to_mark)
+    if activity_ctids:
+        logger.info(f"Marking {len(activity_ctids)} activities as processed")
+        mark_activities_as_processed(activity_ctids)
 
-    # Update last_timestamp to the latest processed
-    # Query uses > so max timestamp can be used directly (no duplicates at boundary)
-    new_last_timestamp = (
-        max(ts for _, ts in all_activities_to_mark)
-        if all_activities_to_mark
-        else last_timestamp
+    # Advance keyset cursor to last row returned (results are ordered)
+    new_last_timestamp = activities[-1][1]
+    new_last_ctid = activities[-1][5]
+
+    return (
+        new_last_timestamp,
+        new_last_ctid,
+        len(activities),
+        len(all_sessions_to_insert),
     )
-
-    return new_last_timestamp, total_activities, len(all_sessions_to_insert)
 
 
 def format_duration(seconds: float) -> str:
@@ -368,6 +374,7 @@ def run_worker():
     # Start processing from lookback_days ago
     start_time = time.time()
     last_timestamp = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+    last_ctid = "(0,0)"
 
     total_activities_processed = 0
     total_sessions_created = 0
@@ -380,8 +387,10 @@ def run_worker():
 
             logger.info(f"Starting batch {batch_count}...")
 
-            new_last_timestamp, activities_count, sessions_count = process_batch(
-                last_timestamp, shard_count, shard_index, batch_size
+            new_last_timestamp, new_last_ctid, activities_count, sessions_count = (
+                process_batch(
+                    last_timestamp, last_ctid, shard_count, shard_index, batch_size
+                )
             )
 
             batch_duration = time.time() - batch_start_time
@@ -402,11 +411,15 @@ def run_worker():
                 last_timestamp = datetime.now(timezone.utc) - timedelta(
                     days=lookback_days
                 )
+                last_ctid = "(0,0)"
                 total_activities_processed = 0
                 total_sessions_created = 0
                 batch_count = 0
                 start_time = time.time()
                 continue
+
+            last_timestamp = new_last_timestamp
+            last_ctid = new_last_ctid
 
             # Calculate processing rate
             activities_per_second = (
@@ -425,8 +438,6 @@ def run_worker():
             ]
 
             logger.info(" | ".join(log_parts))
-
-            last_timestamp = new_last_timestamp
 
             # Small sleep between batches to avoid overwhelming the database
             if sleep_between_batches > 0:
