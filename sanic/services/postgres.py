@@ -4133,33 +4133,51 @@ def get_quest_metrics(quest_id: int) -> dict | None:
 
 
 def get_unprocessed_location_activities(
-    last_timestamp: datetime, shard_count: int, shard_index: int, batch_size: int
+    last_timestamp: datetime,
+    shard_count: int,
+    shard_index: int,
+    batch_size: int,
+    time_window_hours: int = 24,
 ) -> list[tuple]:
     """Fetch unprocessed location activities for quest session processing.
+
+    Uses time-based batching optimized for TimescaleDB chunk access, with a row limit
+    as a safety valve to prevent oversized batches.
 
     Args:
         last_timestamp: Start processing from this timestamp
         shard_count: Total number of shards (currently ignored - for future use)
         shard_index: Current shard index (currently ignored - for future use)
-        batch_size: Maximum number of activities to return
+        batch_size: Maximum number of activities to return (safety limit)
+        time_window_hours: Time window in hours for batch (default 24)
 
     Returns:
         List of tuples (character_id, timestamp, area_id)
     """
-    # NOTE: Removed character_id sharding (character_id %% shard) as it prevents index usage
-    # The partial index on (timestamp, character_id) can now be used efficiently
+    if time_window_hours <= 0:
+        logger.warning(
+            "Non-positive time_window_hours (%s) provided to "
+            "get_unprocessed_location_activities; defaulting to 1 hour",
+            time_window_hours,
+        )
+        time_window_hours = 1
+
+    # Calculate upper bound for time-based batching
+    upper_timestamp = last_timestamp + timedelta(hours=time_window_hours)
+
+    # NOTE: Time-based batching allows TimescaleDB to efficiently target specific chunks
+    # The LIMIT acts as a safety valve if a time window has unexpectedly high activity
     query = """
         SELECT character_id, timestamp, (data->>'value')::int as area_id
         FROM public.character_activity
         WHERE timestamp > %s
+          AND timestamp <= %s
           AND activity_type = 'location'
           AND quest_session_processed = false
-        ORDER BY timestamp ASC, ctid ASC
+        ORDER BY timestamp ASC, character_id ASC
         LIMIT %s
     """
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            cursor.execute(
-                query, (last_timestamp, batch_size)
-            )
+            cursor.execute(query, (last_timestamp, upper_timestamp, batch_size))
             return cursor.fetchall()

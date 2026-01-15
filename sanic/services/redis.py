@@ -1203,9 +1203,12 @@ def get_active_quest_session_state(character_id: int) -> Optional[dict]:
     Returns a dict: {"quest_id": int, "entry_timestamp": str} or None.
     """
     try:
-        sessions = get_active_quest_sessions_map()
-        key = str(character_id)
-        return sessions.get(key)
+        with get_redis_client() as client:
+            key = f"active_quest_session:{character_id}"
+            raw_value = client.get(key)
+            if raw_value:
+                return json.loads(raw_value)
+            return None
     except Exception:
         # Redis unavailable, return None
         return None
@@ -1214,31 +1217,30 @@ def get_active_quest_session_state(character_id: int) -> Optional[dict]:
 def set_active_quest_session_state(
     character_id: int, quest_id: int, entry_timestamp: datetime
 ) -> None:
-    """Set or update the active quest session state for a character."""
+    """Set or update the active quest session state for a character.
+
+    Session is stored with a 48-hour TTL for automatic cleanup.
+    """
     try:
         obj = {
             "quest_id": int(quest_id),
             "entry_timestamp": entry_timestamp.isoformat(),
         }
         with get_redis_client() as client:
-            data = client.json().get(RedisKeys.ACTIVE_QUEST_SESSIONS.value) or {}
-            data[str(character_id)] = obj
-            client.json().set(RedisKeys.ACTIVE_QUEST_SESSIONS.value, path="$", obj=data)
+            key = f"active_quest_session:{character_id}"
+            # Set with 48-hour expiration (172800 seconds)
+            client.setex(key, 172800, json.dumps(obj))
     except Exception:
         # Redis unavailable, silently continue
         pass
 
 
 def clear_active_quest_session_state(character_id: int) -> None:
-    """Clear active quest session state for a character."""
+    """Clear the active quest session state for a character."""
     try:
         with get_redis_client() as client:
-            data = client.json().get(RedisKeys.ACTIVE_QUEST_SESSIONS.value) or {}
-            if str(character_id) in data:
-                del data[str(character_id)]
-                client.json().set(
-                    RedisKeys.ACTIVE_QUEST_SESSIONS.value, path="$", obj=data
-                )
+            key = f"active_quest_session:{character_id}"
+            client.delete(key)
     except Exception:
         # Redis unavailable, silently continue
         pass
@@ -1256,12 +1258,26 @@ def batch_get_active_quest_session_states(
         Dict mapping character_id -> session dict (or None if no active session)
     """
     try:
-        sessions_map = get_active_quest_sessions_map()
-        result = {}
-        for char_id in character_ids:
-            key = str(char_id)
-            result[char_id] = sessions_map.get(key)
-        return result
+        with get_redis_client() as client:
+            # Use pipeline for efficient batch retrieval
+            pipe = client.pipeline()
+            for char_id in character_ids:
+                key = f"active_quest_session:{char_id}"
+                pipe.get(key)
+
+            results = pipe.execute()
+
+            # Parse results
+            result = {}
+            for char_id, raw_value in zip(character_ids, results):
+                if raw_value:
+                    try:
+                        result[char_id] = json.loads(raw_value)
+                    except (json.JSONDecodeError, TypeError):
+                        result[char_id] = None
+                else:
+                    result[char_id] = None
+            return result
     except Exception:
         # Redis unavailable, return empty dict for all
         return {char_id: None for char_id in character_ids}
@@ -1272,6 +1288,8 @@ def batch_update_active_quest_session_states(
 ) -> None:
     """Batch update active quest session states for multiple characters.
 
+    Each session is stored with a 48-hour TTL for automatic cleanup of stale sessions.
+
     Args:
         updates_set: Dict mapping character_id -> {"quest_id": int, "entry_timestamp": str}
         updates_clear: List of character_ids to clear (no active session)
@@ -1281,19 +1299,21 @@ def batch_update_active_quest_session_states(
 
     try:
         with get_redis_client() as client:
-            # Get current data once
-            data = client.json().get(RedisKeys.ACTIVE_QUEST_SESSIONS.value) or {}
+            pipe = client.pipeline()
 
-            # Apply all updates
+            # Set new/updated sessions with 48-hour TTL
             for char_id, session_data in updates_set.items():
-                data[str(char_id)] = session_data
+                key = f"active_quest_session:{char_id}"
+                pipe.setex(
+                    key, 172800, json.dumps(session_data)
+                )  # 48 hours = 172800 seconds
 
-            # Apply all clears
+            # Delete cleared sessions
             for char_id in updates_clear:
-                data.pop(str(char_id), None)
+                key = f"active_quest_session:{char_id}"
+                pipe.delete(key)
 
-            # Write back once
-            client.json().set(RedisKeys.ACTIVE_QUEST_SESSIONS.value, path="$", obj=data)
+            pipe.execute()
     except Exception:
         # Redis unavailable, silently continue
         pass
