@@ -4139,29 +4139,27 @@ def get_unprocessed_location_activities(
 
     Args:
         last_timestamp: Start processing from this timestamp
-        shard_count: Total number of shards
-        shard_index: Current shard index (0-based)
+        shard_count: Total number of shards (currently ignored - for future use)
+        shard_index: Current shard index (currently ignored - for future use)
         batch_size: Maximum number of activities to return
 
     Returns:
         List of tuples (character_id, timestamp, area_id)
     """
-    # Use timestamp + ctid (physical row ID) for keyset pagination to avoid skipping rows
-    # This ensures that even if multiple characters have events at the same timestamp,
-    # we don't miss any when advancing the pagination cursor
+    # NOTE: Removed character_id sharding (character_id %% shard) as it prevents index usage
+    # The partial index on (timestamp, character_id) can now be used efficiently
     query = """
         SELECT character_id, timestamp, (data->>'value')::int as area_id
         FROM public.character_activity
         WHERE timestamp > %s
           AND activity_type = 'location'
           AND quest_session_processed = false
-          AND (character_id %% %s) = %s
         ORDER BY timestamp ASC, ctid ASC
         LIMIT %s
     """
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
-                query, (last_timestamp, shard_count, shard_index, batch_size)
+                query, (last_timestamp, batch_size)
             )
             return cursor.fetchall()

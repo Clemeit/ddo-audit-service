@@ -283,16 +283,17 @@ def format_duration(seconds: float) -> str:
 def run_worker():
     """Main worker loop - scheduled batch processing."""
     # Configuration from environment
-    shard_count = env_int("QUEST_WORKER_SHARDS", 1)
-    shard_index = env_int("QUEST_WORKER_INDEX", 0)
+    # NOTE: Sharding is disabled (always 1/1) because modulo operations prevent index usage
+    # For horizontal scaling, use timestamp-based partitioning instead
+    shard_count = 1
+    shard_index = 0
     batch_size = env_int("QUEST_WORKER_BATCH_SIZE", 10000)
     lookback_days = env_int("QUEST_WORKER_LOOKBACK_DAYS", 90)
     sleep_between_batches = env_float("QUEST_WORKER_SLEEP_SECS", 1.0)
     idle_sleep = env_float("QUEST_WORKER_IDLE_SECS", 300.0)
 
     logger.info(
-        f"Quest Session Worker starting (shard {shard_index + 1}/{shard_count}, "
-        f"batch_size={batch_size}, lookback_days={lookback_days})"
+        f"Quest Session Worker starting (batch_size={batch_size}, lookback_days={lookback_days})"
     )
 
     # Initialize database connection
