@@ -5,7 +5,6 @@ from typing import Optional
 
 from services.postgres import (
     get_quest_analytics,
-    get_quest_analytics_batch,
     get_all_quests,
     get_quest_by_id,
 )
@@ -15,6 +14,32 @@ logger = logging.getLogger(__name__)
 # Constants for normalization
 LOOKBACK_DAYS = 90
 MIN_SESSIONS_FOR_METRICS = 100
+
+
+def _coerce_to_number(value: Optional[object]) -> Optional[float]:
+    """Convert common numeric-like inputs to float or return None.
+
+    Handles ints, floats, and numeric strings while avoiding exceptions from
+    unexpected values.
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped == "":
+            return None
+        try:
+            return float(stripped)
+        except ValueError:
+            logger.debug("Non-numeric value encountered in metrics calc: %s", value)
+            return None
+
+    logger.debug("Unsupported type for numeric coercion: %s", type(value))
+    return None
 
 
 def calculate_xp_per_minute(
@@ -29,10 +54,17 @@ def calculate_xp_per_minute(
     Returns:
         XP per minute, or None if insufficient data
     """
-    if xp_value is None or length_seconds is None or length_seconds <= 0:
+    xp_numeric = _coerce_to_number(xp_value)
+    length_numeric = _coerce_to_number(length_seconds)
+
+    if (
+        xp_numeric is None
+        or length_numeric is None
+        or length_numeric <= 0
+    ):
         return None
 
-    return (xp_value / length_seconds) * 60  # Convert to per-minute
+    return (xp_numeric / length_numeric) * 60  # Convert to per-minute
 
 
 def calculate_relative_metric(
@@ -134,37 +166,28 @@ def get_quest_metrics_single(quest_id: int) -> Optional[dict]:
                 q for q in all_quests if q.epic_normal_cr == quest.epic_normal_cr
             ]
 
-        # Batch fetch analytics for heroic peers
-        # Use sub-batching to prevent query timeouts on large CR groups
-        BATCH_SIZE = 15  # Max quests per analytics batch query
-        if heroic_peers:
-            heroic_peer_ids = [q.id for q in heroic_peers]
-            logger.debug(
-                f"Pre-fetching analytics for {len(heroic_peer_ids)} heroic CR {quest.heroic_normal_cr} peers (batching in groups of {BATCH_SIZE})"
-            )
-            heroic_analytics = {}
-            # Process in sub-batches to avoid query timeout
-            for batch_start in range(0, len(heroic_peer_ids), BATCH_SIZE):
-                batch_ids = heroic_peer_ids[batch_start : batch_start + BATCH_SIZE]
-                batch_analytics = get_quest_analytics_batch(batch_ids, LOOKBACK_DAYS)
-                heroic_analytics.update(batch_analytics)
-        else:
-            heroic_analytics = {}
+        # Fetch analytics individually for peer quests
+        heroic_analytics = {}
+        for peer in heroic_peers:
+            try:
+                heroic_analytics[peer.id] = get_quest_analytics(
+                    peer.id, lookback_days=LOOKBACK_DAYS
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to get analytics for heroic peer quest {peer.id}: {e}"
+                )
 
-        # Batch fetch analytics for epic peers
-        if epic_peers:
-            epic_peer_ids = [q.id for q in epic_peers]
-            logger.debug(
-                f"Pre-fetching analytics for {len(epic_peer_ids)} epic CR {quest.epic_normal_cr} peers (batching in groups of {BATCH_SIZE})"
-            )
-            epic_analytics = {}
-            # Process in sub-batches to avoid query timeout
-            for batch_start in range(0, len(epic_peer_ids), BATCH_SIZE):
-                batch_ids = epic_peer_ids[batch_start : batch_start + BATCH_SIZE]
-                batch_analytics = get_quest_analytics_batch(batch_ids, LOOKBACK_DAYS)
-                epic_analytics.update(batch_analytics)
-        else:
-            epic_analytics = {}
+        epic_analytics = {}
+        for peer in epic_peers:
+            try:
+                epic_analytics[peer.id] = get_quest_analytics(
+                    peer.id, lookback_days=LOOKBACK_DAYS
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to get analytics for epic peer quest {peer.id}: {e}"
+                )
 
         # Calculate Heroic XP/min relative metric
         if (
@@ -299,50 +322,24 @@ def get_all_quest_metrics_data() -> dict:
 
         metrics_data = {}
 
-        # Pre-fetch analytics for all quests in each CR group to avoid N+1 queries
-        # Use sub-batching to prevent query timeouts on large CR groups
-        heroic_analytics_by_cr = {}  # Map of CR -> Map of quest_id -> QuestAnalytics
-        epic_analytics_by_cr = {}  # Map of CR -> Map of quest_id -> QuestAnalytics
-        BATCH_SIZE = 15  # Max quests per analytics batch query
-
-        for cr, quests in heroic_cr_groups.items():
-            quest_ids = [q.id for q in quests]
-            logger.debug(
-                f"Pre-fetching analytics for {len(quest_ids)} heroic CR {cr} quests (batching in groups of {BATCH_SIZE})"
-            )
-            heroic_analytics_by_cr[cr] = {}
-
-            # Process in sub-batches to avoid query timeout
-            for batch_start in range(0, len(quest_ids), BATCH_SIZE):
-                batch_ids = quest_ids[batch_start : batch_start + BATCH_SIZE]
-                batch_analytics = get_quest_analytics_batch(batch_ids, LOOKBACK_DAYS)
-                heroic_analytics_by_cr[cr].update(batch_analytics)
-
-        for cr, quests in epic_cr_groups.items():
-            quest_ids = [q.id for q in quests]
-            logger.debug(
-                f"Pre-fetching analytics for {len(quest_ids)} epic CR {cr} quests (batching in groups of {BATCH_SIZE})"
-            )
-            epic_analytics_by_cr[cr] = {}
-
-            # Process in sub-batches to avoid query timeout
-            for batch_start in range(0, len(quest_ids), BATCH_SIZE):
-                batch_ids = quest_ids[batch_start : batch_start + BATCH_SIZE]
-                batch_analytics = get_quest_analytics_batch(batch_ids, LOOKBACK_DAYS)
-                epic_analytics_by_cr[cr].update(batch_analytics)
+        # Fetch analytics individually for all quests and cache by quest id
+        analytics_by_id = {}
+        for quest in all_quests:
+            try:
+                analytics_by_id[quest.id] = get_quest_analytics(
+                    quest.id, lookback_days=LOOKBACK_DAYS
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to get analytics for quest {quest.id}: {e}", exc_info=True
+                )
 
         # Process each quest
         for quest in all_quests:
             logger.debug(f"Processing quest {quest.id}: {quest.name}")
 
             # Get analytics from pre-fetched data based on CR level
-            analytics = None
-            if quest.heroic_normal_cr is not None:
-                cr = quest.heroic_normal_cr
-                analytics = heroic_analytics_by_cr.get(cr, {}).get(quest.id)
-            elif quest.epic_normal_cr is not None:
-                cr = quest.epic_normal_cr
-                analytics = epic_analytics_by_cr.get(cr, {}).get(quest.id)
+            analytics = analytics_by_id.get(quest.id)
 
             if analytics is None:
                 logger.debug(f"No analytics found for quest {quest.id}")
@@ -433,19 +430,15 @@ def get_all_quest_metrics_data() -> dict:
 
             if quest.heroic_normal_cr is not None:
                 cr = quest.heroic_normal_cr
-                # Use pre-fetched analytics for this CR group
-                cr_analytics = heroic_analytics_by_cr.get(cr, {})
                 for peer_quest in heroic_cr_groups.get(cr, []):
-                    peer_analytics = cr_analytics.get(peer_quest.id)
+                    peer_analytics = analytics_by_id.get(peer_quest.id)
                     if peer_analytics is not None:
                         all_peer_sessions.append(peer_analytics.total_sessions)
             elif quest.epic_normal_cr is not None:
                 # Fall back to epic CR if no heroic CR
                 cr = quest.epic_normal_cr
-                # Use pre-fetched analytics for this CR group
-                cr_analytics = epic_analytics_by_cr.get(cr, {})
                 for peer_quest in epic_cr_groups.get(cr, []):
-                    peer_analytics = cr_analytics.get(peer_quest.id)
+                    peer_analytics = analytics_by_id.get(peer_quest.id)
                     if peer_analytics is not None:
                         all_peer_sessions.append(peer_analytics.total_sessions)
 
