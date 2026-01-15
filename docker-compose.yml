@@ -144,6 +144,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
 
   quest_metrics_worker:
     build:
@@ -171,6 +173,8 @@ services:
       - backend
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   nginx:

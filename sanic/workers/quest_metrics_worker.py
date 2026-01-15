@@ -182,6 +182,13 @@ def run_metrics_update() -> None:
     start_time = time.time()
 
     try:
+        # Ensure Redis is initialized before attempting metrics calculation
+        try:
+            initialize_redis()
+        except Exception as e:
+            logger.error(f"Cannot calculate metrics without Redis: {e}")
+            return
+
         # Calculate metrics for all quests
         metrics_data = get_all_quest_metrics_data()
 
@@ -291,7 +298,14 @@ def main():
 
     # Initialize database and Redis connections
     initialize_postgres()
-    initialize_redis()
+
+    # Initialize Redis - non-fatal if it fails, will retry during metrics update
+    try:
+        initialize_redis()
+    except Exception as e:
+        logger.warning(
+            f"Redis initialization failed at startup: {e}. Metrics updates will retry on each cycle."
+        )
 
     # Calculate time until next midnight (UTC)
     now = datetime.now(timezone.utc)
