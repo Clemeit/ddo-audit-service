@@ -3513,6 +3513,9 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
+                # Set a higher timeout for analytics queries (they scan large datasets)
+                cursor.execute("SET statement_timeout = '120s'")
+
                 # Get basic statistics including percentiles to exclude outliers
                 logger.debug("Executing basic stats query...")
                 cursor.execute(
@@ -3761,6 +3764,9 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
                     if len(row) >= 2 and row[0] is not None
                 ]
 
+                # Reset timeout back to default for this connection
+                cursor.execute(f"SET statement_timeout = '{POSTGRES_COMMAND_TIMEOUT}s'")
+
                 logger.info(
                     f"Quest analytics completed for quest_id={quest_id}: "
                     f"total_sessions={total_sessions}, histogram_bins={len(histogram)}, "
@@ -3817,6 +3823,9 @@ def get_quest_analytics_batch(
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
+                # Set a higher timeout for analytics queries (they scan large datasets)
+                cursor.execute("SET statement_timeout = '120s'")
+
                 # Fetch total_sessions for all quests in one query
                 logger.debug(f"Executing batch query for {len(quest_ids)} quests...")
                 cursor.execute(
@@ -3865,6 +3874,9 @@ def get_quest_analytics_batch(
                             completed_sessions=0,
                             active_sessions=0,
                         )
+
+                # Reset timeout back to default for this connection
+                cursor.execute(f"SET statement_timeout = '{POSTGRES_COMMAND_TIMEOUT}s'")
 
                 logger.info(f"Batch analytics completed for {len(result)} quests")
                 return result
