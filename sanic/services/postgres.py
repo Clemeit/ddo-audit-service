@@ -4154,6 +4154,14 @@ def get_unprocessed_location_activities(
     Returns:
         List of tuples (character_id, timestamp, area_id)
     """
+    if time_window_hours <= 0:
+        logger.warning(
+            "Non-positive time_window_hours (%s) provided to "
+            "get_unprocessed_location_activities; defaulting to 1 hour",
+            time_window_hours,
+        )
+        time_window_hours = 1
+
     # Calculate upper bound for time-based batching
     upper_timestamp = last_timestamp + timedelta(hours=time_window_hours)
 
@@ -4166,7 +4174,7 @@ def get_unprocessed_location_activities(
           AND timestamp <= %s
           AND activity_type = 'location'
           AND quest_session_processed = false
-        ORDER BY timestamp ASC, ctid ASC
+        ORDER BY timestamp ASC, character_id ASC
         LIMIT %s
     """
     with get_db_connection() as conn:

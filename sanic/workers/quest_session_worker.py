@@ -295,6 +295,19 @@ def run_worker():
     sleep_between_batches = env_float("QUEST_WORKER_SLEEP_SECS", 1.0)
     idle_sleep = env_float("QUEST_WORKER_IDLE_SECS", 300.0)
 
+    # Validate time_window_hours to avoid zero/negative or extreme values
+    if time_window_hours <= 0:
+        logger.warning(
+            "Invalid QUEST_WORKER_TIME_WINDOW_HOURS=%s; falling back to default of 24 hours",
+            time_window_hours,
+        )
+        time_window_hours = 24
+    elif time_window_hours > 168:
+        logger.warning(
+            "QUEST_WORKER_TIME_WINDOW_HOURS=%s is unusually high; this may impact batch processing performance",
+            time_window_hours,
+        )
+
     logger.info(
         f"Quest Session Worker starting (batch_size={batch_size}, "
         f"time_window_hours={time_window_hours}, lookback_days={lookback_days})"
