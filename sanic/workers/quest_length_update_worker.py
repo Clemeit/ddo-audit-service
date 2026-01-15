@@ -58,6 +58,14 @@ def env_int(name: str, default: int) -> int:
         return default
 
 
+def env_float(name: str, default: float) -> float:
+    """Parse float from environment variable with fallback to default."""
+    try:
+        return float(os.getenv(name, str(default)))
+    except Exception:
+        return default
+
+
 def clamp_to_smallint(value: float) -> int:
     """Clamp a value to PostgreSQL smallint range (0 to 32767) and round."""
     clamped = max(0, min(32767, value))
@@ -95,6 +103,9 @@ def process_quest_batch(
     updates_to_null: List[int] = []
     errors: List[int] = []
 
+    # Add delay between quest processing to reduce postgres load
+    delay_between_quests = env_float("QUEST_METRICS_DELAY_SECS", 0.5)
+
     for quest_id in quest_ids:
         try:
             analytics = get_quest_analytics(quest_id, lookback_days)
@@ -109,6 +120,10 @@ def process_quest_batch(
             else:
                 # Insufficient data - set to null
                 updates_to_null.append(quest_id)
+
+            # Sleep between quest processing to reduce load on postgres
+            if delay_between_quests > 0:
+                time.sleep(delay_between_quests)
 
         except Exception as e:
             logger.error(f"Failed to process quest {quest_id}: {e}")
