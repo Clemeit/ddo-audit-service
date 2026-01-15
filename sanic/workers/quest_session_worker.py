@@ -75,7 +75,7 @@ def process_character_activities(
     character_id: int,
     activities: List[Tuple[datetime, Optional[int], Optional[bool]]],
     initial_session: Optional[QuestSession],
-) -> Tuple[List[Tuple], List[Tuple], Optional[QuestSession]]:
+) -> Tuple[List[Tuple], Optional[QuestSession]]:
     """Process all activities (location + status) for a single character.
 
     Args:
@@ -84,12 +84,11 @@ def process_character_activities(
         initial_session: The character's active session at the start (if any)
 
     Returns:
-        Tuple of (sessions_to_insert, activities_to_mark)
+        Tuple of (sessions_to_insert, current_session)
         - sessions_to_insert: List of tuples (character_id, quest_id, entry_timestamp, exit_timestamp)
-        - activities_to_mark: List of tuples (character_id, timestamp) to mark as processed
+        - current_session: The character's active session at the end (if any)
     """
     sessions_to_insert = []
-    activities_to_mark = []
     current_session = initial_session
     last_area_id = None
 
@@ -104,7 +103,6 @@ def process_character_activities(
         if area_id is not None:
             # Skip duplicate location events (same area)
             if area_id == last_area_id:
-                activities_to_mark.append((character_id, timestamp))
                 continue
 
             last_area_id = area_id
@@ -138,7 +136,6 @@ def process_character_activities(
                         f"activity timestamp {timestamp} is before active session start "
                         f"{current_session.entry_timestamp} (quest_id={current_session.quest_id})"
                     )
-                    activities_to_mark.append((character_id, timestamp))
                     continue
 
             # Check if new area is a quest area
@@ -153,9 +150,6 @@ def process_character_activities(
                         exit_timestamp=None,
                     )
                     current_quest_area = area_id
-
-            # Mark this activity as processed
-            activities_to_mark.append((character_id, timestamp))
             continue
 
         if is_online is not None:
@@ -186,19 +180,14 @@ def process_character_activities(
                             f"logout timestamp {timestamp} is before active session start "
                             f"{current_session.entry_timestamp} (quest_id={current_session.quest_id})"
                         )
-                # Reset last_area_id so next location isn't treated as duplicate
-                last_area_id = None
-            else:
-                # Login event - reset last_area_id to ensure location tracking restarts
-                last_area_id = None
-
-            # Mark status activity as processed
-            activities_to_mark.append((character_id, timestamp))
+            # Reset last_area_id on logout so next location isn't treated as duplicate
+            # Also reset on login to ensure location tracking restarts properly
+            last_area_id = None
 
     # Do not persist sessions without an exit_timestamp
     # Active sessions will be tracked via Redis and closed when a leave event is observed
 
-    return sessions_to_insert, activities_to_mark, current_session
+    return sessions_to_insert, current_session
 
 
 def process_batch(
@@ -281,7 +270,6 @@ def process_batch(
 
     # Process each character's activities and collect Redis updates
     all_sessions_to_insert = []
-    all_activities_to_mark = []
     redis_updates_set = {}
     redis_updates_clear = []
 
@@ -291,12 +279,11 @@ def process_batch(
 
         initial_session = character_sessions.get(character_id)
 
-        sessions, activities_marked, current_session = process_character_activities(
+        sessions, current_session = process_character_activities(
             character_id, char_activities, initial_session
         )
 
         all_sessions_to_insert.extend(sessions)
-        all_activities_to_mark.extend(activities_marked)
 
         # Collect Redis updates instead of applying immediately
         if current_session is not None:
