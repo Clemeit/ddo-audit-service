@@ -145,13 +145,13 @@ services:
       postgres:
         condition: service_healthy
 
-  quest_length_update_worker:
+  quest_metrics_worker:
     build:
       context: ./sanic
       dockerfile: Dockerfile
     image: clemeit/ddoaudit-sanic:latest
     restart: always
-    command: ["python", "-m", "workers.quest_length_update_worker"]
+    command: ["python", "-m", "workers.quest_metrics_worker"]
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_HOST=${POSTGRES_HOST}
