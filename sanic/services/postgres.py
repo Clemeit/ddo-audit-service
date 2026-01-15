@@ -26,7 +26,11 @@ from constants.activity import (
 
 from models.quest import Quest
 from models.area import Area
-from models.quest_session import QuestSession, QuestAnalytics
+from models.quest_session import (
+    QuestSession,
+    QuestAnalytics,
+    UnprocessedQuestSessionActivity,
+)
 
 from utils.areas import get_valid_area_ids
 from utils.time import datetime_to_datetime_string
@@ -1895,6 +1899,12 @@ def add_game_info(game_info: dict):
 
 
 def add_character_activity(activites: list[dict]):
+    """Insert character activities into the database.
+
+    Logs and skips invalid activities that violate data constraints
+    (e.g., location activities with non-integer values, status with non-boolean).
+    This allows batch processing to continue even if some records are malformed.
+    """
     insert_query = """
         INSERT INTO character_activity (timestamp, character_id, activity_type, data)
         VALUES (NOW(), %s, %s, %s)
@@ -1902,26 +1912,71 @@ def add_character_activity(activites: list[dict]):
     batch_size = 500
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            try:
-                batch = []
-                for activity in activites:
-                    batch.append(
-                        (
-                            activity.get("character_id"),
-                            activity.get("activity_type").value,
-                            json.dumps(activity.get("data")),
-                        )
+            batch = []
+            skipped_count = 0
+
+            for activity in activites:
+                batch.append(
+                    (
+                        activity.get("character_id"),
+                        activity.get("activity_type").value,
+                        json.dumps(activity.get("data")),
                     )
-                    if len(batch) >= batch_size:
-                        cursor.executemany(insert_query, batch)
-                        batch.clear()
-                if batch:
-                    cursor.executemany(insert_query, batch)
-                conn.commit()
-            except Exception as e:
-                print(f"Failed to add character activity to the database: {e}")
-                conn.rollback()
-                raise e
+                )
+                if len(batch) >= batch_size:
+                    skipped_count += _execute_activity_batch(
+                        cursor, insert_query, batch
+                    )
+                    batch.clear()
+
+            if batch:
+                skipped_count += _execute_activity_batch(cursor, insert_query, batch)
+
+            if skipped_count > 0:
+                logger.warning(
+                    f"Skipped {skipped_count} invalid character activities due to constraint violations"
+                )
+
+            conn.commit()
+
+
+def _execute_activity_batch(cursor, insert_query: str, batch: list) -> int:
+    """Execute a batch of activity inserts, handling constraint violations gracefully.
+
+    Returns the number of rows skipped due to constraint violations.
+    """
+    skipped = 0
+
+    # Try full batch insert first (fast path)
+    try:
+        cursor.executemany(insert_query, batch)
+        return 0
+    except PostgresError as e:
+        # Check if it's a constraint violation (not a transient error)
+        if "check constraint" in str(e).lower():
+            # Insert individually to identify and skip invalid rows
+            logger.debug(
+                f"Batch insert failed with constraint violation: {e}. Retrying individually."
+            )
+            for row in batch:
+                try:
+                    cursor.execute(insert_query, row)
+                except PostgresError as row_error:
+                    if "check constraint" in str(row_error).lower():
+                        character_id, activity_type, data_json = row
+                        logger.warning(
+                            f"Skipping invalid activity: character_id={character_id}, "
+                            f"activity_type={activity_type}, data={data_json}. "
+                            f"Reason: {row_error}"
+                        )
+                        skipped += 1
+                    else:
+                        # Re-raise non-constraint errors
+                        raise row_error
+            return skipped
+        else:
+            # Re-raise non-constraint errors
+            raise e
 
 
 def set_character_active_status(
@@ -4172,7 +4227,7 @@ def get_unprocessed_quest_session_activities(
     shard_count: int,
     shard_index: int,
     batch_size: int,
-) -> list[tuple]:
+) -> list[UnprocessedQuestSessionActivity]:
     """Fetch unprocessed quest-session-relevant activities (location + status).
 
     This uses keyset pagination on (timestamp, ctid) to avoid skipping rows when
@@ -4186,8 +4241,7 @@ def get_unprocessed_quest_session_activities(
         batch_size: Maximum number of activities to return
 
     Returns:
-        List of tuples:
-            (character_id, timestamp, activity_type, area_id, is_online, ctid_text)
+        List of UnprocessedQuestSessionActivity objects
     """
     query = """
         SELECT
@@ -4218,4 +4272,15 @@ def get_unprocessed_quest_session_activities(
                     batch_size,
                 ),
             )
-            return cursor.fetchall()
+            rows = cursor.fetchall()
+            return [
+                UnprocessedQuestSessionActivity(
+                    character_id=row[0],
+                    timestamp=row[1],
+                    activity_type=row[2],
+                    area_id=row[3],
+                    is_online=row[4],
+                    ctid_text=row[5],
+                )
+                for row in rows
+            ]

@@ -34,6 +34,17 @@ class QuestAnalytics(BaseModel):
     active_sessions: int = 0
 
 
+class UnprocessedQuestSessionActivity(BaseModel):
+    """Model for unprocessed quest-session-relevant activities (location + status)."""
+
+    character_id: int
+    timestamp: datetime
+    activity_type: str  # "location" or "status"
+    area_id: Optional[int] = None  # Only set if activity_type == "location"
+    is_online: Optional[bool] = None  # Only set if activity_type == "status"
+    ctid_text: str  # PostgreSQL tuple ID for row identification
+
+
 class QuestMetrics(BaseModel):
     """Model for cached quest metrics with relative performance scores."""
 

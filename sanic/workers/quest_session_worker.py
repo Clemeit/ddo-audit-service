@@ -225,22 +225,19 @@ def process_batch(
 
     # Add activities (timestamp, area_id, is_online) - type determines which value is set
     activity_ctids: List[str] = []
-    for (
-        character_id,
-        timestamp,
-        activity_type,
-        area_id,
-        is_online,
-        ctid_text,
-    ) in activities:
-        if activity_type == "location":
-            by_character[character_id].append((timestamp, area_id, None))
-        elif activity_type == "status":
-            by_character[character_id].append((timestamp, None, is_online))
+    for activity in activities:
+        if activity.activity_type == "location":
+            by_character[activity.character_id].append(
+                (activity.timestamp, activity.area_id, None)
+            )
+        elif activity.activity_type == "status":
+            by_character[activity.character_id].append(
+                (activity.timestamp, None, activity.is_online)
+            )
         else:
             # Defensive; query is filtered so this should not happen
             continue
-        activity_ctids.append(ctid_text)
+        activity_ctids.append(activity.ctid_text)
 
     # Batch fetch initial active sessions for all characters from Redis
     character_ids = list(by_character.keys())
