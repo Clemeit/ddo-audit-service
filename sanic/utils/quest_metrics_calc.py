@@ -135,12 +135,19 @@ def get_quest_metrics_single(quest_id: int) -> Optional[dict]:
             ]
 
         # Batch fetch analytics for heroic peers
+        # Use sub-batching to prevent query timeouts on large CR groups
+        BATCH_SIZE = 25  # Max quests per analytics batch query
         if heroic_peers:
             heroic_peer_ids = [q.id for q in heroic_peers]
             logger.debug(
-                f"Pre-fetching analytics for {len(heroic_peer_ids)} heroic CR {quest.heroic_normal_cr} peers"
+                f"Pre-fetching analytics for {len(heroic_peer_ids)} heroic CR {quest.heroic_normal_cr} peers (batching in groups of {BATCH_SIZE})"
             )
-            heroic_analytics = get_quest_analytics_batch(heroic_peer_ids, LOOKBACK_DAYS)
+            heroic_analytics = {}
+            # Process in sub-batches to avoid query timeout
+            for batch_start in range(0, len(heroic_peer_ids), BATCH_SIZE):
+                batch_ids = heroic_peer_ids[batch_start : batch_start + BATCH_SIZE]
+                batch_analytics = get_quest_analytics_batch(batch_ids, LOOKBACK_DAYS)
+                heroic_analytics.update(batch_analytics)
         else:
             heroic_analytics = {}
 
@@ -148,9 +155,14 @@ def get_quest_metrics_single(quest_id: int) -> Optional[dict]:
         if epic_peers:
             epic_peer_ids = [q.id for q in epic_peers]
             logger.debug(
-                f"Pre-fetching analytics for {len(epic_peer_ids)} epic CR {quest.epic_normal_cr} peers"
+                f"Pre-fetching analytics for {len(epic_peer_ids)} epic CR {quest.epic_normal_cr} peers (batching in groups of {BATCH_SIZE})"
             )
-            epic_analytics = get_quest_analytics_batch(epic_peer_ids, LOOKBACK_DAYS)
+            epic_analytics = {}
+            # Process in sub-batches to avoid query timeout
+            for batch_start in range(0, len(epic_peer_ids), BATCH_SIZE):
+                batch_ids = epic_peer_ids[batch_start : batch_start + BATCH_SIZE]
+                batch_analytics = get_quest_analytics_batch(batch_ids, LOOKBACK_DAYS)
+                epic_analytics.update(batch_analytics)
         else:
             epic_analytics = {}
 
