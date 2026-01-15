@@ -204,7 +204,9 @@ def run_metrics_update() -> None:
         logger.error(f"Failed to update quest metrics: {e}", exc_info=True)
 
 
-def estimate_and_update_quest_lengths(lookback_days: int, batch_size: int, min_sessions: int) -> None:
+def estimate_and_update_quest_lengths(
+    lookback_days: int, batch_size: int, min_sessions: int
+) -> None:
     """
     Estimate and update quest length values for all quests based on analytics data.
 

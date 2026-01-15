@@ -179,14 +179,18 @@ def get_quest_metrics_single(
             heroic_peers = [
                 q
                 for q in all_quests
-                if abs(q.heroic_normal_cr - quest.heroic_normal_cr) <= PEER_RANGE
+                if q.heroic_normal_cr is not None
+                and q.id != quest.id
+                and abs(q.heroic_normal_cr - quest.heroic_normal_cr) <= PEER_RANGE
             ]
 
         if quest.epic_normal_cr is not None:
             epic_peers = [
                 q
                 for q in all_quests
-                if abs(q.epic_normal_cr - quest.epic_normal_cr) <= PEER_RANGE
+                if q.epic_normal_cr is not None
+                and q.id != quest.id
+                and abs(q.epic_normal_cr - quest.epic_normal_cr) <= PEER_RANGE
             ]
 
         # Fetch cached analytics for peer quests in a single query
@@ -541,11 +545,6 @@ def compute_all_quest_relative_metrics_pass2() -> dict:
             metrics_data[quest.id] = quest_metrics
             logger.debug(f"[PASS 2] Metrics calculated for quest {quest.id}")
 
-        # Clean up Redis cache
-        logger.info("[PASS 2] Cleaning up Redis analytics cache")
-        with get_redis_client() as redis_client:
-            redis_client.delete(REDIS_QUEST_ANALYTICS_CACHE_KEY)
-
         logger.info(
             f"[PASS 2] Complete. Calculated metrics for {len(metrics_data)} quests"
         )
@@ -554,6 +553,10 @@ def compute_all_quest_relative_metrics_pass2() -> dict:
     except Exception as e:
         logger.error(f"[PASS 2] Error calculating relative metrics: {e}", exc_info=True)
         raise
+    finally:
+        # Ensure Redis cache is cleaned up even on error
+        with get_redis_client() as redis_client:
+            redis_client.delete(REDIS_QUEST_ANALYTICS_CACHE_KEY)
 
 
 def get_all_quest_metrics_data() -> dict:
