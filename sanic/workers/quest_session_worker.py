@@ -34,11 +34,10 @@ if PROJECT_ROOT not in sys.path:
 
 from services.postgres import (  # type: ignore
     initialize_postgres,
-    get_db_connection,
-    get_active_quest_session,
     bulk_insert_quest_sessions,
     mark_activities_as_processed,
     get_unprocessed_location_activities,
+    get_unprocessed_status_activities,
     get_quest_by_id,
 )
 from services.redis import (  # type: ignore
@@ -115,15 +114,21 @@ def process_character_activities(
             # Only close the session if exit_timestamp would be >= entry_timestamp
             # This prevents negative durations from out-of-order or clock-skewed data
             if timestamp >= current_session.entry_timestamp:
-                # Character is leaving the quest area
-                sessions_to_insert.append(
-                    (
-                        current_session.character_id,
-                        current_session.quest_id,
-                        current_session.entry_timestamp,
-                        timestamp,  # exit_timestamp
+                # Calculate duration to check 1-day cap (86400 seconds)
+                duration_seconds = (
+                    timestamp - current_session.entry_timestamp
+                ).total_seconds()
+                if duration_seconds <= 86400:
+                    # Character is leaving the quest area
+                    sessions_to_insert.append(
+                        (
+                            current_session.character_id,
+                            current_session.quest_id,
+                            current_session.entry_timestamp,
+                            timestamp,  # exit_timestamp
+                        )
                     )
-                )
+                # Sessions exceeding 1 day are silently discarded (not recorded)
                 current_session = None
                 current_quest_area = None
             else:
@@ -158,37 +163,99 @@ def process_character_activities(
     return sessions_to_insert, activities_to_mark, current_session
 
 
+def process_status_activities(
+    character_id: int,
+    activities: List[Tuple[datetime, bool]],
+    initial_session: Optional[QuestSession],
+) -> Tuple[List[Tuple], List[Tuple], Optional[QuestSession]]:
+    """Process status (logoff) activities for a single character and close sessions on logoff.
+
+    Args:
+        character_id: ID of the character
+        activities: List of (timestamp, is_online) sorted chronologically
+        initial_session: The character's active session at the start (if any)
+
+    Returns:
+        Tuple of (sessions_to_insert, activities_to_mark, final_session)
+        - sessions_to_insert: List of tuples (character_id, quest_id, entry_timestamp, exit_timestamp)
+        - activities_to_mark: List of tuples (character_id, timestamp) to mark as processed
+        - final_session: The character's active session after processing (if any)
+    """
+    sessions_to_insert = []
+    activities_to_mark = []
+    current_session = initial_session
+
+    for timestamp, is_online in activities:
+        # Close session on logoff (is_online = False)
+        if not is_online and current_session is not None:
+            # Calculate duration to check 1-day cap (86400 seconds)
+            duration_seconds = (
+                timestamp - current_session.entry_timestamp
+            ).total_seconds()
+            if duration_seconds <= 86400:
+                # Record the session with logoff as exit
+                sessions_to_insert.append(
+                    (
+                        current_session.character_id,
+                        current_session.quest_id,
+                        current_session.entry_timestamp,
+                        timestamp,  # exit_timestamp (logoff time)
+                    )
+                )
+            # Sessions exceeding 1 day are silently discarded (not recorded)
+            current_session = None
+
+        # Mark activity as processed regardless of whether we closed a session
+        activities_to_mark.append((character_id, timestamp))
+
+    return sessions_to_insert, activities_to_mark, current_session
+
+
 def process_batch(
     last_timestamp: datetime,
     shard_count: int,
     shard_index: int,
     batch_size: int,
 ) -> Tuple[datetime, int, int]:
-    """Process a batch of unprocessed location activities.
+    """Process a batch of unprocessed location and status activities.
 
     Args:
         last_timestamp: Start processing from this timestamp
         shard_count: Total number of worker shards
         shard_index: Current shard index (0-based)
-        batch_size: Maximum activities to process
+        batch_size: Maximum activities to process per type
 
     Returns:
         Tuple of (new_last_timestamp, activities_processed, sessions_created)
     """
-    # Fetch unprocessed activities
-    activities = get_unprocessed_location_activities(
+    # Fetch both location and status activities
+    location_activities = get_unprocessed_location_activities(
+        last_timestamp, shard_count, shard_index, batch_size
+    )
+    status_activities = get_unprocessed_status_activities(
         last_timestamp, shard_count, shard_index, batch_size
     )
 
-    if not activities:
+    total_activities = len(location_activities) + len(status_activities)
+    if total_activities == 0:
         return last_timestamp, 0, 0
 
-    logger.info(f"Processing {len(activities)} unprocessed location activities")
+    logger.info(
+        f"Processing {len(location_activities)} location + {len(status_activities)} status activities"
+    )
 
-    # Group activities by character_id
-    by_character: Dict[int, List[Tuple[datetime, int]]] = defaultdict(list)
-    for character_id, timestamp, area_id in activities:
-        by_character[character_id].append((timestamp, area_id))
+    # Group activities by character_id, merging location and status activities
+    by_character: Dict[int, List[Tuple[datetime, Optional[int], Optional[bool]]]] = (
+        defaultdict(list)
+    )
+
+    # Add location activities (timestamp, area_id, None)
+    for character_id, timestamp, area_id in location_activities:
+        by_character[character_id].append((timestamp, area_id, None))
+
+    # Add status activities (timestamp, None, is_online)
+    for character_id, timestamp, is_online in status_activities:
+        by_character[character_id].append((timestamp, None, is_online))
 
     # Batch fetch initial active sessions for all characters from Redis
     character_ids = list(by_character.keys())
@@ -223,22 +290,51 @@ def process_batch(
     redis_updates_clear = []
 
     for character_id, char_activities in by_character.items():
-        # Sort chronologically (should already be sorted, but ensure it)
+        # Sort chronologically by timestamp (should already be sorted, but ensure it)
         char_activities.sort(key=lambda x: x[0])
 
         initial_session = character_sessions.get(character_id)
-        sessions, activities_marked, final_session = process_character_activities(
-            character_id, char_activities, initial_session
-        )
 
-        all_sessions_to_insert.extend(sessions)
-        all_activities_to_mark.extend(activities_marked)
+        # Separate location and status activities for this character
+        location_acts = [
+            (ts, area_id) for ts, area_id, _ in char_activities if area_id is not None
+        ]
+        status_acts = [
+            (ts, is_online)
+            for ts, _, is_online in char_activities
+            if is_online is not None
+        ]
+
+        # Process location activities first, then status activities
+        current_session = initial_session
+        location_sessions = []
+        location_marks = []
+        status_sessions = []
+        status_marks = []
+
+        if location_acts:
+            location_sessions, location_marks, current_session = (
+                process_character_activities(
+                    character_id, location_acts, current_session
+                )
+            )
+
+        if status_acts:
+            status_sessions, status_marks, current_session = process_status_activities(
+                character_id, status_acts, current_session
+            )
+
+        # Combine results from both activity types
+        all_sessions_to_insert.extend(location_sessions)
+        all_sessions_to_insert.extend(status_sessions)
+        all_activities_to_mark.extend(location_marks)
+        all_activities_to_mark.extend(status_marks)
 
         # Collect Redis updates instead of applying immediately
-        if final_session is not None:
+        if current_session is not None:
             redis_updates_set[character_id] = {
-                "quest_id": int(final_session.quest_id),
-                "entry_timestamp": final_session.entry_timestamp.isoformat(),
+                "quest_id": int(current_session.quest_id),
+                "entry_timestamp": current_session.entry_timestamp.isoformat(),
             }
         else:
             redis_updates_clear.append(character_id)
@@ -260,12 +356,12 @@ def process_batch(
     # Update last_timestamp to the latest processed
     # Query uses > so max timestamp can be used directly (no duplicates at boundary)
     new_last_timestamp = (
-        max(ts for _, ts in all_activities_to_mark)
+        max(ts for ts, _, _ in all_activities_to_mark)
         if all_activities_to_mark
         else last_timestamp
     )
 
-    return new_last_timestamp, len(activities), len(all_sessions_to_insert)
+    return new_last_timestamp, total_activities, len(all_sessions_to_insert)
 
 
 def format_duration(seconds: float) -> str:

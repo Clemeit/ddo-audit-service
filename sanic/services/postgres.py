@@ -4165,3 +4165,35 @@ def get_unprocessed_location_activities(
                 query, (last_timestamp, shard_count, shard_index, batch_size)
             )
             return cursor.fetchall()
+
+
+def get_unprocessed_status_activities(
+    last_timestamp: datetime, shard_count: int, shard_index: int, batch_size: int
+) -> list[tuple]:
+    """Fetch unprocessed status (logoff) activities for quest session processing.
+
+    Args:
+        last_timestamp: Start processing from this timestamp
+        shard_count: Total number of shards
+        shard_index: Current shard index (0-based)
+        batch_size: Maximum number of activities to return
+
+    Returns:
+        List of tuples (character_id, timestamp, is_online) where is_online is False for logoff
+    """
+    query = """
+        SELECT character_id, timestamp, (data->>'value')::boolean as is_online
+        FROM public.character_activity
+        WHERE timestamp > %s
+          AND activity_type = 'status'
+          AND quest_session_processed = false
+          AND (character_id %% %s) = %s
+        ORDER BY timestamp ASC, ctid ASC
+        LIMIT %s
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                query, (last_timestamp, shard_count, shard_index, batch_size)
+            )
+            return cursor.fetchall()

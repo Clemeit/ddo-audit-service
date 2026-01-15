@@ -118,6 +118,11 @@ CREATE INDEX idx_character_activity_unprocessed
 ON public."character_activity" ("timestamp", character_id)
 WHERE activity_type = 'location' AND quest_session_processed = false;
 
+-- Add an index for unprocessed status activities aligned to query filter order
+CREATE INDEX idx_character_activity_status_unprocessed
+ON public."character_activity" ("timestamp", character_id)
+WHERE activity_type = 'status' AND quest_session_processed = false;
+
 ALTER TABLE IF EXISTS public."character_activity"
     OWNER to pgadmin;
 
