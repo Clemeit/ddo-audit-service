@@ -163,21 +163,30 @@ def process_character_activities(
             if not is_online:
                 # Close session on logoff
                 if current_session is not None:
-                    duration_seconds = (
-                        timestamp - current_session.entry_timestamp
-                    ).total_seconds()
-                    if duration_seconds <= 86400:
-                        sessions_to_insert.append(
-                            (
-                                current_session.character_id,
-                                current_session.quest_id,
-                                current_session.entry_timestamp,
-                                timestamp,  # exit_timestamp (logoff time)
+                    # Only close the session if logout timestamp >= entry_timestamp
+                    if timestamp >= current_session.entry_timestamp:
+                        duration_seconds = (
+                            timestamp - current_session.entry_timestamp
+                        ).total_seconds()
+                        if duration_seconds <= 86400:
+                            sessions_to_insert.append(
+                                (
+                                    current_session.character_id,
+                                    current_session.quest_id,
+                                    current_session.entry_timestamp,
+                                    timestamp,  # exit_timestamp (logoff time)
+                                )
                             )
+                        # Sessions exceeding 1 day are silently discarded (not recorded)
+                        current_session = None
+                        current_quest_area = None
+                    else:
+                        # Skip out-of-order logout event
+                        logger.debug(
+                            f"Skipping out-of-order logout for character {character_id}: "
+                            f"logout timestamp {timestamp} is before active session start "
+                            f"{current_session.entry_timestamp} (quest_id={current_session.quest_id})"
                         )
-                    # Sessions exceeding 1 day are silently discarded (not recorded)
-                    current_session = None
-                    current_quest_area = None
                 # Reset last_area_id so next location isn't treated as duplicate
                 last_area_id = None
             else:
