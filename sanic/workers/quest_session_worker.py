@@ -163,6 +163,7 @@ def process_batch(
     shard_count: int,
     shard_index: int,
     batch_size: int,
+    time_window_hours: int = 24,
 ) -> Tuple[datetime, int, int]:
     """Process a batch of unprocessed location activities.
 
@@ -170,14 +171,15 @@ def process_batch(
         last_timestamp: Start processing from this timestamp
         shard_count: Total number of worker shards
         shard_index: Current shard index (0-based)
-        batch_size: Maximum activities to process
+        batch_size: Maximum activities to process (safety limit)
+        time_window_hours: Time window in hours for time-based batching
 
     Returns:
         Tuple of (new_last_timestamp, activities_processed, sessions_created)
     """
-    # Fetch unprocessed activities
+    # Fetch unprocessed activities using time-based batching
     activities = get_unprocessed_location_activities(
-        last_timestamp, shard_count, shard_index, batch_size
+        last_timestamp, shard_count, shard_index, batch_size, time_window_hours
     )
 
     if not activities:
@@ -288,12 +290,14 @@ def run_worker():
     shard_count = 1
     shard_index = 0
     batch_size = env_int("QUEST_WORKER_BATCH_SIZE", 10000)
+    time_window_hours = env_int("QUEST_WORKER_TIME_WINDOW_HOURS", 24)
     lookback_days = env_int("QUEST_WORKER_LOOKBACK_DAYS", 90)
     sleep_between_batches = env_float("QUEST_WORKER_SLEEP_SECS", 1.0)
     idle_sleep = env_float("QUEST_WORKER_IDLE_SECS", 300.0)
 
     logger.info(
-        f"Quest Session Worker starting (batch_size={batch_size}, lookback_days={lookback_days})"
+        f"Quest Session Worker starting (batch_size={batch_size}, "
+        f"time_window_hours={time_window_hours}, lookback_days={lookback_days})"
     )
 
     # Initialize database connection
@@ -323,7 +327,7 @@ def run_worker():
             logger.info(f"Starting batch {batch_count}...")
 
             new_last_timestamp, activities_count, sessions_count = process_batch(
-                last_timestamp, shard_count, shard_index, batch_size
+                last_timestamp, shard_count, shard_index, batch_size, time_window_hours
             )
 
             batch_duration = time.time() - batch_start_time
