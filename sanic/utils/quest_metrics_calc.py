@@ -57,11 +57,7 @@ def calculate_xp_per_minute(
     xp_numeric = _coerce_to_number(xp_value)
     length_numeric = _coerce_to_number(length_seconds)
 
-    if (
-        xp_numeric is None
-        or length_numeric is None
-        or length_numeric <= 0
-    ):
+    if xp_numeric is None or length_numeric is None or length_numeric <= 0:
         return None
 
     return (xp_numeric / length_numeric) * 60  # Convert to per-minute
