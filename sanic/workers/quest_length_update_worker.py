@@ -280,58 +280,21 @@ def main():
     # Initialize database connection
     initialize_postgres()
 
-    # Cold start: Pre-populate metrics table on first run
-    logger.info(
-        "Starting cold-start: computing metrics and quest lengths for all quests"
+    # Calculate time until next midnight (UTC)
+    now = datetime.now(timezone.utc)
+    tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
+        days=1
     )
-    metrics_failed = False
-    full_update_failed = False
+    seconds_until_midnight = (tomorrow - now).total_seconds()
 
-    # Attempt metrics update - continue even if it fails
-    try:
-        run_metrics_update()
-    except Exception as e:
-        logger.error(f"Cold-start metrics update failed: {e}", exc_info=True)
-        metrics_failed = True
+    logger.info(
+        f"Worker started. First update scheduled for midnight UTC at {tomorrow.strftime('%Y-%m-%d %H:%M:%S')} "
+        f"(sleeping {seconds_until_midnight:.0f} seconds)"
+    )
+    time.sleep(seconds_until_midnight)
 
-    # Attempt full length update - continue even if metrics failed
-    try:
-        run_full_update(lookback_days, batch_size, min_sessions)
-    except Exception as e:
-        logger.error(f"Cold-start full update failed: {e}", exc_info=True)
-        full_update_failed = True
-
-    # Log warning if both operations failed, but continue to main loop
-    if metrics_failed and full_update_failed:
-        logger.warning(
-            "Cold-start: both metrics update and full update encountered errors. "
-            "Worker will continue with periodic updates - data may be stale until next successful run."
-        )
-    elif metrics_failed:
-        logger.warning(
-            "Cold-start: metrics update failed but full update succeeded. "
-            "Quest length estimates are available but performance metrics are unavailable."
-        )
-    elif full_update_failed:
-        logger.warning(
-            "Cold-start: full update failed but metrics update succeeded. "
-            "Performance metrics are available but quest length estimates may be stale."
-        )
-    else:
-        logger.info("Cold-start completed successfully.")
-
-    # Main loop: repeat at configured interval
+    # Main loop: repeat at configured interval starting from midnight
     while True:
-        # Sleep until next update
-        sleep_seconds = update_interval_days * 86400
-        next_run = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(
-            seconds=sleep_seconds
-        )
-        logger.info(
-            f"Sleeping for {update_interval_days} day(s) until next run at {next_run}"
-        )
-        time.sleep(sleep_seconds)
-
         # Attempt metrics update - continue even if it fails
         try:
             run_metrics_update()
@@ -343,6 +306,16 @@ def main():
             run_full_update(lookback_days, batch_size, min_sessions)
         except Exception as e:
             logger.error(f"Update cycle full update failed: {e}", exc_info=True)
+
+        # Sleep until next update
+        sleep_seconds = update_interval_days * 86400
+        next_run = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(
+            seconds=sleep_seconds
+        )
+        logger.info(
+            f"Sleeping for {update_interval_days} day(s) until next run at {next_run}"
+        )
+        time.sleep(sleep_seconds)
 
 
 if __name__ == "__main__":
