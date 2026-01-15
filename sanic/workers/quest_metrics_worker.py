@@ -304,7 +304,7 @@ def main():
         f"Worker started. First update scheduled for midnight UTC at {tomorrow.strftime('%Y-%m-%d %H:%M:%S')} "
         f"(sleeping {seconds_until_midnight:.0f} seconds)"
     )
-    time.sleep(seconds_until_midnight)
+    # time.sleep(seconds_until_midnight) # TODO: Uncomment in production
 
     # Main loop: repeat at configured interval starting from midnight
     while True:
