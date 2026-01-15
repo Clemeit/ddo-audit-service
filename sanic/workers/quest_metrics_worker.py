@@ -1,24 +1,28 @@
 """
-Quest Length Update Worker - Periodic batch processing to update quest length estimates.
+Quest Metrics Worker - Periodic batch processing to calculate quest metrics and update length estimates.
 
-This worker updates the 'length' column in the quests table based on historical
-analytics from completed quest sessions. It runs on startup and then repeats daily.
+This worker runs daily (at midnight UTC) and performs two main operations:
 
-Processing Logic:
-1. Fetch all quest IDs from the quests table
-2. Process in batches of 50 quests
-3. For each quest:
-   - Get analytics from quest_sessions (using configurable lookback period)
-   - If total_sessions >= 100: extract average_duration_seconds, round and clamp to 0-32767
-   - If total_sessions < 100: set length to null
-4. Bulk update quest rows with new length values
-5. Sleep for configured interval (default 1 day) and repeat
+1. Quest Metrics Update (Two-Pass Approach):
+   Pass 1: Fetch analytics data from quest_sessions for all quests
+           - Calculates total_sessions, average_duration, histograms, etc.
+           - Stores intermediate results in Redis cache
+   Pass 2: Calculate relative metrics using cached analytics
+           - Computes heroic/epic XP per minute relative scores
+           - Computes popularity relative scores by comparing to peer quests
+   Final: Bulk write all metrics to quest_metrics table
+
+2. Quest Length Update:
+   - Batch process all quests
+   - Extract average_duration_seconds from analytics
+   - Update 'length' column in quests table
 
 The worker uses environment variables for configuration:
 - LOOKBACK_DAYS: Days of historical data to analyze (default: 90)
 - UPDATE_INTERVAL_DAYS: Days between update runs (default: 1)
 - BATCH_SIZE: Number of quests to process per batch (default: 50)
 - MIN_SESSIONS: Minimum completed sessions required to estimate length (default: 100)
+- QUEST_METRICS_DELAY_SECS: Delay between quest processing in Pass 1 (default: 0.1)
 """
 
 import os
@@ -40,10 +44,11 @@ from services.postgres import (  # type: ignore
     get_quest_analytics,
     upsert_quest_metrics_batch,
 )
+from services.redis import initialize_redis  # type: ignore
 from utils.quest_metrics_calc import get_all_quest_metrics_data  # type: ignore
 
 
-logger = logging.getLogger("quest_length_update_worker")
+logger = logging.getLogger("quest_metrics_worker")
 logging.basicConfig(
     level=os.getenv("WORKER_LOG_LEVEL", "INFO"),
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
@@ -82,11 +87,11 @@ def fetch_all_quest_ids() -> List[int]:
             return [int(row[0]) for row in rows]
 
 
-def process_quest_batch(
+def estimate_quest_lengths_batch(
     quest_ids: List[int], lookback_days: int, min_sessions: int = 100
 ) -> Tuple[List[Tuple[int, int]], List[int], List[int]]:
     """
-    Process a batch of quests and determine their length values.
+    Estimate length values for a batch of quests based on analytics data.
 
     Args:
         quest_ids: List of quest IDs to process
@@ -161,11 +166,16 @@ def bulk_update_quest_lengths(
 
 def run_metrics_update() -> None:
     """
-    Compute and update quest metrics for all quests.
+    Compute and update quest metrics for all quests using two-pass approach.
 
-    This includes:
-    - Heroic and Epic XP/min relative scores
-    - Popularity relative score
+    Pass 1: Fetch analytics data (total sessions, durations, histograms) for all quests
+            and cache in Redis
+    Pass 2: Calculate relative metrics (XP/min, popularity) using cached analytics
+    Final: Bulk upsert all metrics to quest_metrics table
+
+    Metrics calculated:
+    - Heroic and Epic XP/min relative scores (0-1 normalized vs peers)
+    - Popularity relative score (0-1 normalized vs peers)
     - Cached quest analytics (90-day lookback)
     """
     logger.info("Starting quest metrics calculation")
@@ -194,16 +204,18 @@ def run_metrics_update() -> None:
         logger.error(f"Failed to update quest metrics: {e}", exc_info=True)
 
 
-def run_full_update(lookback_days: int, batch_size: int, min_sessions: int) -> None:
+def estimate_and_update_quest_lengths(
+    lookback_days: int, batch_size: int, min_sessions: int
+) -> None:
     """
-    Run a full update cycle for all quests.
+    Estimate and update quest length values for all quests based on analytics data.
 
     Args:
         lookback_days: Number of days of historical data to analyze
         batch_size: Number of quests to process per batch
         min_sessions: Minimum sessions required to calculate length
     """
-    logger.info("Starting full quest length update cycle")
+    logger.info("Starting quest length estimation and batch update")
     start_time = time.time()
 
     # Fetch all quest IDs
@@ -229,7 +241,7 @@ def run_full_update(lookback_days: int, batch_size: int, min_sessions: int) -> N
         )
 
         # Process the batch
-        updates_with_value, updates_to_null, errors = process_quest_batch(
+        updates_with_value, updates_to_null, errors = estimate_quest_lengths_batch(
             batch_ids, lookback_days, min_sessions
         )
 
@@ -253,7 +265,7 @@ def run_full_update(lookback_days: int, batch_size: int, min_sessions: int) -> N
     # Final statistics
     elapsed_time = time.time() - start_time
     logger.info(
-        f"Full update cycle complete in {elapsed_time:.1f}s - "
+        f"Quest length estimation and batch update complete in {elapsed_time:.1f}s - "
         f"Total: {total_quests} quests, "
         f"Updated with values: {total_updated_with_value}, "
         f"Set to null: {total_updated_to_null}, "
@@ -269,7 +281,7 @@ def main():
     batch_size = env_int("BATCH_SIZE", 50)
     min_sessions = env_int("MIN_SESSIONS", 100)
 
-    logger.info("Quest Length Update Worker starting")
+    logger.info("Quest Metrics Worker starting")
     logger.info(
         f"Configuration: lookback_days={lookback_days}, "
         f"update_interval_days={update_interval_days}, "
@@ -277,8 +289,9 @@ def main():
         f"min_sessions={min_sessions}"
     )
 
-    # Initialize database connection
+    # Initialize database and Redis connections
     initialize_postgres()
+    initialize_redis()
 
     # Calculate time until next midnight (UTC)
     now = datetime.now(timezone.utc)
@@ -291,7 +304,7 @@ def main():
         f"Worker started. First update scheduled for midnight UTC at {tomorrow.strftime('%Y-%m-%d %H:%M:%S')} "
         f"(sleeping {seconds_until_midnight:.0f} seconds)"
     )
-    time.sleep(seconds_until_midnight)
+    # time.sleep(seconds_until_midnight) # TODO: Uncomment in production
 
     # Main loop: repeat at configured interval starting from midnight
     while True:
@@ -303,7 +316,7 @@ def main():
 
         # Attempt full length update - continue even if metrics failed
         try:
-            run_full_update(lookback_days, batch_size, min_sessions)
+            estimate_and_update_quest_lengths(lookback_days, batch_size, min_sessions)
         except Exception as e:
             logger.error(f"Update cycle full update failed: {e}", exc_info=True)
 

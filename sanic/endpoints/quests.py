@@ -4,7 +4,7 @@ Quest endpoints.
 
 import services.postgres as postgres_client
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from sanic import Blueprint
 from sanic.response import json
 from sanic.request import Request
@@ -60,49 +60,33 @@ async def get_quest_analytics(request: Request, quest_id: int):
         # Check if refresh is requested
         refresh = request.args.get("refresh", "false").lower() == "true"
 
-        # Try to get cached metrics
-        cached_metrics = None
-        if not refresh:
-            cached_metrics = postgres_client.get_quest_metrics(quest_id)
+        # Try to get cached metrics (always used unless refresh=true)
+        cached_metrics = (
+            None if refresh else postgres_client.get_quest_metrics(quest_id)
+        )
 
-            # Check if cache is fresh (updated in last 24 hours)
-            if cached_metrics:
-                updated_at = cached_metrics["updated_at"]
-                # Ensure updated_at is timezone-aware to avoid TypeError on subtraction
-                if isinstance(updated_at, datetime):
-                    if updated_at.tzinfo is None:
-                        updated_at = updated_at.replace(tzinfo=timezone.utc)
-                time_since_update = datetime.now(timezone.utc) - updated_at
-                if time_since_update < timedelta(days=1):
-                    # Cache is fresh, return it
-                    analytics_dict = cached_metrics["analytics_data"]
-                    analytics = (
-                        QuestAnalytics(**analytics_dict)
-                        if isinstance(analytics_dict, dict)
-                        else analytics_dict
-                    )
-
-                    result = {
-                        "data": analytics.model_dump(),
-                        "cached": True,
-                        "updated_at": cached_metrics["updated_at"].isoformat(),
-                        "heroic_xp_per_minute_relative": cached_metrics[
-                            "heroic_xp_per_minute_relative"
-                        ],
-                        "epic_xp_per_minute_relative": cached_metrics[
-                            "epic_xp_per_minute_relative"
-                        ],
-                        "heroic_popularity_relative": cached_metrics[
-                            "heroic_popularity_relative"
-                        ],
-                        "epic_popularity_relative": cached_metrics[
-                            "epic_popularity_relative"
-                        ],
-                    }
-                    return json(result)
+        if cached_metrics and not refresh:
+            result = {
+                "data": cached_metrics["analytics_data"],
+                "cached": True,
+                "updated_at": cached_metrics["updated_at"].isoformat(),
+                "heroic_xp_per_minute_relative": cached_metrics[
+                    "heroic_xp_per_minute_relative"
+                ],
+                "epic_xp_per_minute_relative": cached_metrics[
+                    "epic_xp_per_minute_relative"
+                ],
+                "heroic_popularity_relative": cached_metrics[
+                    "heroic_popularity_relative"
+                ],
+                "epic_popularity_relative": cached_metrics["epic_popularity_relative"],
+            }
+            return json(result)
 
         # Cache miss or refresh requested: calculate metrics for this quest only
-        quest_metrics = get_quest_metrics_single(quest_id)
+        quest_metrics = get_quest_metrics_single(
+            quest_id, force_refresh=refresh, cached_metrics=cached_metrics
+        )
 
         if not quest_metrics:
             return json({"message": "insufficient data for metrics"}, status=404)
@@ -117,15 +101,8 @@ async def get_quest_analytics(request: Request, quest_id: int):
             quest_metrics["analytics_data"],
         )
 
-        analytics_dict = quest_metrics["analytics_data"]
-        analytics = (
-            QuestAnalytics(**analytics_dict)
-            if isinstance(analytics_dict, dict)
-            else analytics_dict
-        )
-
         result = {
-            "data": analytics.model_dump(),
+            "data": quest_metrics["analytics_data"],
             "cached": False,
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "heroic_xp_per_minute_relative": quest_metrics[
