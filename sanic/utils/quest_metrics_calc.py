@@ -173,15 +173,20 @@ def get_quest_metrics_single(
         heroic_peers = []
         epic_peers = []
         all_quests = get_all_quests()
+        PEER_RANGE = 0  # TODO: set to 2
 
         if quest.heroic_normal_cr is not None:
             heroic_peers = [
-                q for q in all_quests if q.heroic_normal_cr == quest.heroic_normal_cr
+                q
+                for q in all_quests
+                if abs(q.heroic_normal_cr - quest.heroic_normal_cr) <= PEER_RANGE
             ]
 
         if quest.epic_normal_cr is not None:
             epic_peers = [
-                q for q in all_quests if q.epic_normal_cr == quest.epic_normal_cr
+                q
+                for q in all_quests
+                if abs(q.epic_normal_cr - quest.epic_normal_cr) <= PEER_RANGE
             ]
 
         # Fetch cached analytics for peer quests in a single query

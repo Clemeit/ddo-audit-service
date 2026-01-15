@@ -66,15 +66,8 @@ async def get_quest_analytics(request: Request, quest_id: int):
         )
 
         if cached_metrics and not refresh:
-            analytics_dict = cached_metrics["analytics_data"]
-            analytics = (
-                QuestAnalytics(**analytics_dict)
-                if isinstance(analytics_dict, dict)
-                else analytics_dict
-            )
-
             result = {
-                "data": analytics.model_dump(),
+                "data": cached_metrics["analytics_data"],
                 "cached": True,
                 "updated_at": cached_metrics["updated_at"].isoformat(),
                 "heroic_xp_per_minute_relative": cached_metrics[
@@ -108,15 +101,8 @@ async def get_quest_analytics(request: Request, quest_id: int):
             quest_metrics["analytics_data"],
         )
 
-        analytics_dict = quest_metrics["analytics_data"]
-        analytics = (
-            QuestAnalytics(**analytics_dict)
-            if isinstance(analytics_dict, dict)
-            else analytics_dict
-        )
-
         result = {
-            "data": analytics.model_dump(),
+            "data": quest_metrics["analytics_data"],
             "cached": False,
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "heroic_xp_per_minute_relative": quest_metrics[
