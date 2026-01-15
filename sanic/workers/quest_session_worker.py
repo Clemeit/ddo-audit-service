@@ -74,14 +74,14 @@ def env_float(name: str, default: float) -> float:
 
 def process_character_activities(
     character_id: int,
-    activities: List[Tuple[datetime, int]],
+    activities: List[Tuple[datetime, Optional[int], Optional[bool]]],
     initial_session: Optional[QuestSession],
 ) -> Tuple[List[Tuple], List[Tuple], Optional[QuestSession]]:
-    """Process all activities for a single character and generate session changes.
+    """Process all activities (location + status) for a single character.
 
     Args:
         character_id: ID of the character
-        activities: List of (timestamp, area_id) sorted chronologically
+        activities: List of (timestamp, area_id, is_online) sorted chronologically
         initial_session: The character's active session at the start (if any)
 
     Returns:
@@ -101,112 +101,89 @@ def process_character_activities(
         if quest:
             current_quest_area = quest.area_id
 
-    for timestamp, area_id in activities:
-        # Skip duplicate location events (same area)
-        if area_id == last_area_id:
+    for timestamp, area_id, is_online in activities:
+        if area_id is not None:
+            # Skip duplicate location events (same area)
+            if area_id == last_area_id:
+                activities_to_mark.append((character_id, timestamp))
+                continue
+
+            last_area_id = area_id
+
+            # If character has an active session, check if they're leaving it
+            if current_session is not None and current_quest_area != area_id:
+                # Only close the session if exit_timestamp would be >= entry_timestamp
+                # This prevents negative durations from out-of-order or clock-skewed data
+                if timestamp >= current_session.entry_timestamp:
+                    # Calculate duration to check 1-day cap (86400 seconds)
+                    duration_seconds = (
+                        timestamp - current_session.entry_timestamp
+                    ).total_seconds()
+                    if duration_seconds <= 86400:
+                        # Character is leaving the quest area
+                        sessions_to_insert.append(
+                            (
+                                current_session.character_id,
+                                current_session.quest_id,
+                                current_session.entry_timestamp,
+                                timestamp,  # exit_timestamp
+                            )
+                        )
+                    # Sessions exceeding 1 day are silently discarded (not recorded)
+                    current_session = None
+                    current_quest_area = None
+                else:
+                    # Skip this activity if it's before the session start (out-of-order data)
+                    logger.debug(
+                        f"Skipping out-of-order activity for character {character_id}: "
+                        f"activity timestamp {timestamp} is before active session start "
+                        f"{current_session.entry_timestamp} (quest_id={current_session.quest_id})"
+                    )
+                    activities_to_mark.append((character_id, timestamp))
+                    continue
+
+            # Check if new area is a quest area
+            new_quest_id = get_quest_id_for_area(area_id)
+            if new_quest_id is not None:
+                # Only create new session if different from current
+                if current_session is None or current_session.quest_id != new_quest_id:
+                    current_session = QuestSession(
+                        character_id=character_id,
+                        quest_id=new_quest_id,
+                        entry_timestamp=timestamp,
+                        exit_timestamp=None,
+                    )
+                    current_quest_area = area_id
+
+            # Mark this activity as processed
             activities_to_mark.append((character_id, timestamp))
             continue
 
-        last_area_id = area_id
-
-        # If character has an active session, check if they're leaving it
-        if current_session is not None and current_quest_area != area_id:
-            # Only close the session if exit_timestamp would be >= entry_timestamp
-            # This prevents negative durations from out-of-order or clock-skewed data
-            if timestamp >= current_session.entry_timestamp:
-                # Calculate duration to check 1-day cap (86400 seconds)
+        if is_online is not None:
+            # Close session on logoff (is_online = False)
+            if not is_online and current_session is not None:
                 duration_seconds = (
                     timestamp - current_session.entry_timestamp
                 ).total_seconds()
                 if duration_seconds <= 86400:
-                    # Character is leaving the quest area
                     sessions_to_insert.append(
                         (
                             current_session.character_id,
                             current_session.quest_id,
                             current_session.entry_timestamp,
-                            timestamp,  # exit_timestamp
+                            timestamp,  # exit_timestamp (logoff time)
                         )
                     )
                 # Sessions exceeding 1 day are silently discarded (not recorded)
                 current_session = None
                 current_quest_area = None
-            else:
-                # Skip this activity if it's before the session start (out-of-order data)
-                logger.debug(
-                    f"Skipping out-of-order activity for character {character_id}: "
-                    f"activity timestamp {timestamp} is before active session start "
-                    f"{current_session.entry_timestamp} (quest_id={current_session.quest_id})"
-                )
-                activities_to_mark.append((character_id, timestamp))
-                continue
+                last_area_id = None
 
-        # Check if new area is a quest area
-        new_quest_id = get_quest_id_for_area(area_id)
-        if new_quest_id is not None:
-            # Only create new session if different from current
-            if current_session is None or current_session.quest_id != new_quest_id:
-                current_session = QuestSession(
-                    character_id=character_id,
-                    quest_id=new_quest_id,
-                    entry_timestamp=timestamp,
-                    exit_timestamp=None,
-                )
-                current_quest_area = area_id
-
-        # Mark this activity as processed
-        activities_to_mark.append((character_id, timestamp))
+            # Mark status activity as processed
+            activities_to_mark.append((character_id, timestamp))
 
     # Do not persist sessions without an exit_timestamp
     # Active sessions will be tracked via Redis and closed when a leave event is observed
-
-    return sessions_to_insert, activities_to_mark, current_session
-
-
-def process_status_activities(
-    character_id: int,
-    activities: List[Tuple[datetime, bool]],
-    initial_session: Optional[QuestSession],
-) -> Tuple[List[Tuple], List[Tuple], Optional[QuestSession]]:
-    """Process status (logoff) activities for a single character and close sessions on logoff.
-
-    Args:
-        character_id: ID of the character
-        activities: List of (timestamp, is_online) sorted chronologically
-        initial_session: The character's active session at the start (if any)
-
-    Returns:
-        Tuple of (sessions_to_insert, activities_to_mark, final_session)
-        - sessions_to_insert: List of tuples (character_id, quest_id, entry_timestamp, exit_timestamp)
-        - activities_to_mark: List of tuples (character_id, timestamp) to mark as processed
-        - final_session: The character's active session after processing (if any)
-    """
-    sessions_to_insert = []
-    activities_to_mark = []
-    current_session = initial_session
-
-    for timestamp, is_online in activities:
-        # Close session on logoff (is_online = False)
-        if not is_online and current_session is not None:
-            # Calculate duration to check 1-day cap (86400 seconds)
-            duration_seconds = (
-                timestamp - current_session.entry_timestamp
-            ).total_seconds()
-            if duration_seconds <= 86400:
-                # Record the session with logoff as exit
-                sessions_to_insert.append(
-                    (
-                        current_session.character_id,
-                        current_session.quest_id,
-                        current_session.entry_timestamp,
-                        timestamp,  # exit_timestamp (logoff time)
-                    )
-                )
-            # Sessions exceeding 1 day are silently discarded (not recorded)
-            current_session = None
-
-        # Mark activity as processed regardless of whether we closed a session
-        activities_to_mark.append((character_id, timestamp))
 
     return sessions_to_insert, activities_to_mark, current_session
 
@@ -295,40 +272,12 @@ def process_batch(
 
         initial_session = character_sessions.get(character_id)
 
-        # Separate location and status activities for this character
-        location_acts = [
-            (ts, area_id) for ts, area_id, _ in char_activities if area_id is not None
-        ]
-        status_acts = [
-            (ts, is_online)
-            for ts, _, is_online in char_activities
-            if is_online is not None
-        ]
+        sessions, activities_marked, current_session = process_character_activities(
+            character_id, char_activities, initial_session
+        )
 
-        # Process location activities first, then status activities
-        current_session = initial_session
-        location_sessions = []
-        location_marks = []
-        status_sessions = []
-        status_marks = []
-
-        if location_acts:
-            location_sessions, location_marks, current_session = (
-                process_character_activities(
-                    character_id, location_acts, current_session
-                )
-            )
-
-        if status_acts:
-            status_sessions, status_marks, current_session = process_status_activities(
-                character_id, status_acts, current_session
-            )
-
-        # Combine results from both activity types
-        all_sessions_to_insert.extend(location_sessions)
-        all_sessions_to_insert.extend(status_sessions)
-        all_activities_to_mark.extend(location_marks)
-        all_activities_to_mark.extend(status_marks)
+        all_sessions_to_insert.extend(sessions)
+        all_activities_to_mark.extend(activities_marked)
 
         # Collect Redis updates instead of applying immediately
         if current_session is not None:
@@ -356,7 +305,7 @@ def process_batch(
     # Update last_timestamp to the latest processed
     # Query uses > so max timestamp can be used directly (no duplicates at boundary)
     new_last_timestamp = (
-        max(ts for ts, _, _ in all_activities_to_mark)
+        max(ts for _, ts in all_activities_to_mark)
         if all_activities_to_mark
         else last_timestamp
     )
