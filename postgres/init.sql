@@ -145,6 +145,13 @@ CREATE INDEX idx_quest_sessions_character_entry ON public."quest_sessions" (char
 CREATE INDEX idx_quest_sessions_quest_entry ON public."quest_sessions" (quest_id, entry_timestamp);
 CREATE INDEX idx_quest_sessions_active ON public."quest_sessions" (character_id, quest_id) WHERE exit_timestamp IS NULL;
 
+-- Optimized index for quest analytics queries that filter on completed sessions
+-- This covers the most expensive queries: quest_id + entry_timestamp + exit_timestamp IS NOT NULL + duration_seconds IS NOT NULL
+-- The INCLUDE clause adds duration_seconds as a covering index to avoid table lookups
+CREATE INDEX idx_quest_sessions_analytics ON public."quest_sessions" (quest_id, entry_timestamp) 
+    INCLUDE (duration_seconds, exit_timestamp)
+    WHERE exit_timestamp IS NOT NULL AND duration_seconds IS NOT NULL;
+
 -- Function to calculate duration_seconds when exit_timestamp is set
 CREATE OR REPLACE FUNCTION calculate_quest_session_duration()
 RETURNS TRIGGER AS $$

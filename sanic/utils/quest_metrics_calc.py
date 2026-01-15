@@ -1,6 +1,8 @@
 """Shared functions for calculating quest metrics and analytics."""
 
 import logging
+import os
+import time
 from typing import Optional
 
 from services.postgres import (
@@ -318,6 +320,9 @@ def get_all_quest_metrics_data() -> dict:
 
         metrics_data = {}
 
+        # Get delay between quest processing to reduce postgres load
+        delay_between_quests = float(os.getenv("QUEST_METRICS_DELAY_SECS", "0.1"))
+
         # Fetch analytics individually for all quests and cache by quest id
         analytics_by_id = {}
         for quest in all_quests:
@@ -325,6 +330,11 @@ def get_all_quest_metrics_data() -> dict:
                 analytics_by_id[quest.id] = get_quest_analytics(
                     quest.id, lookback_days=LOOKBACK_DAYS
                 )
+                
+                # Sleep between quest processing to reduce load on postgres
+                if delay_between_quests > 0:
+                    time.sleep(delay_between_quests)
+                    
             except Exception as e:
                 logger.error(
                     f"Failed to get analytics for quest {quest.id}: {e}", exc_info=True
