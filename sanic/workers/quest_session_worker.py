@@ -306,8 +306,8 @@ def process_batch(
         mark_activities_as_processed(activity_ctids)
 
     # Advance keyset cursor to last row returned (results are ordered)
-    new_last_timestamp = activities[-1][1]
-    new_last_ctid = activities[-1][5]
+    new_last_timestamp = activities[-1].timestamp
+    new_last_ctid = activities[-1].ctid_text
 
     return (
         new_last_timestamp,
