@@ -14,6 +14,7 @@ from services.postgres import (
     get_quest_metrics_bulk,
 )
 from services.redis import get_redis_client
+from models.quest import Quest
 
 from models.quest_session import QuestAnalytics
 
@@ -310,7 +311,7 @@ def get_quest_metrics_single(
         return None
 
 
-def compute_all_quest_analytics_pass1() -> dict:
+def compute_all_quest_analytics_pass1(all_quests: list[Quest]) -> dict:
     """Pass 1: Fetch and cache analytics data for all quests in Redis.
 
     This pass queries the quest_sessions table for each quest to compute
@@ -323,11 +324,6 @@ def compute_all_quest_analytics_pass1() -> dict:
     logger.info("[PASS 1] Fetching analytics for all quests")
 
     try:
-        all_quests = get_all_quests()
-        if not all_quests:
-            logger.warning("No quests found in database")
-            return {}
-
         logger.info(f"[PASS 1] Processing {len(all_quests)} quests")
 
         # Get delay between quest processing to reduce postgres load
@@ -374,7 +370,7 @@ def compute_all_quest_analytics_pass1() -> dict:
         raise
 
 
-def compute_all_quest_relative_metrics_pass2() -> dict:
+def compute_all_quest_relative_metrics_pass2(all_quests: list[Quest]) -> dict:
     """Pass 2: Calculate relative metrics for all quests using cached analytics.
 
     This pass uses the analytics data cached in Redis from Pass 1 to compute
@@ -388,7 +384,7 @@ def compute_all_quest_relative_metrics_pass2() -> dict:
     try:
         # Load analytics from Redis
         logger.info("[PASS 2] Loading cached analytics from Redis")
-        analytics_by_id = {}
+        analytics_by_id: dict[int, QuestAnalytics] = {}
 
         with get_redis_client() as redis_client:
             cached_data = redis_client.hgetall(REDIS_QUEST_ANALYTICS_CACHE_KEY)
@@ -405,15 +401,9 @@ def compute_all_quest_relative_metrics_pass2() -> dict:
 
         logger.info(f"[PASS 2] Loaded analytics for {len(analytics_by_id)} quests")
 
-        # Fetch all quests metadata
-        all_quests = get_all_quests()
-        if not all_quests:
-            logger.warning("No quests found in database")
-            return {}
-
         # Group quests by CR level (both heroic and epic)
-        heroic_cr_groups = {}
-        epic_cr_groups = {}
+        heroic_cr_groups: dict[int, list[Quest]] = {}
+        epic_cr_groups: dict[int, list[Quest]] = {}
 
         for quest in all_quests:
             if quest.heroic_normal_cr is not None:
@@ -559,7 +549,7 @@ def compute_all_quest_relative_metrics_pass2() -> dict:
             redis_client.delete(REDIS_QUEST_ANALYTICS_CACHE_KEY)
 
 
-def get_all_quest_metrics_data() -> dict:
+def get_all_quest_metrics_data(all_quests: list[Quest]) -> dict:
     """Calculate complete metrics for all quests using two-pass approach.
 
     Pass 1: Fetch analytics data from quest_sessions for each quest
@@ -577,10 +567,10 @@ def get_all_quest_metrics_data() -> dict:
 
     try:
         # Pass 1: Fetch and cache analytics
-        compute_all_quest_analytics_pass1()
+        compute_all_quest_analytics_pass1(all_quests)
 
         # Pass 2: Calculate relative metrics using cached analytics
-        metrics_data = compute_all_quest_relative_metrics_pass2()
+        metrics_data = compute_all_quest_relative_metrics_pass2(all_quests)
 
         logger.info(
             f"Two-pass calculation complete. Final metrics for {len(metrics_data)} quests"
