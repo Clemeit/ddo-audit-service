@@ -127,7 +127,7 @@ def process_character_activities(
             activities_to_mark.append((character_id, timestamp))
 
             # Only act on explicit logout (status=false)
-            if not is_active:
+            if is_active is False:
                 # Discard any active session without persisting it
                 current_session = None
                 current_quest_area = None
