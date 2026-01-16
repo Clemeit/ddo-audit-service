@@ -78,41 +78,49 @@ def clamp_to_smallint(value: float) -> int:
 
 
 def bulk_update_quest_lengths(
-    updates_with_value: List[Tuple[int, int]], updates_to_null: List[int]
+    updates_with_value: List[Tuple[int, int]],
+    updates_to_null: List[int],
+    batch_size: int = 50,
 ) -> None:
     """
-    Bulk update quest length values in the database.
+    Bulk update quest length values in the database in batches.
 
     Args:
         updates_with_value: List of (quest_id, length_seconds) tuples
         updates_to_null: List of quest_ids to set length to null
+        batch_size: Number of quests to update per batch
     """
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            # Update quests with calculated length values
+            # Update quests with calculated length values in batches
             if updates_with_value:
                 update_query = "UPDATE public.quests SET length = %s WHERE id = %s"
-                cursor.executemany(
-                    update_query, [(length, qid) for qid, length in updates_with_value]
-                )
+                for i in range(0, len(updates_with_value), batch_size):
+                    batch = updates_with_value[i : i + batch_size]
+                    cursor.executemany(
+                        update_query, [(length, qid) for qid, length in batch]
+                    )
+                    logger.debug(f"Updated {len(batch)} quests with length values")
 
-            # Set length to null for quests with insufficient data
+            # Set length to null for quests with insufficient data in batches
             if updates_to_null:
                 null_query = "UPDATE public.quests SET length = NULL WHERE id = %s"
-                cursor.executemany(null_query, [(qid,) for qid in updates_to_null])
+                for i in range(0, len(updates_to_null), batch_size):
+                    batch = updates_to_null[i : i + batch_size]
+                    cursor.executemany(null_query, [(qid,) for qid in batch])
+                    logger.debug(f"Set {len(batch)} quests length to null")
 
             conn.commit()
 
 
 def extract_and_batch_quest_lengths(
-    metrics_data: dict, batch_size: int, min_sessions: int = 100
+    metrics_data: dict, min_sessions: int = 100
 ) -> Tuple[List[Tuple[int, int]], List[int]]:
     """
     Extract length estimates from metrics_data and return batched updates.
 
     Args:
         metrics_data: Dictionary mapping quest_id to metrics dict with analytics_data
-        batch_size: Number of quests to group per batch (for logging)
         min_sessions: Minimum sessions required to estimate length
 
     Returns:
@@ -192,11 +200,11 @@ def run_metrics_update(batch_size: int = 50, min_sessions: int = 100) -> None:
         # Extract and batch update quest lengths from computed metrics
         logger.info("Extracting quest lengths from computed analytics")
         updates_with_value, updates_to_null = extract_and_batch_quest_lengths(
-            metrics_data, batch_size, min_sessions
+            metrics_data, min_sessions
         )
 
         if updates_with_value or updates_to_null:
-            bulk_update_quest_lengths(updates_with_value, updates_to_null)
+            bulk_update_quest_lengths(updates_with_value, updates_to_null, batch_size)
             logger.info(
                 f"Quest lengths updated: {len(updates_with_value)} with values, "
                 f"{len(updates_to_null)} set to null"
