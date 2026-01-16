@@ -104,17 +104,17 @@ def process_character_activities(
         initial_session: The character's active session at the start (if any)
 
     Returns:
-        Tuple of (sessions_to_insert, activities_to_mark, final_session, logout_seen)
+        Tuple of (sessions_to_insert, activities_to_mark, final_session, status_seen)
         - sessions_to_insert: List of tuples (character_id, quest_id, entry_timestamp, exit_timestamp)
         - activities_to_mark: List of tuples (character_id, timestamp) to mark as processed
         - final_session: Active session at end of processing (None if none)
-        - logout_seen: True if a logout (status=false) event was processed
+        - status_seen: True if any status event (login/logout) was processed
     """
     sessions_to_insert = []
     activities_to_mark = []
     current_session = initial_session
     last_area_id = None
-    logout_seen = False
+    status_seen = False
 
     # Get quest's area if there's an initial session
     current_quest_area = None
@@ -122,17 +122,15 @@ def process_character_activities(
         current_quest_area = QUEST_ID_TO_AREA.get(current_session.quest_id)
 
     for timestamp, activity_type, area_id, is_active in activities:
-        # Handle logout/status events first
+        # Handle status events (login/logout) first
         if activity_type == "status":
             activities_to_mark.append((character_id, timestamp))
 
-            # Only act on explicit logout (status=false)
-            if is_active is False:
-                # Discard any active session without persisting it
-                current_session = None
-                current_quest_area = None
-                last_area_id = None  # reset dedup tracking after logout
-                logout_seen = True
+            # Discard any active session without persisting it when a status change occurs
+            current_session = None
+            current_quest_area = None
+            last_area_id = None  # reset dedup tracking after status change
+            status_seen = True
             continue
 
         # From here on, only location events are expected
@@ -187,7 +185,7 @@ def process_character_activities(
     # Do not persist sessions without an exit_timestamp
     # Active sessions will be tracked via Redis and closed when a leave event is observed
 
-    return sessions_to_insert, activities_to_mark, current_session, logout_seen
+    return sessions_to_insert, activities_to_mark, current_session, status_seen
 
 
 def process_batch(
@@ -262,7 +260,7 @@ def process_batch(
         char_activities.sort(key=lambda x: x[0])
 
         initial_session = character_sessions.get(character_id)
-        sessions, activities_marked, final_session, logout_seen = (
+        sessions, activities_marked, final_session, status_seen = (
             process_character_activities(character_id, char_activities, initial_session)
         )
 
@@ -270,7 +268,7 @@ def process_batch(
         all_activities_to_mark.extend(activities_marked)
 
         # Collect Redis updates instead of applying immediately
-        if logout_seen:
+        if status_seen:
             redis_updates_clear.append(character_id)
         elif final_session is not None:
             redis_updates_set[character_id] = {

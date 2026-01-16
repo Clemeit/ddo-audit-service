@@ -4182,11 +4182,12 @@ def get_unprocessed_quest_activities(
     batch_size: int,
     time_window_hours: int = 24,
 ) -> list[tuple]:
-    """Fetch unprocessed quest-related activities (location + logout status).
+    """Fetch unprocessed quest-related activities (location + status events).
 
     Uses time-based batching optimized for TimescaleDB chunk access, with a row limit
     as a safety valve to prevent oversized batches. Includes location changes and
-    status=false (logout) events so the worker can discard active sessions on logout.
+    any status events so the worker can discard active sessions whenever a status
+    change (login or logout) is observed.
 
     Args:
         last_timestamp: Start processing from this timestamp
@@ -4221,7 +4222,7 @@ def get_unprocessed_quest_activities(
           AND timestamp <= %s
           AND (
               activity_type = 'location'
-              OR (activity_type = 'status' AND (data->>'value')::boolean = false)
+              OR activity_type = 'status'
           )
           AND quest_session_processed = false
         ORDER BY timestamp ASC, character_id ASC
