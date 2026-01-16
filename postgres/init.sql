@@ -112,9 +112,8 @@ SELECT add_retention_policy('character_activity', INTERVAL '180 days');
 
 CREATE INDEX ON public."character_activity" (character_id);
 
--- Replace location-only partial index with a multi-activity partial index
--- to support both quest location and logout status events
-DROP INDEX IF EXISTS idx_character_activity_unprocessed;
+-- Multi-activity partial index to support both quest location
+-- and logout status events
 CREATE INDEX idx_character_activity_unprocessed_multi
 ON public."character_activity" ("timestamp", character_id)
 WHERE activity_type IN ('location', 'status') AND quest_session_processed = false;
