@@ -43,6 +43,7 @@ from services.redis import (  # type: ignore
     initialize_redis,
     batch_get_active_quest_session_states,
     batch_update_active_quest_session_states,
+    get_redis_client,
 )
 from utils.quest_sessions import get_quest_id_for_area  # type: ignore
 from models.quest_session import QuestSession  # type: ignore
@@ -92,6 +93,10 @@ def process_character_activities(
     activities_to_mark = []
     current_session = initial_session
     last_area_id = None
+    last_timestamp = None  # Track time gaps to detect logout/login events
+
+    # Maximum inactivity before a quest session is automatically closed (5 minutes)
+    MAX_SESSION_INACTIVITY_SECONDS = 5 * 60
 
     # Get quest's area if there's an initial session
     current_quest_area = None
@@ -101,6 +106,22 @@ def process_character_activities(
             current_quest_area = quest.area_id
 
     for timestamp, area_id in activities:
+        # Check for logout/login gaps (> 5 minutes with no activity)
+        # When a character is inactive for > 5 minutes, they're automatically removed from the quest
+        if last_timestamp is not None and current_session is not None:
+            gap_seconds = (timestamp - last_timestamp).total_seconds()
+            if gap_seconds > MAX_SESSION_INACTIVITY_SECONDS:
+                # Character was inactive too long - discard the stale session
+                logger.debug(
+                    f"Discarding stale session for character {character_id}: "
+                    f"inactivity gap of {gap_seconds}s exceeds max {MAX_SESSION_INACTIVITY_SECONDS}s "
+                    f"(quest_id={current_session.quest_id})"
+                )
+                current_session = None
+                current_quest_area = None
+
+        last_timestamp = timestamp
+
         # Skip duplicate location events (same area)
         if area_id == last_area_id:
             activities_to_mark.append((character_id, timestamp))
@@ -277,6 +298,26 @@ def format_duration(seconds: float) -> str:
         return f"{hours:.1f}h"
 
 
+def clear_all_active_quest_sessions() -> None:
+    """Clear all active quest session states from Redis on startup.
+
+    This ensures a clean state and prevents out-of-order activity errors
+    that can occur if the worker was interrupted during a previous run.
+    """
+    try:
+        with get_redis_client() as client:
+            keys = client.keys("active_quest_session:*")
+            if keys:
+                deleted_count = client.delete(*keys)
+                logger.info(
+                    f"Cleared {deleted_count} stale active quest sessions from Redis"
+                )
+            else:
+                logger.info("No stale active quest sessions found in Redis")
+    except Exception as e:
+        logger.warning(f"Failed to clear active quest sessions from Redis: {e}")
+
+
 def run_worker():
     """Main worker loop - scheduled batch processing."""
     time_window_hours = 24
@@ -293,6 +334,9 @@ def run_worker():
     # Initialize database and Redis connections
     initialize_postgres()
     initialize_redis()
+
+    # Clear any stale active quest sessions from a previous interrupted run
+    clear_all_active_quest_sessions()
 
     # Start processing from lookback_days ago
     start_time = time.time()
