@@ -549,7 +549,7 @@ def compute_all_quest_relative_metrics_pass2(all_quests: list[Quest]) -> dict:
             redis_client.delete(REDIS_QUEST_ANALYTICS_CACHE_KEY)
 
 
-def get_all_quest_metrics_data() -> dict:
+def get_all_quest_metrics_data(all_quests: list[Quest]) -> dict:
     """Calculate complete metrics for all quests using two-pass approach.
 
     Pass 1: Fetch analytics data from quest_sessions for each quest
@@ -566,12 +566,6 @@ def get_all_quest_metrics_data() -> dict:
     logger.info("Starting two-pass quest metrics calculation")
 
     try:
-        all_quests = get_all_quests()
-
-        if not all_quests:
-            logger.warning("No quests found in database")
-            return {}
-
         # Pass 1: Fetch and cache analytics
         compute_all_quest_analytics_pass1(all_quests)
 

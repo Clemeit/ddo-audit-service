@@ -41,7 +41,7 @@ if PROJECT_ROOT not in sys.path:
 from services.postgres import (  # type: ignore
     initialize_postgres,
     get_db_connection,
-    get_quest_analytics,
+    get_all_quests,
     upsert_quest_metrics_batch,
 )
 from services.redis import initialize_redis  # type: ignore
@@ -100,6 +100,7 @@ def bulk_update_quest_lengths(
                     cursor.executemany(
                         update_query, [(length, qid) for qid, length in batch]
                     )
+                    conn.commit()
                     logger.debug(f"Updated {len(batch)} quests with length values")
 
             # Set length to null for quests with insufficient data in batches
@@ -108,43 +109,39 @@ def bulk_update_quest_lengths(
                 for i in range(0, len(updates_to_null), batch_size):
                     batch = updates_to_null[i : i + batch_size]
                     cursor.executemany(null_query, [(qid,) for qid in batch])
+                    conn.commit()
                     logger.debug(f"Set {len(batch)} quests length to null")
-
-            conn.commit()
 
 
 def extract_and_batch_quest_lengths(
-    metrics_data: dict, min_sessions: int = 100
+    metrics_data: dict, all_quest_ids: List[int], min_sessions: int = 100
 ) -> Tuple[List[Tuple[int, int]], List[int]]:
     """
-    Extract length estimates from metrics_data and return batched updates.
+    Extract length estimates from metrics_data and identify quests with insufficient data.
+
+    Quests in metrics_data have sufficient sessions and their average_duration is extracted.
+    Quests not in metrics_data (skipped in Pass 2 due to insufficient sessions or errors)
+    will have their length set to null to avoid stale data.
 
     Args:
         metrics_data: Dictionary mapping quest_id to metrics dict with analytics_data
+        all_quest_ids: List of all quest IDs in the database
         min_sessions: Minimum sessions required to estimate length
 
     Returns:
         Tuple of:
         - List of (quest_id, length_seconds) for quests with sufficient data
-        - List of quest_ids to set to null (insufficient data)
+        - List of quest_ids to set to null (insufficient data or not in metrics_data)
     """
     updates_with_value: List[Tuple[int, int]] = []
     updates_to_null: List[int] = []
 
+    # Process quests in metrics_data
     for quest_id, metrics in metrics_data.items():
         try:
             analytics_data = metrics.get("analytics_data", {})
-
-            # Handle both dict and QuestAnalytics object
-            if isinstance(analytics_data, dict):
-                total_sessions = analytics_data.get("total_sessions", 0)
-                average_duration = analytics_data.get("average_duration_seconds")
-            else:
-                # QuestAnalytics object
-                total_sessions = getattr(analytics_data, "total_sessions", 0)
-                average_duration = getattr(
-                    analytics_data, "average_duration_seconds", None
-                )
+            total_sessions = analytics_data.get("total_sessions", 0)
+            average_duration = analytics_data.get("average_duration_seconds")
 
             if total_sessions >= min_sessions and average_duration is not None:
                 # Sufficient data - update with clamped value
@@ -156,6 +153,13 @@ def extract_and_batch_quest_lengths(
 
         except Exception as e:
             logger.error(f"Failed to extract length for quest {quest_id}: {e}")
+            updates_to_null.append(quest_id)
+
+    # Identify quests not in metrics_data (skipped in Pass 2 due to insufficient sessions)
+    # and set their length to null to avoid stale data
+    quests_in_metrics = set(metrics_data.keys())
+    for quest_id in all_quest_ids:
+        if quest_id not in quests_in_metrics:
             updates_to_null.append(quest_id)
 
     return updates_with_value, updates_to_null
@@ -185,8 +189,16 @@ def run_metrics_update(batch_size: int = 50, min_sessions: int = 100) -> None:
     start_time = time.time()
 
     try:
+        all_quests = get_all_quests()
+
+        if not all_quests:
+            logger.warning("No quests found in database")
+            return {}
+
+        all_quest_ids = [quest.id for quest in all_quests]
+
         # Calculate metrics for all quests
-        metrics_data = get_all_quest_metrics_data()
+        metrics_data = get_all_quest_metrics_data(all_quests)
 
         if not metrics_data:
             logger.warning("No metrics data generated")
@@ -200,7 +212,7 @@ def run_metrics_update(batch_size: int = 50, min_sessions: int = 100) -> None:
         # Extract and batch update quest lengths from computed metrics
         logger.info("Extracting quest lengths from computed analytics")
         updates_with_value, updates_to_null = extract_and_batch_quest_lengths(
-            metrics_data, min_sessions
+            metrics_data, all_quest_ids, min_sessions
         )
 
         if updates_with_value or updates_to_null:
@@ -258,7 +270,7 @@ def main():
         )
         seconds_until_midnight = (tomorrow - now).total_seconds()
         logger.info(
-            f"Next run at {tomorrow.strftime('%Y-%m-%d %H:%M:%S')}. Sleeping for {seconds_until_midnight} seconds/"
+            f"Next run at {tomorrow.strftime('%Y-%m-%d %H:%M:%S')}. Sleeping for {seconds_until_midnight:.0f} seconds."
         )
         # Sleep until next update
         time.sleep(seconds_until_midnight)
