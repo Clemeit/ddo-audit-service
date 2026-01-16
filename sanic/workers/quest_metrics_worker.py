@@ -182,7 +182,7 @@ def run_metrics_update(batch_size: int = 50, min_sessions: int = 100) -> None:
     - Cached quest analytics (90-day lookback)
 
     Args:
-        batch_size: Number of quests to group per length update batch (for logging)
+        batch_size: Number of quests to update per database batch
         min_sessions: Minimum sessions required to calculate length
     """
     logger.info("Starting quest metrics calculation")
@@ -193,7 +193,7 @@ def run_metrics_update(batch_size: int = 50, min_sessions: int = 100) -> None:
 
         if not all_quests:
             logger.warning("No quests found in database")
-            return {}
+            return
 
         all_quest_ids = [quest.id for quest in all_quests]
 
@@ -237,14 +237,12 @@ def main():
     """Main worker loop."""
     # Configuration from environment variables
     lookback_days = env_int("LOOKBACK_DAYS", 90)
-    update_interval_days = env_int("UPDATE_INTERVAL_DAYS", 1)
     batch_size = env_int("BATCH_SIZE", 50)
     min_sessions = env_int("MIN_SESSIONS", 100)
 
     logger.info("Quest Metrics Worker starting")
     logger.info(
         f"Configuration: lookback_days={lookback_days}, "
-        f"update_interval_days={update_interval_days}, "
         f"batch_size={batch_size}, "
         f"min_sessions={min_sessions}"
     )
@@ -253,7 +251,7 @@ def main():
     initialize_postgres()
     initialize_redis()
 
-    # Main loop: repeat at configured interval starting from midnight
+    # Main loop: repeat daily at midnight UTC
     while True:
         # Attempt metrics and length update - continue even if it fails
         try:
