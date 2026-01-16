@@ -354,6 +354,9 @@ def run_worker():
     initialize_postgres()
     initialize_redis()
 
+    # Load quest area lookup maps
+    load_quest_area_maps()
+
     # Clear any stale active quest sessions from a previous interrupted run
     clear_all_active_quest_sessions()
 
@@ -367,11 +370,14 @@ def run_worker():
     total_sessions_created = 0
     batch_count = 0
     first_run = True
+    last_quest_lookup = time.time()
 
     while True:
         try:
-            # Refresh quest lookup maps each run to avoid stale quest/area data
-            load_quest_area_maps()
+            # Refresh quest area maps every hour in case of updates
+            if time.time() - last_quest_lookup > 3600:
+                load_quest_area_maps()
+                last_quest_lookup = time.time()
 
             batch_count += 1
             batch_start_time = time.time()
