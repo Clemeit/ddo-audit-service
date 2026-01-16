@@ -110,13 +110,14 @@ SELECT create_hypertable('character_activity', 'timestamp');
 -- Add a retention policy to delete data older than 180 days
 SELECT add_retention_policy('character_activity', INTERVAL '180 days');
 
--- Add an index on the character_id column
 CREATE INDEX ON public."character_activity" (character_id);
 
--- Add an index for unprocessed location activities aligned to query filter order
-CREATE INDEX idx_character_activity_unprocessed
+-- Replace location-only partial index with a multi-activity partial index
+-- to support both quest location and logout status events
+DROP INDEX IF EXISTS idx_character_activity_unprocessed;
+CREATE INDEX idx_character_activity_unprocessed_multi
 ON public."character_activity" ("timestamp", character_id)
-WHERE activity_type = 'location' AND quest_session_processed = false;
+WHERE activity_type IN ('location', 'status') AND quest_session_processed = false;
 
 ALTER TABLE IF EXISTS public."character_activity"
     OWNER to pgadmin;
