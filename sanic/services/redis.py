@@ -1319,6 +1319,44 @@ def batch_update_active_quest_session_states(
         pass
 
 
+def get_quest_worker_checkpoint() -> Optional[datetime]:
+    """Retrieve the quest worker's last processed timestamp from Redis.
+
+    Returns:
+        datetime of the last processed timestamp, or None if not found
+    """
+    try:
+        with get_redis_client() as client:
+            raw_value = client.get("quest_worker:last_processed_timestamp")
+            if raw_value:
+                if isinstance(raw_value, bytes):
+                    raw_value = raw_value.decode("utf-8")
+                return datetime.fromisoformat(raw_value)
+    except Exception as e:
+        logger.warning(f"Failed to retrieve quest worker checkpoint from Redis: {e}")
+    return None
+
+
+def set_quest_worker_checkpoint(timestamp: datetime) -> None:
+    """Store the quest worker's last processed timestamp in Redis.
+
+    The checkpoint is stored with a 14-day TTL for automatic cleanup if the worker is offline.
+
+    Args:
+        timestamp: The last processed timestamp to store
+    """
+    try:
+        with get_redis_client() as client:
+            # 14 days = 1209600 seconds
+            client.setex(
+                "quest_worker:last_processed_timestamp",
+                1209600,
+                timestamp.isoformat(),
+            )
+    except Exception as e:
+        logger.warning(f"Failed to store quest worker checkpoint in Redis: {e}")
+
+
 def get_one_time_user_settings(user_id: str) -> Optional[dict]:
     """
     Atomically retrieve and delete one-time user settings.

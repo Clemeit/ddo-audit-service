@@ -44,6 +44,8 @@ from services.redis import (  # type: ignore
     batch_get_active_quest_session_states,
     batch_update_active_quest_session_states,
     get_redis_client,
+    get_quest_worker_checkpoint,
+    set_quest_worker_checkpoint,
 )
 from models.quest_session import QuestSession  # type: ignore
 
@@ -358,11 +360,20 @@ def run_worker():
     # Clear any stale active quest sessions from a previous interrupted run
     clear_all_active_quest_sessions()
 
-    # Start processing from lookback_days ago
+    # Try to resume from checkpoint, otherwise fall back to lookback_days
     start_time = time.time()
-    last_timestamp = datetime.now(timezone.utc) - timedelta(days=lookback_days)
-
-    logger.info(f"Starting worker from timestamp: {last_timestamp.isoformat()}")
+    checkpoint = get_quest_worker_checkpoint()
+    if checkpoint:
+        last_timestamp = checkpoint
+        logger.info(
+            f"Found checkpoint, resuming from timestamp: {last_timestamp.isoformat()}"
+        )
+    else:
+        last_timestamp = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+        logger.info(
+            f"No checkpoint found, starting from {lookback_days}-day lookback: "
+            f"{last_timestamp.isoformat()}"
+        )
 
     total_activities_processed = 0
     total_sessions_created = 0
@@ -412,11 +423,13 @@ def run_worker():
                     f"Total runtime: {format_duration(total_runtime)}. "
                     f"Sleeping for {format_duration(idle_sleep)} before next check..."
                 )
-                time.sleep(idle_sleep)
-                # Reset for next cycle
-                last_timestamp = datetime.now(timezone.utc) - timedelta(
-                    days=lookback_days
+                last_timestamp = max(
+                    datetime.now(timezone.utc) - timedelta(hours=time_window_hours),
+                    last_timestamp,
                 )
+                time.sleep(idle_sleep)
+
+                # Reset for next cycle
                 total_activities_processed = 0
                 total_sessions_created = 0
                 batch_count = 0
@@ -428,6 +441,12 @@ def run_worker():
                 activities_count / batch_duration if batch_duration > 0 else 0
             )
 
+            # Update checkpoint in Redis
+            set_quest_worker_checkpoint(new_last_timestamp)
+
+            # Calculate checkpoint age for monitoring
+            checkpoint_age = datetime.now(timezone.utc) - new_last_timestamp
+
             # Build progress log message
             log_parts = [
                 f"Batch {batch_count} complete:",
@@ -437,6 +456,7 @@ def run_worker():
                 f"rate: {activities_per_second:.1f} activities/sec",
                 f"total processed: {total_activities_processed:,} activities",
                 f"runtime: {format_duration(total_runtime)}",
+                f"checkpoint age: {format_duration(checkpoint_age.total_seconds())}",
             ]
 
             logger.info(" | ".join(log_parts))
@@ -451,7 +471,7 @@ def run_worker():
                 first_run = False
 
             # Small sleep between batches to avoid overwhelming the database
-            if sleep_between_batches > 0:
+            if sleep_between_batches > 0 and not first_run:
                 time.sleep(sleep_between_batches)
 
         except KeyboardInterrupt:
