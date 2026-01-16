@@ -50,7 +50,7 @@ from models.quest_session import QuestSession  # type: ignore
 
 logger = logging.getLogger("quest_session_worker")
 logging.basicConfig(
-    level=os.getenv("WORKER_LOG_LEVEL", "INFO"),
+    level="DEBUG",  # TODO: revert: os.getenv("WORKER_LOG_LEVEL", "INFO"),
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
 )
 
@@ -325,7 +325,6 @@ def run_worker():
     total_activities_processed = 0
     total_sessions_created = 0
     batch_count = 0
-    initial_catchup = True  # Use larger window for first pass to catch recent data
 
     while True:
         try:
@@ -334,21 +333,13 @@ def run_worker():
 
             logger.info(f"Starting batch {batch_count}...")
 
-            # For initial catchup, use a larger time window to quickly get recent data
-            # This prevents the worker from being stuck querying ancient timestamps
-            current_time_window = (
-                lookback_days * 24 if initial_catchup else time_window_hours
-            )
-
             new_last_timestamp, activities_count, sessions_count = process_batch(
                 last_timestamp,
                 shard_count,
                 shard_index,
                 batch_size,
-                current_time_window,
+                time_window_hours,
             )
-
-            initial_catchup = False  # Only use expanded window on first batch
 
             batch_duration = time.time() - batch_start_time
             total_activities_processed += activities_count
