@@ -303,6 +303,7 @@ def run_worker():
     total_activities_processed = 0
     total_sessions_created = 0
     batch_count = 0
+    first_run = True
 
     while True:
         try:
@@ -322,7 +323,18 @@ def run_worker():
             total_sessions_created += sessions_count
             total_runtime = time.time() - start_time
 
-            if activities_count == 0:
+            if new_last_timestamp == last_timestamp and activities_count == 0:
+                # No new activities processed in this batch
+                if first_run:
+                    # Move last_timestamp forward to avoid infinite loop on already-processed events
+                    new_last_timestamp = last_timestamp + timedelta(
+                        hours=time_window_hours
+                    )
+                    logger.debug(
+                        f"No activities found in window, advancing timestamp to {new_last_timestamp.isoformat()}"
+                    )
+
+            if activities_count == 0 and not first_run:
                 logger.info(
                     f"✓ No more unprocessed activities found. "
                     f"Total processed: {total_activities_processed:,} activities, "
@@ -360,6 +372,13 @@ def run_worker():
             logger.info(" | ".join(log_parts))
 
             last_timestamp = new_last_timestamp
+
+            # Check if we've caught up to current time
+            if datetime.now(timezone.utc) - new_last_timestamp <= timedelta(
+                hours=time_window_hours
+            ):
+                # We've caught up to current time
+                first_run = False
 
             # Small sleep between batches to avoid overwhelming the database
             if sleep_between_batches > 0:
