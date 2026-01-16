@@ -36,8 +36,8 @@ from services.postgres import (  # type: ignore
     initialize_postgres,
     bulk_insert_quest_sessions,
     mark_activities_as_processed,
-    get_unprocessed_location_activities,
-    get_quest_by_id,
+    get_unprocessed_quest_activities,
+    get_all_quests,
 )
 from services.redis import (  # type: ignore
     initialize_redis,
@@ -45,7 +45,6 @@ from services.redis import (  # type: ignore
     batch_update_active_quest_session_states,
     get_redis_client,
 )
-from utils.quest_sessions import get_quest_id_for_area  # type: ignore
 from models.quest_session import QuestSession  # type: ignore
 
 
@@ -54,6 +53,10 @@ logging.basicConfig(
     level="DEBUG",  # TODO: revert: os.getenv("WORKER_LOG_LEVEL", "INFO"),
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
 )
+
+# Preloaded quest lookup maps (area_id -> quest_id, quest_id -> area_id)
+QUEST_AREA_TO_ID: Dict[int, int] = {}
+QUEST_ID_TO_AREA: Dict[int, int] = {}
 
 
 def env_int(name: str, default: int) -> int:
@@ -72,58 +75,69 @@ def env_float(name: str, default: float) -> float:
         return default
 
 
+def load_quest_area_maps() -> None:
+    """Load quest metadata once to avoid per-activity DB lookups."""
+    global QUEST_AREA_TO_ID, QUEST_ID_TO_AREA
+    quests = get_all_quests()
+    area_to_id: Dict[int, int] = {}
+    id_to_area: Dict[int, int] = {}
+    for quest in quests:
+        if quest.area_id is not None:
+            area_to_id[quest.area_id] = quest.id
+            id_to_area[quest.id] = quest.area_id
+
+    QUEST_AREA_TO_ID = area_to_id
+    QUEST_ID_TO_AREA = id_to_area
+    logger.info(f"Loaded quest lookup maps: {len(QUEST_AREA_TO_ID)} areas -> quests")
+
+
 def process_character_activities(
     character_id: int,
-    activities: List[Tuple[datetime, int]],
+    activities: List[Tuple[datetime, str, Optional[int], Optional[bool]]],
     initial_session: Optional[QuestSession],
-) -> Tuple[List[Tuple], List[Tuple], Optional[QuestSession]]:
+) -> Tuple[List[Tuple], List[Tuple], Optional[QuestSession], bool]:
     """Process all activities for a single character and generate session changes.
 
     Args:
         character_id: ID of the character
-        activities: List of (timestamp, area_id) sorted chronologically
+        activities: List of (timestamp, activity_type, area_id, is_active) sorted chronologically
         initial_session: The character's active session at the start (if any)
 
     Returns:
-        Tuple of (sessions_to_insert, activities_to_mark)
+        Tuple of (sessions_to_insert, activities_to_mark, final_session, logout_seen)
         - sessions_to_insert: List of tuples (character_id, quest_id, entry_timestamp, exit_timestamp)
         - activities_to_mark: List of tuples (character_id, timestamp) to mark as processed
+        - final_session: Active session at end of processing (None if none)
+        - logout_seen: True if a logout (status=false) event was processed
     """
     sessions_to_insert = []
     activities_to_mark = []
     current_session = initial_session
     last_area_id = None
-    last_timestamp = None  # Track time gaps to detect logout/login events
-
-    # Maximum inactivity before a quest session is automatically closed (5 minutes)
-    MAX_SESSION_INACTIVITY_SECONDS = 5 * 60
+    logout_seen = False
 
     # Get quest's area if there's an initial session
     current_quest_area = None
     if current_session:
-        quest = get_quest_by_id(current_session.quest_id)
-        if quest:
-            current_quest_area = quest.area_id
+        current_quest_area = QUEST_ID_TO_AREA.get(current_session.quest_id)
 
-    for timestamp, area_id in activities:
-        # Check for logout/login gaps (> 5 minutes with no activity)
-        # When a character is inactive for > 5 minutes, they're automatically removed from the quest
-        if last_timestamp is not None and current_session is not None:
-            gap_seconds = (timestamp - last_timestamp).total_seconds()
-            if gap_seconds > MAX_SESSION_INACTIVITY_SECONDS:
-                # Character was inactive too long - discard the stale session
-                logger.debug(
-                    f"Discarding stale session for character {character_id}: "
-                    f"inactivity gap of {gap_seconds}s exceeds max {MAX_SESSION_INACTIVITY_SECONDS}s "
-                    f"(quest_id={current_session.quest_id})"
-                )
+    for timestamp, activity_type, area_id, is_active in activities:
+        # Handle logout/status events first
+        if activity_type == "status":
+            activities_to_mark.append((character_id, timestamp))
+
+            # Only act on explicit logout (status=false)
+            if is_active is False:
+                # Discard any active session without persisting it
                 current_session = None
                 current_quest_area = None
+                last_area_id = None  # reset dedup tracking after logout
+                logout_seen = True
+            continue
 
-        last_timestamp = timestamp
-
-        # Skip duplicate location events (same area)
+        # From here on, only location events are expected
         if area_id == last_area_id:
+            # Skip duplicate location events (same area)
             activities_to_mark.append((character_id, timestamp))
             continue
 
@@ -134,7 +148,6 @@ def process_character_activities(
             # Only close the session if exit_timestamp would be >= entry_timestamp
             # This prevents negative durations from out-of-order or clock-skewed data
             if timestamp >= current_session.entry_timestamp:
-                # Character is leaving the quest area
                 sessions_to_insert.append(
                     (
                         current_session.character_id,
@@ -156,7 +169,7 @@ def process_character_activities(
                 continue
 
         # Check if new area is a quest area
-        new_quest_id = get_quest_id_for_area(area_id)
+        new_quest_id = QUEST_AREA_TO_ID.get(area_id) if area_id is not None else None
         if new_quest_id is not None:
             # Only create new session if different from current
             if current_session is None or current_session.quest_id != new_quest_id:
@@ -174,7 +187,7 @@ def process_character_activities(
     # Do not persist sessions without an exit_timestamp
     # Active sessions will be tracked via Redis and closed when a leave event is observed
 
-    return sessions_to_insert, activities_to_mark, current_session
+    return sessions_to_insert, activities_to_mark, current_session, logout_seen
 
 
 def process_batch(
@@ -194,19 +207,23 @@ def process_batch(
     """
     # Fetch unprocessed activities using time-based batching
     logger.debug(f"Fetching unprocessed activities from {last_timestamp}")
-    activities = get_unprocessed_location_activities(
+    activities = get_unprocessed_quest_activities(
         last_timestamp, batch_size, time_window_hours
     )
 
     if not activities:
         return last_timestamp, 0, 0
 
-    logger.info(f"Processing {len(activities)} unprocessed location activities")
+    logger.info(f"Processing {len(activities)} unprocessed quest activities")
 
     # Group activities by character_id
-    by_character: Dict[int, List[Tuple[datetime, int]]] = defaultdict(list)
-    for character_id, timestamp, area_id in activities:
-        by_character[character_id].append((timestamp, area_id))
+    by_character: Dict[
+        int, List[Tuple[datetime, str, Optional[int], Optional[bool]]]
+    ] = defaultdict(list)
+    for character_id, timestamp, activity_type, area_id, is_active in activities:
+        by_character[character_id].append(
+            (timestamp, activity_type, area_id, is_active)
+        )
 
     # Batch fetch initial active sessions for all characters from Redis
     character_ids = list(by_character.keys())
@@ -245,15 +262,17 @@ def process_batch(
         char_activities.sort(key=lambda x: x[0])
 
         initial_session = character_sessions.get(character_id)
-        sessions, activities_marked, final_session = process_character_activities(
-            character_id, char_activities, initial_session
+        sessions, activities_marked, final_session, logout_seen = (
+            process_character_activities(character_id, char_activities, initial_session)
         )
 
         all_sessions_to_insert.extend(sessions)
         all_activities_to_mark.extend(activities_marked)
 
         # Collect Redis updates instead of applying immediately
-        if final_session is not None:
+        if logout_seen:
+            redis_updates_clear.append(character_id)
+        elif final_session is not None:
             redis_updates_set[character_id] = {
                 "quest_id": int(final_session.quest_id),
                 "entry_timestamp": final_session.entry_timestamp.isoformat(),
@@ -351,6 +370,9 @@ def run_worker():
 
     while True:
         try:
+            # Refresh quest lookup maps each run to avoid stale quest/area data
+            load_quest_area_maps()
+
             batch_count += 1
             batch_start_time = time.time()
 

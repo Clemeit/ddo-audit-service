@@ -4177,15 +4177,16 @@ def get_quest_metrics_bulk(quest_ids: list[int]) -> dict[int, dict]:
             return results
 
 
-def get_unprocessed_location_activities(
+def get_unprocessed_quest_activities(
     last_timestamp: datetime,
     batch_size: int,
     time_window_hours: int = 24,
 ) -> list[tuple]:
-    """Fetch unprocessed location activities for quest session processing.
+    """Fetch unprocessed quest-related activities (location + logout status).
 
     Uses time-based batching optimized for TimescaleDB chunk access, with a row limit
-    as a safety valve to prevent oversized batches.
+    as a safety valve to prevent oversized batches. Includes location changes and
+    status=false (logout) events so the worker can discard active sessions on logout.
 
     Args:
         last_timestamp: Start processing from this timestamp
@@ -4193,12 +4194,12 @@ def get_unprocessed_location_activities(
         time_window_hours: Time window in hours for batch (default 24)
 
     Returns:
-        List of tuples (character_id, timestamp, area_id)
+        List of tuples (character_id, timestamp, activity_type, area_id, is_active)
     """
     if time_window_hours <= 0:
         logger.warning(
             "Non-positive time_window_hours (%s) provided to "
-            "get_unprocessed_location_activities; defaulting to 1 hour",
+            "get_unprocessed_quest_activities; defaulting to 1 hour",
             time_window_hours,
         )
         time_window_hours = 1
@@ -4209,11 +4210,19 @@ def get_unprocessed_location_activities(
     # NOTE: Time-based batching allows TimescaleDB to efficiently target specific chunks
     # The LIMIT acts as a safety valve if a time window has unexpectedly high activity
     query = """
-        SELECT character_id, timestamp, (data->>'value')::int as area_id
+        SELECT 
+            character_id,
+            timestamp,
+            activity_type,
+            CASE WHEN activity_type = 'location' THEN (data->>'value')::int END AS area_id,
+            CASE WHEN activity_type = 'status' THEN (data->>'value')::boolean END AS is_active
         FROM public.character_activity
         WHERE timestamp > %s
           AND timestamp <= %s
-          AND activity_type = 'location'
+          AND (
+              activity_type = 'location'
+              OR (activity_type = 'status' AND (data->>'value')::boolean = false)
+          )
           AND quest_session_processed = false
         ORDER BY timestamp ASC, character_id ASC
         LIMIT %s
