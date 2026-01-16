@@ -158,8 +158,6 @@ def process_character_activities(
 
 def process_batch(
     last_timestamp: datetime,
-    shard_count: int,
-    shard_index: int,
     batch_size: int,
     time_window_hours: int = 24,
 ) -> Tuple[datetime, int, int]:
@@ -167,8 +165,6 @@ def process_batch(
 
     Args:
         last_timestamp: Start processing from this timestamp
-        shard_count: Total number of worker shards
-        shard_index: Current shard index (0-based)
         batch_size: Maximum activities to process (safety limit)
         time_window_hours: Time window in hours for time-based batching
 
@@ -178,7 +174,7 @@ def process_batch(
     # Fetch unprocessed activities using time-based batching
     logger.debug(f"Fetching unprocessed activities from {last_timestamp}")
     activities = get_unprocessed_location_activities(
-        last_timestamp, shard_count, shard_index, batch_size, time_window_hours
+        last_timestamp, batch_size, time_window_hours
     )
 
     if not activities:
@@ -283,29 +279,11 @@ def format_duration(seconds: float) -> str:
 
 def run_worker():
     """Main worker loop - scheduled batch processing."""
-    # Configuration from environment
-    # NOTE: Sharding is disabled (always 1/1) because modulo operations prevent index usage
-    # For horizontal scaling, use timestamp-based partitioning instead
-    shard_count = 1
-    shard_index = 0
+    time_window_hours = 24
     batch_size = env_int("QUEST_WORKER_BATCH_SIZE", 10000)
-    time_window_hours = env_int("QUEST_WORKER_TIME_WINDOW_HOURS", 24)
     lookback_days = env_int("QUEST_WORKER_LOOKBACK_DAYS", 90)
     sleep_between_batches = env_float("QUEST_WORKER_SLEEP_SECS", 1.0)
     idle_sleep = env_float("QUEST_WORKER_IDLE_SECS", 300.0)
-
-    # Validate time_window_hours to avoid zero/negative or extreme values
-    if time_window_hours <= 0:
-        logger.warning(
-            "Invalid QUEST_WORKER_TIME_WINDOW_HOURS=%s; falling back to default of 24 hours",
-            time_window_hours,
-        )
-        time_window_hours = 24
-    elif time_window_hours > 168:
-        logger.warning(
-            "QUEST_WORKER_TIME_WINDOW_HOURS=%s is unusually high; this may impact batch processing performance",
-            time_window_hours,
-        )
 
     logger.info(
         f"Quest Session Worker starting (batch_size={batch_size}, "
@@ -335,8 +313,6 @@ def run_worker():
 
             new_last_timestamp, activities_count, sessions_count = process_batch(
                 last_timestamp,
-                shard_count,
-                shard_index,
                 batch_size,
                 time_window_hours,
             )

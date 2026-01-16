@@ -4179,8 +4179,6 @@ def get_quest_metrics_bulk(quest_ids: list[int]) -> dict[int, dict]:
 
 def get_unprocessed_location_activities(
     last_timestamp: datetime,
-    shard_count: int,
-    shard_index: int,
     batch_size: int,
     time_window_hours: int = 24,
 ) -> list[tuple]:
@@ -4191,8 +4189,6 @@ def get_unprocessed_location_activities(
 
     Args:
         last_timestamp: Start processing from this timestamp
-        shard_count: Total number of shards (currently ignored - for future use)
-        shard_index: Current shard index (currently ignored - for future use)
         batch_size: Maximum number of activities to return (safety limit)
         time_window_hours: Time window in hours for batch (default 24)
 
