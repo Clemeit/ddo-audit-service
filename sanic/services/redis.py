@@ -1319,39 +1319,57 @@ def batch_update_active_quest_session_states(
         pass
 
 
-def get_quest_worker_checkpoint() -> Optional[datetime]:
-    """Retrieve the quest worker's last processed timestamp from Redis.
+def get_quest_worker_checkpoint() -> Optional[tuple[datetime, int]]:
+    """Retrieve the quest worker's last processed checkpoint from Redis.
+
+    The checkpoint consists of:
+    - timestamp: The last timestamp processed
+    - max_character_id: The maximum character_id seen at that timestamp
+
+    This composite checkpoint enables proper pagination when many activities share the same timestamp.
 
     Returns:
-        datetime of the last processed timestamp, or None if not found
+        Tuple of (datetime, max_character_id), or None if not found
     """
     try:
         with get_redis_client() as client:
-            raw_value = client.get("quest_worker:last_processed_timestamp")
+            raw_value = client.get("quest_worker:checkpoint")
             if raw_value:
                 if isinstance(raw_value, bytes):
                     raw_value = raw_value.decode("utf-8")
-                return datetime.fromisoformat(raw_value)
+                checkpoint_dict = json.loads(raw_value)
+                timestamp = datetime.fromisoformat(checkpoint_dict["timestamp"])
+                max_character_id = int(checkpoint_dict["max_character_id"])
+                return (timestamp, max_character_id)
     except Exception as e:
         logger.warning(f"Failed to retrieve quest worker checkpoint from Redis: {e}")
     return None
 
 
-def set_quest_worker_checkpoint(timestamp: datetime) -> None:
-    """Store the quest worker's last processed timestamp in Redis.
+def set_quest_worker_checkpoint(timestamp: datetime, max_character_id: int) -> None:
+    """Store the quest worker's checkpoint in Redis.
+
+    The checkpoint includes both the timestamp and the maximum character_id at that timestamp
+    to handle cases where many activities share the same timestamp. This enables proper pagination
+    within same-timestamp groups using: (timestamp > %s) OR (timestamp = %s AND character_id > %s)
 
     The checkpoint is stored with a 14-day TTL for automatic cleanup if the worker is offline.
 
     Args:
-        timestamp: The last processed timestamp to store
+        timestamp: The last processed timestamp
+        max_character_id: The maximum character_id seen at that timestamp
     """
     try:
         with get_redis_client() as client:
+            checkpoint_dict = {
+                "timestamp": timestamp.isoformat(),
+                "max_character_id": max_character_id,
+            }
             # 14 days = 1209600 seconds
             client.setex(
-                "quest_worker:last_processed_timestamp",
+                "quest_worker:checkpoint",
                 1209600,
-                timestamp.isoformat(),
+                json.dumps(checkpoint_dict),
             )
     except Exception as e:
         logger.warning(f"Failed to store quest worker checkpoint in Redis: {e}")
@@ -1381,6 +1399,26 @@ def one_time_user_settings_exists(user_id: str) -> bool:
     key = f"{ONE_TIME_USER_SETTINGS_PREFIX}{user_id}"
     with get_redis_client() as client:
         return client.exists(key) == 1
+
+
+def clear_all_active_quest_sessions() -> None:
+    """Clear all active quest session states from Redis.
+
+    Used during cold-start initialization to ensure clean state.
+    Prevents out-of-order activity errors that can occur if the worker was interrupted.
+    """
+    try:
+        with get_redis_client() as client:
+            keys = client.keys("active_quest_session:*")
+            if keys:
+                deleted_count = client.delete(*keys)
+                logger.info(
+                    f"Cleared {deleted_count} stale active quest sessions from Redis"
+                )
+            else:
+                logger.info("No stale active quest sessions found in Redis")
+    except Exception as e:
+        logger.warning(f"Failed to clear active quest sessions from Redis: {e}")
 
 
 # ======= Game Population ========

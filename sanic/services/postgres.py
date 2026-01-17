@@ -4,7 +4,7 @@ import logging
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from time import time
-from typing import Optional, Generator
+from typing import Optional, Generator, Tuple
 
 from constants.activity import CharacterActivityType
 from models.character import (
@@ -3886,8 +3886,11 @@ def get_quest_analytics_batch(
         raise
 
 
-def bulk_insert_quest_sessions(sessions: list[tuple]) -> None:
+def bulk_insert_quest_sessions(sessions: list[Tuple[int, int, datetime, datetime]]) -> None:
     """Bulk insert quest sessions for efficient batch processing.
+
+    Filters out sessions longer than 4 hours (14400 seconds) to prevent stale or erroneous
+    session data from being persisted.
 
     Args:
         sessions: List of tuples (character_id, quest_id, entry_timestamp, exit_timestamp)
@@ -3907,15 +3910,34 @@ def bulk_insert_quest_sessions(sessions: list[tuple]) -> None:
             )
             existing_character_ids = set(row[0] for row in cursor.fetchall())
 
-    # Filter sessions to only include those with existing character IDs
-    # and an exit_timestamp (we only persist completed sessions)
-    valid_sessions = [
-        session
-        for session in sessions
-        if session[0] in existing_character_ids and session[3] is not None
-    ]
+    # Filter sessions: only include those with existing character IDs, an exit_timestamp,
+    # and duration <= 4 hours (14400 seconds)
+    valid_sessions = []
+    sessions_over_4h = []
 
-    # Log if we're skipping any sessions
+    for session in sessions:
+        character_id, quest_id, entry_ts, exit_ts = session
+
+        # Skip if character doesn't exist
+        if character_id not in existing_character_ids:
+            continue
+
+        # Skip if no exit_timestamp (we only persist completed sessions)
+        if exit_ts is None:
+            continue
+
+        # Calculate duration and filter out sessions > 4 hours
+        if entry_ts and exit_ts:
+            duration_seconds = (exit_ts - entry_ts).total_seconds()
+            if duration_seconds > 14400:  # 4 hours in seconds
+                sessions_over_4h.append(
+                    (character_id, quest_id, entry_ts, exit_ts, duration_seconds)
+                )
+                continue
+
+        valid_sessions.append(session)
+
+    # Log filtered sessions
     skipped_count = len(sessions) - len(valid_sessions)
     if skipped_count > 0:
         missing_char_ids = set(
@@ -3934,8 +3956,15 @@ def bulk_insert_quest_sessions(sessions: list[tuple]) -> None:
             if incomplete_sessions_count
             else ""
         )
+        oversized_msg = (
+            f"Skipping {len(sessions_over_4h)} sessions exceeding 4-hour limit: {[(s[0], f'{s[4]:.0f}s') for s in sessions_over_4h[:5]]}"
+            if sessions_over_4h
+            else ""
+        )
         logging.warning(
-            " | ".join(msg for msg in [missing_char_msg, incomplete_msg] if msg)
+            " | ".join(
+                msg for msg in [missing_char_msg, incomplete_msg, oversized_msg] if msg
+            )
         )
 
     if not valid_sessions:
@@ -3951,46 +3980,6 @@ def bulk_insert_quest_sessions(sessions: list[tuple]) -> None:
         with conn.cursor() as cursor:
             cursor.executemany(query, valid_sessions)
             conn.commit()
-
-
-def mark_activities_as_processed(activity_ids: list[tuple]) -> None:
-    """Mark character activities as processed for quest session tracking.
-
-    Args:
-        activity_ids: List of tuples (character_id, timestamp) identifying activities
-    """
-    if not activity_ids:
-        return
-
-    # Use execute_values for efficient batch update
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cursor:
-                # Use a CTE with VALUES to avoid temp table complexity
-                # Set page_size to handle large batches efficiently
-                psycopg2.extras.execute_values(
-                    cursor,
-                    """
-                    UPDATE public.character_activity AS ca
-                    SET quest_session_processed = true
-                    FROM (VALUES %s) AS v(character_id, ts)
-                    WHERE ca.character_id = v.character_id
-                        AND ca.timestamp = v.ts
-                        AND ca.quest_session_processed = false
-                    """,
-                    activity_ids,
-                    template="(%s, %s)",
-                    page_size=1000,  # Process in batches of 1000 for efficiency
-                    fetch=False,
-                )
-
-                # Log the total number of activities passed (cursor.rowcount only shows last batch)
-                logger.info(
-                    f"Activities marked processed: {len(activity_ids)} activities submitted, {cursor.rowcount} rows updated in final batch"
-                )
-            conn.commit()
-    except Exception as e:
-        logger.error(f"Failed to mark activities as processed: {e}")
 
 
 def upsert_quest_metrics(
@@ -4179,18 +4168,26 @@ def get_quest_metrics_bulk(quest_ids: list[int]) -> dict[int, dict]:
 
 def get_unprocessed_quest_activities(
     last_timestamp: datetime,
+    max_character_id_at_timestamp: int,
     batch_size: int,
     time_window_hours: int = 24,
 ) -> list[tuple]:
-    """Fetch unprocessed quest-related activities (location + status events).
+    """Fetch quest-related activities (location + status events) using composite checkpoint.
+
+    Uses composite checkpoint (timestamp + max_character_id) to handle batches that cross
+    same-timestamp groups. This ensures no activities are skipped or duplicated when many
+    activities share the exact same timestamp.
+
+    For efficient pagination within same-timestamp groups:
+    - Fetch activities where: (timestamp > last_timestamp) OR (timestamp = last_timestamp AND character_id > max_character_id_at_timestamp)
+    - Return ordered by timestamp ASC, character_id ASC for deterministic batching
 
     Uses time-based batching optimized for TimescaleDB chunk access, with a row limit
-    as a safety valve to prevent oversized batches. Includes location changes and
-    any status events so the worker can discard active sessions whenever a status
-    change (login or logout) is observed.
+    as a safety valve to prevent oversized batches.
 
     Args:
         last_timestamp: Start processing from this timestamp
+        max_character_id_at_timestamp: Max character_id seen at last_timestamp (for pagination within group)
         batch_size: Maximum number of activities to return (safety limit)
         time_window_hours: Time window in hours for batch (default 24)
 
@@ -4210,6 +4207,7 @@ def get_unprocessed_quest_activities(
 
     # NOTE: Time-based batching allows TimescaleDB to efficiently target specific chunks
     # The LIMIT acts as a safety valve if a time window has unexpectedly high activity
+    # Composite checkpoint uses tuple comparison for optimal index utilization
     query = """
         SELECT 
             character_id,
@@ -4218,17 +4216,55 @@ def get_unprocessed_quest_activities(
             CASE WHEN activity_type = 'location' THEN (data->>'value')::int END AS area_id,
             CASE WHEN activity_type = 'status' THEN (data->>'value')::boolean END AS is_active
         FROM public.character_activity
-        WHERE timestamp > %s
+        WHERE (timestamp, character_id) > (%s, %s)
           AND timestamp <= %s
           AND (
               activity_type = 'location'
               OR activity_type = 'status'
           )
-          AND quest_session_processed = false
         ORDER BY timestamp ASC, character_id ASC
         LIMIT %s
     """
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            cursor.execute(query, (last_timestamp, upper_timestamp, batch_size))
+            cursor.execute(
+                query,
+                (
+                    last_timestamp,
+                    max_character_id_at_timestamp,
+                    upper_timestamp,
+                    batch_size,
+                ),
+            )
             return cursor.fetchall()
+
+
+def truncate_quest_sessions() -> None:
+    """Truncate quest_sessions table with elevated timeout for safety.
+
+    Used during cold-start initialization to clear stale session data.
+    Sets statement timeout to 300 seconds to allow large truncation operations.
+    """
+    logger.info("Truncating quest_sessions table with elevated connection timeout")
+    start_time = datetime.now(timezone.utc)
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                # Set statement timeout to 300 seconds for the truncate operation
+                cursor.execute("SET statement_timeout = '300s'")
+                cursor.execute("TRUNCATE public.quest_sessions CASCADE")
+                conn.commit()
+                logger.info("Successfully truncated quest_sessions table")
+
+                # Reset timeout to default
+                cursor.execute("SET statement_timeout = '30s'")
+                conn.commit()
+    except Exception as e:
+        logger.error(f"Failed to truncate quest_sessions table: {e}", exc_info=True)
+        raise
+    finally:
+        end_time = datetime.now(timezone.utc)
+        duration = (end_time - start_time).total_seconds()
+        logger.info(
+            f"Truncate quest_sessions operation completed in {duration:.2f} seconds"
+        )

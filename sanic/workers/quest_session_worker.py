@@ -35,17 +35,17 @@ if PROJECT_ROOT not in sys.path:
 from services.postgres import (  # type: ignore
     initialize_postgres,
     bulk_insert_quest_sessions,
-    mark_activities_as_processed,
     get_unprocessed_quest_activities,
     get_all_quests,
+    truncate_quest_sessions,
 )
 from services.redis import (  # type: ignore
     initialize_redis,
     batch_get_active_quest_session_states,
     batch_update_active_quest_session_states,
-    get_redis_client,
     get_quest_worker_checkpoint,
     set_quest_worker_checkpoint,
+    clear_all_active_quest_sessions,
 )
 from models.quest_session import QuestSession  # type: ignore
 
@@ -97,7 +97,7 @@ def process_character_activities(
     character_id: int,
     activities: List[Tuple[datetime, str, Optional[int], Optional[bool]]],
     initial_session: Optional[QuestSession],
-) -> Tuple[List[Tuple], List[Tuple], Optional[QuestSession], bool]:
+) -> Tuple[List[Tuple], Optional[QuestSession], bool]:
     """Process all activities for a single character and generate session changes.
 
     Args:
@@ -106,14 +106,12 @@ def process_character_activities(
         initial_session: The character's active session at the start (if any)
 
     Returns:
-        Tuple of (sessions_to_insert, activities_to_mark, final_session, status_seen)
+        Tuple of (sessions_to_insert, final_session, status_seen)
         - sessions_to_insert: List of tuples (character_id, quest_id, entry_timestamp, exit_timestamp)
-        - activities_to_mark: List of tuples (character_id, timestamp) to mark as processed
         - final_session: Active session at end of processing (None if none)
         - status_seen: True if any status event (login/logout) was processed
     """
     sessions_to_insert = []
-    activities_to_mark = []
     current_session = initial_session
     last_area_id = None
     status_seen = False
@@ -126,8 +124,6 @@ def process_character_activities(
     for timestamp, activity_type, area_id, is_active in activities:
         # Handle status events (login/logout) first
         if activity_type == "status":
-            activities_to_mark.append((character_id, timestamp))
-
             # Discard any active session without persisting it when a status change occurs
             current_session = None
             current_quest_area = None
@@ -138,7 +134,6 @@ def process_character_activities(
         # From here on, only location events are expected
         if area_id == last_area_id:
             # Skip duplicate location events (same area)
-            activities_to_mark.append((character_id, timestamp))
             continue
 
         last_area_id = area_id
@@ -165,7 +160,6 @@ def process_character_activities(
                     f"activity timestamp {timestamp} is before active session start "
                     f"{current_session.entry_timestamp} (quest_id={current_session.quest_id})"
                 )
-                activities_to_mark.append((character_id, timestamp))
                 continue
 
         # Check if new area is a quest area
@@ -181,40 +175,41 @@ def process_character_activities(
                 )
                 current_quest_area = area_id
 
-        # Mark this activity as processed
-        activities_to_mark.append((character_id, timestamp))
-
     # Do not persist sessions without an exit_timestamp
     # Active sessions will be tracked via Redis and closed when a leave event is observed
 
-    return sessions_to_insert, activities_to_mark, current_session, status_seen
+    return sessions_to_insert, current_session, status_seen
 
 
 def process_batch(
     last_timestamp: datetime,
+    max_character_id_at_timestamp: int,
     batch_size: int,
     time_window_hours: int = 24,
-) -> Tuple[datetime, int, int]:
-    """Process a batch of unprocessed location activities.
+) -> Tuple[datetime, int, int, int]:
+    """Process a batch of quest-related activities using composite checkpoint.
 
     Args:
         last_timestamp: Start processing from this timestamp
+        max_character_id_at_timestamp: Max character_id at last_timestamp (for pagination)
         batch_size: Maximum activities to process (safety limit)
         time_window_hours: Time window in hours for time-based batching
 
     Returns:
-        Tuple of (new_last_timestamp, activities_processed, sessions_created)
+        Tuple of (new_last_timestamp, max_char_id_at_new_timestamp, activities_processed, sessions_created)
     """
-    # Fetch unprocessed activities using time-based batching
-    logger.debug(f"Fetching unprocessed activities from {last_timestamp}")
+    # Fetch activities using composite checkpoint
+    logger.debug(
+        f"Fetching activities from {last_timestamp} (max_char_id={max_character_id_at_timestamp})"
+    )
     activities = get_unprocessed_quest_activities(
-        last_timestamp, batch_size, time_window_hours
+        last_timestamp, max_character_id_at_timestamp, batch_size, time_window_hours
     )
 
     if not activities:
-        return last_timestamp, 0, 0
+        return last_timestamp, max_character_id_at_timestamp, 0, 0
 
-    logger.info(f"Processing {len(activities)} unprocessed quest activities")
+    logger.info(f"Processing {len(activities)} quest activities")
 
     # Group activities by character_id
     by_character: Dict[
@@ -253,7 +248,6 @@ def process_batch(
 
     # Process each character's activities and collect Redis updates
     all_sessions_to_insert = []
-    all_activities_to_mark = []
     redis_updates_set = {}
     redis_updates_clear = []
 
@@ -262,12 +256,11 @@ def process_batch(
         char_activities.sort(key=lambda x: x[0])
 
         initial_session = character_sessions.get(character_id)
-        sessions, activities_marked, final_session, status_seen = (
-            process_character_activities(character_id, char_activities, initial_session)
+        sessions, final_session, status_seen = process_character_activities(
+            character_id, char_activities, initial_session
         )
 
         all_sessions_to_insert.extend(sessions)
-        all_activities_to_mark.extend(activities_marked)
 
         # Collect Redis updates instead of applying immediately
         if status_seen:
@@ -289,20 +282,22 @@ def process_batch(
         logger.info(f"Inserting {len(all_sessions_to_insert)} quest sessions")
         bulk_insert_quest_sessions(all_sessions_to_insert)
 
-    # Mark activities as processed
-    if all_activities_to_mark:
-        logger.info(f"Marking {len(all_activities_to_mark)} activities as processed")
-        mark_activities_as_processed(all_activities_to_mark)
+    # Calculate new checkpoint: use the timestamp and max character_id from the last activity
+    # This ensures proper pagination for next batch if activities with same timestamp span batches
+    if activities:
+        last_activity = activities[-1]
+        new_last_timestamp = last_activity[1]  # timestamp
+        new_max_character_id = last_activity[0]  # character_id
+    else:
+        new_last_timestamp = last_timestamp
+        new_max_character_id = max_character_id_at_timestamp
 
-    # Update last_timestamp to the latest processed
-    # Query uses > so max timestamp can be used directly (no duplicates at boundary)
-    new_last_timestamp = (
-        max(ts for _, ts in all_activities_to_mark)
-        if all_activities_to_mark
-        else last_timestamp
+    return (
+        new_last_timestamp,
+        new_max_character_id,
+        len(activities),
+        len(all_sessions_to_insert),
     )
-
-    return new_last_timestamp, len(activities), len(all_sessions_to_insert)
 
 
 def format_duration(seconds: float) -> str:
@@ -315,26 +310,6 @@ def format_duration(seconds: float) -> str:
     else:
         hours = seconds / 3600
         return f"{hours:.1f}h"
-
-
-def clear_all_active_quest_sessions() -> None:
-    """Clear all active quest session states from Redis on startup.
-
-    This ensures a clean state and prevents out-of-order activity errors
-    that can occur if the worker was interrupted during a previous run.
-    """
-    try:
-        with get_redis_client() as client:
-            keys = client.keys("active_quest_session:*")
-            if keys:
-                deleted_count = client.delete(*keys)
-                logger.info(
-                    f"Cleared {deleted_count} stale active quest sessions from Redis"
-                )
-            else:
-                logger.info("No stale active quest sessions found in Redis")
-    except Exception as e:
-        logger.warning(f"Failed to clear active quest sessions from Redis: {e}")
 
 
 def run_worker():
@@ -357,22 +332,35 @@ def run_worker():
     # Load quest area lookup maps
     load_quest_area_maps()
 
-    # Clear any stale active quest sessions from a previous interrupted run
-    clear_all_active_quest_sessions()
-
-    # Try to resume from checkpoint, otherwise fall back to lookback_days
+    # Try to resume from checkpoint, otherwise cold start
     start_time = time.time()
     checkpoint = get_quest_worker_checkpoint()
-    if checkpoint:
-        last_timestamp = checkpoint
+
+    is_cold_start = checkpoint is None
+
+    if is_cold_start:
+        logger.info("No checkpoint found - performing cold start initialization")
+
+        # Cold start: truncate quest_sessions table and clear active sessions
+        truncate_quest_sessions()
+
+        # Clear any stale active quest sessions from Redis
+        logger.info("Clearing active quest sessions from Redis for clean cold start")
+        clear_all_active_quest_sessions()
+
+        # Set last_timestamp to lookback_days ago
+        last_timestamp = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+        max_character_id_at_timestamp = 0
         logger.info(
-            f"Found checkpoint, resuming from timestamp: {last_timestamp.isoformat()}"
+            f"Cold start: setting initial timestamp to {lookback_days} days ago: "
+            f"{last_timestamp.isoformat()}"
         )
     else:
-        last_timestamp = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+        # Warm start: resume from checkpoint
+        last_timestamp, max_character_id_at_timestamp = checkpoint
         logger.info(
-            f"No checkpoint found, starting from {lookback_days}-day lookback: "
-            f"{last_timestamp.isoformat()}"
+            f"Found checkpoint, resuming from timestamp: {last_timestamp.isoformat()} "
+            f"(max_char_id={max_character_id_at_timestamp})"
         )
 
     total_activities_processed = 0
@@ -393,8 +381,14 @@ def run_worker():
 
             logger.info(f"Starting batch {batch_count}...")
 
-            new_last_timestamp, activities_count, sessions_count = process_batch(
+            (
+                new_last_timestamp,
+                new_max_character_id,
+                activities_count,
+                sessions_count,
+            ) = process_batch(
                 last_timestamp,
+                max_character_id_at_timestamp,
                 batch_size,
                 time_window_hours,
             )
@@ -411,13 +405,14 @@ def run_worker():
                     new_last_timestamp = last_timestamp + timedelta(
                         hours=time_window_hours
                     )
+                    new_max_character_id = 0
                     logger.debug(
                         f"No activities found in window, advancing timestamp to {new_last_timestamp.isoformat()}"
                     )
 
             if activities_count == 0 and not first_run:
                 logger.info(
-                    f"✓ No more unprocessed activities found. "
+                    f"✓ No more activities found. "
                     f"Total processed: {total_activities_processed:,} activities, "
                     f"{total_sessions_created:,} sessions created in {batch_count} batches. "
                     f"Total runtime: {format_duration(total_runtime)}. "
@@ -427,6 +422,7 @@ def run_worker():
                     datetime.now(timezone.utc) - timedelta(hours=time_window_hours),
                     last_timestamp,
                 )
+                max_character_id_at_timestamp = 0
                 time.sleep(idle_sleep)
 
                 # Reset for next cycle
@@ -441,8 +437,8 @@ def run_worker():
                 activities_count / batch_duration if batch_duration > 0 else 0
             )
 
-            # Update checkpoint in Redis
-            set_quest_worker_checkpoint(new_last_timestamp)
+            # Update checkpoint in Redis with composite (timestamp, max_character_id)
+            set_quest_worker_checkpoint(new_last_timestamp, new_max_character_id)
 
             # Calculate checkpoint age for monitoring
             checkpoint_age = datetime.now(timezone.utc) - new_last_timestamp
@@ -462,6 +458,7 @@ def run_worker():
             logger.info(" | ".join(log_parts))
 
             last_timestamp = new_last_timestamp
+            max_character_id_at_timestamp = new_max_character_id
 
             # Check if we've caught up to current time
             if datetime.now(timezone.utc) - new_last_timestamp <= timedelta(

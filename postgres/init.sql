@@ -101,8 +101,7 @@ CREATE TABLE IF NOT EXISTS public."character_activity"
 	"timestamp" timestamp with time zone NOT NULL,
 	character_id BIGINT NOT NULL,
 	activity_type TEXT,
-	data jsonb,
-	quest_session_processed boolean NOT NULL DEFAULT false
+	data jsonb
 );
 
 SELECT create_hypertable('character_activity', 'timestamp');
@@ -112,11 +111,11 @@ SELECT add_retention_policy('character_activity', INTERVAL '180 days');
 
 CREATE INDEX ON public."character_activity" (character_id);
 
--- Multi-activity partial index to support both quest location
--- and logout status events
-CREATE INDEX idx_character_activity_unprocessed_multi
-ON public."character_activity" ("timestamp", character_id)
-WHERE activity_type IN ('location', 'status') AND quest_session_processed = false;
+-- Index optimized for quest session worker queries using composite checkpoint
+-- Supports: (timestamp > %s) OR (timestamp = %s AND character_id > %s)
+CREATE INDEX idx_character_activity_by_timestamp
+ON public."character_activity" (timestamp, character_id)
+WHERE activity_type IN ('location', 'status');
 
 ALTER TABLE IF EXISTS public."character_activity"
     OWNER to pgadmin;
