@@ -3929,13 +3929,15 @@ def bulk_insert_quest_sessions(
             continue
 
         # Calculate duration and filter out sessions > 4 hours
-        if entry_ts and exit_ts:
-            duration_seconds = (exit_ts - entry_ts).total_seconds()
-            if duration_seconds <= 0 or duration_seconds > 14400:  # 4 hours in seconds
-                sessions_over_4h.append(
-                    (character_id, quest_id, entry_ts, exit_ts, duration_seconds)
-                )
-                continue
+        if entry_ts is None:
+            continue
+
+        duration_seconds = (exit_ts - entry_ts).total_seconds()
+        if duration_seconds <= 0 or duration_seconds > 14400:
+            sessions_over_4h.append(
+                (character_id, quest_id, entry_ts, exit_ts, duration_seconds)
+            )
+            continue
 
         valid_sessions.append(session)
 
@@ -3985,7 +3987,7 @@ def bulk_insert_quest_sessions(
         INSERT INTO public.quest_sessions 
         (character_id, quest_id, entry_timestamp, exit_timestamp)
         VALUES (%s, %s, %s, %s)
-        ON CONFLICT (character_id, quest_id, entry_timestamp, exit_timestamp) WHERE exit_timestamp IS NOT NULL
+        ON CONFLICT (character_id, quest_id, entry_timestamp, exit_timestamp)
         DO NOTHING
     """
     with get_db_connection() as conn:

@@ -112,7 +112,7 @@ SELECT add_retention_policy('character_activity', INTERVAL '180 days');
 CREATE INDEX ON public."character_activity" (character_id);
 
 -- Index optimized for quest session worker queries using composite checkpoint
--- Supports: (timestamp > %s) OR (timestamp = %s AND character_id > %s)
+-- Supports tuple comparison for composite checkpoint: (timestamp, character_id) > (last_timestamp, max_character_id)
 CREATE INDEX idx_character_activity_by_timestamp
 ON public."character_activity" (timestamp, character_id)
 WHERE activity_type IN ('location', 'status');
@@ -140,8 +140,8 @@ ALTER TABLE IF EXISTS public."quest_sessions"
 -- Same (character_id, quest_id, entry_timestamp, exit_timestamp) tuple won't be inserted twice
 -- This allows safe reprocessing of activities without duplicate sessions
 ALTER TABLE IF EXISTS public.quest_sessions
-    ADD CONSTRAINT uq_quest_sessions_activity UNIQUE (character_id, quest_id, entry_timestamp, exit_timestamp)
-    WHERE exit_timestamp IS NOT NULL;
+ADD CONSTRAINT uq_quest_sessions_activity UNIQUE (character_id, quest_id, entry_timestamp, exit_timestamp)
+WHERE exit_timestamp IS NOT NULL;
 
 -- Indexes for quest_sessions
 CREATE INDEX idx_quest_sessions_character_id ON public."quest_sessions" (character_id);
