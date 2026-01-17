@@ -52,7 +52,7 @@ from models.quest_session import QuestSession  # type: ignore
 
 logger = logging.getLogger("quest_session_worker")
 logging.basicConfig(
-    level="DEBUG",  # TODO: revert: os.getenv("WORKER_LOG_LEVEL", "INFO"),
+    level=os.getenv("WORKER_LOG_LEVEL", "INFO"),
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
 )
 
@@ -319,6 +319,7 @@ def run_worker():
     lookback_days = env_int("QUEST_WORKER_LOOKBACK_DAYS", 90)
     sleep_between_batches = env_float("QUEST_WORKER_SLEEP_SECS", 1.0)
     idle_sleep = env_float("QUEST_WORKER_IDLE_SECS", 300.0)
+    allow_truncate = os.getenv("QUEST_WORKER_ALLOW_TRUNCATE", "false").lower() == "true"
 
     logger.info(
         f"Quest Session Worker starting (batch_size={batch_size}, "
@@ -341,8 +342,20 @@ def run_worker():
     if is_cold_start:
         logger.info("No checkpoint found - performing cold start initialization")
 
-        # Cold start: truncate quest_sessions table and clear active sessions
-        truncate_quest_sessions()
+        if allow_truncate:
+            # Explicit truncate only if explicitly enabled (disaster recovery)
+            logger.warning(
+                "QUEST_WORKER_ALLOW_TRUNCATE=true: Truncating quest_sessions table. "
+                "This should only be done during initial setup or disaster recovery."
+            )
+            truncate_quest_sessions()
+        else:
+            # Safe cold start: preserve existing sessions and reprocess from lookback period
+            logger.info(
+                "QUEST_WORKER_ALLOW_TRUNCATE is disabled (recommended). "
+                "Resuming from lookback period without truncating quest_sessions table. "
+                "Idempotent constraints ensure reprocessed sessions won't create duplicates."
+            )
 
         # Clear any stale active quest sessions from Redis
         logger.info("Clearing active quest sessions from Redis for clean cold start")

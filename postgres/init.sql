@@ -136,6 +136,13 @@ TABLESPACE pg_default;
 ALTER TABLE IF EXISTS public."quest_sessions"
     OWNER to pgadmin;
 
+-- Unique constraint to ensure idempotent reprocessing of quest sessions
+-- Same (character_id, quest_id, entry_timestamp, exit_timestamp) tuple won't be inserted twice
+-- This allows safe reprocessing of activities without duplicate sessions
+ALTER TABLE IF EXISTS public.quest_sessions
+    ADD CONSTRAINT uq_quest_sessions_activity UNIQUE (character_id, quest_id, entry_timestamp, exit_timestamp)
+    WHERE exit_timestamp IS NOT NULL;
+
 -- Indexes for quest_sessions
 CREATE INDEX idx_quest_sessions_character_id ON public."quest_sessions" (character_id);
 CREATE INDEX idx_quest_sessions_quest_id ON public."quest_sessions" (quest_id);

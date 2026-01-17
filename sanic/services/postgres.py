@@ -3886,7 +3886,9 @@ def get_quest_analytics_batch(
         raise
 
 
-def bulk_insert_quest_sessions(sessions: list[Tuple[int, int, datetime, datetime]]) -> None:
+def bulk_insert_quest_sessions(
+    sessions: list[Tuple[int, int, datetime, datetime]],
+) -> None:
     """Bulk insert quest sessions for efficient batch processing.
 
     Filters out sessions longer than 4 hours (14400 seconds) to prevent stale or erroneous
@@ -3971,10 +3973,14 @@ def bulk_insert_quest_sessions(sessions: list[Tuple[int, int, datetime, datetime
         logging.warning("No valid quest sessions to insert after filtering")
         return
 
+    # Use ON CONFLICT DO NOTHING for idempotent reprocessing
+    # This allows safe cold starts that reprocess activities without creating duplicates
     query = """
         INSERT INTO public.quest_sessions 
         (character_id, quest_id, entry_timestamp, exit_timestamp)
         VALUES (%s, %s, %s, %s)
+        ON CONFLICT (character_id, quest_id, entry_timestamp, exit_timestamp) WHERE exit_timestamp IS NOT NULL
+        DO NOTHING
     """
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
