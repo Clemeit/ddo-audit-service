@@ -243,9 +243,22 @@ async def get_all_quests_with_analytics(request: Request):
 
         data = []
         for quest, metrics in items:
+            # Serialize datetime in metrics if present
+            serialized_metrics = None
+            if metrics:
+                serialized_metrics = {
+                    "heroic_xp_per_minute_relative": metrics.get("heroic_xp_per_minute_relative"),
+                    "epic_xp_per_minute_relative": metrics.get("epic_xp_per_minute_relative"),
+                    "heroic_popularity_relative": metrics.get("heroic_popularity_relative"),
+                    "epic_popularity_relative": metrics.get("epic_popularity_relative"),
+                    "analytics_data": metrics.get("analytics_data"),
+                    "updated_at": metrics["updated_at"].isoformat() if metrics.get("updated_at") else None,
+                    "total_sessions": metrics.get("total_sessions"),
+                }
+            
             item = {
                 "quest": quest.model_dump(),
-                "metrics": metrics,
+                "metrics": serialized_metrics,
             }
             data.append(item)
 
