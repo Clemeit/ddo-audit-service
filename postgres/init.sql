@@ -139,8 +139,8 @@ ALTER TABLE IF EXISTS public."quest_sessions"
 -- Unique constraint to ensure idempotent reprocessing of quest sessions
 -- Same (character_id, quest_id, entry_timestamp, exit_timestamp) tuple won't be inserted twice
 -- This allows safe reprocessing of activities without duplicate sessions
-ALTER TABLE IF EXISTS public.quest_sessions
-ADD CONSTRAINT uq_quest_sessions_activity UNIQUE (character_id, quest_id, entry_timestamp, exit_timestamp)
+-- Using a partial unique index instead of constraint since PostgreSQL doesn't support WHERE on UNIQUE constraints
+CREATE UNIQUE INDEX IF NOT EXISTS uq_quest_sessions_activity ON public."quest_sessions" (character_id, quest_id, entry_timestamp, exit_timestamp)
 WHERE exit_timestamp IS NOT NULL;
 
 -- Indexes for quest_sessions

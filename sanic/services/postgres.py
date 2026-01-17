@@ -3981,13 +3981,15 @@ def bulk_insert_quest_sessions(
         logging.warning("No valid quest sessions to insert after filtering")
         return
 
-    # Use ON CONFLICT DO NOTHING for idempotent reprocessing
+    # Use ON CONFLICT DO NOTHING for idempotent reprocessing with the named constraint
     # This allows safe cold starts that reprocess activities without creating duplicates
+    # Note: The constraint has a WHERE exit_timestamp IS NOT NULL condition, which is why
+    # we reference the constraint by name rather than the column list
     query = """
         INSERT INTO public.quest_sessions 
         (character_id, quest_id, entry_timestamp, exit_timestamp)
         VALUES (%s, %s, %s, %s)
-        ON CONFLICT (character_id, quest_id, entry_timestamp, exit_timestamp)
+        ON CONFLICT ON CONSTRAINT uq_quest_sessions_activity
         DO NOTHING
     """
     with get_db_connection() as conn:
