@@ -13,7 +13,6 @@ from utils.quests import get_quests
 from utils.quest_metrics_calc import get_quest_metrics_single
 
 from models.quest import Quest
-from models.quest_session import QuestAnalytics
 
 quest_blueprint = Blueprint("quests", url_prefix="/quests", version=1)
 

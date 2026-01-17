@@ -40,7 +40,7 @@ if PROJECT_ROOT not in sys.path:
 from services.postgres import (  # type: ignore
     initialize_postgres,
     get_db_connection,
-    get_all_quests,
+    get_all_non_wilderness_quests,
     upsert_quest_metrics_batch,
 )
 from services.redis import initialize_redis  # type: ignore
@@ -188,16 +188,16 @@ def run_metrics_update(batch_size: int = 50, min_sessions: int = 100) -> None:
     start_time = time.time()
 
     try:
-        all_quests = get_all_quests()
+        all_non_wilderness_quests = get_all_non_wilderness_quests()
 
-        if not all_quests:
+        if not all_non_wilderness_quests:
             logger.warning("No quests found in database")
             return
 
-        all_quest_ids = [quest.id for quest in all_quests]
+        all_quest_ids = [quest.id for quest in all_non_wilderness_quests]
 
         # Calculate metrics for all quests
-        metrics_data = get_all_quest_metrics_data(all_quests)
+        metrics_data = get_all_quest_metrics_data(all_non_wilderness_quests)
 
         if not metrics_data:
             logger.warning("No metrics data generated")

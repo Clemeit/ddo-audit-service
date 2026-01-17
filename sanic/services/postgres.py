@@ -2315,6 +2315,28 @@ def get_all_quests() -> list[Quest]:
             return [build_quest_from_row(quest) for quest in quests]
 
 
+def get_all_non_wilderness_quests() -> list[Quest]:
+    """
+    Get all quests that are not considered wilderness areas.
+
+    This filters out "quests" such as Ataraxia's Haven, Vale of Twilight, etc.
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT quests.* FROM public.quests
+                LEFT JOIN areas ON quests.area_id = areas.id
+                WHERE areas.is_wilderness IS FALSE
+                """
+            )
+            quests = cursor.fetchall()
+            if not quests:
+                return []
+
+            return [build_quest_from_row(quest) for quest in quests]
+
+
 def get_all_areas() -> list[Area]:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
@@ -3603,24 +3625,6 @@ def get_quest_analytics_raw(quest_id: int, cutoff_date: datetime) -> tuple:
                 dow_rows,
                 time_rows,
             )
-
-
-def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytics:
-    """Get comprehensive analytics for a quest.
-
-    This is a thin wrapper that delegates to the business layer.
-    Use business.quests.get_quest_analytics() for the actual implementation.
-
-    Args:
-        quest_id: ID of the quest
-        lookback_days: Number of days to look back (default 90)
-
-    Returns:
-        QuestAnalytics object with duration stats and activity patterns
-    """
-    from business.quests import get_quest_analytics as business_get_quest_analytics
-
-    return business_get_quest_analytics(quest_id, lookback_days)
 
 
 def get_quest_analytics_batch(

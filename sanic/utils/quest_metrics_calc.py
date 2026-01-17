@@ -7,7 +7,6 @@ import time
 from typing import Optional
 
 from services.postgres import (
-    get_quest_analytics,
     get_all_quests,
     get_quest_by_id,
     get_quest_metrics,
@@ -15,8 +14,8 @@ from services.postgres import (
 )
 from services.redis import get_redis_client
 from models.quest import Quest
-
 from models.quest_session import QuestAnalytics
+from business.quests import get_quest_analytics
 
 logger = logging.getLogger(__name__)
 
