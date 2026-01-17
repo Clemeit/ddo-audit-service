@@ -189,6 +189,12 @@ async def get_all_quests_with_analytics(request: Request):
         except Exception:
             return json({"message": "invalid page_size"}, status=400)
 
+        if page_size < 1 or page_size > 200:
+            return json(
+                {"message": "page_size must be between 1 and 200"},
+                status=400,
+            )
+
         # Validate sort params against strict whitelist
         allowed_sort_fields = {
             "id",
@@ -207,9 +213,14 @@ async def get_all_quests_with_analytics(request: Request):
         sort_dir = request.args.get("sort_dir", "asc").lower()
 
         if sort_by not in allowed_sort_fields:
-            return json({"message": "invalid sort_by"}, status=400)
+            return json(
+                {"message": f"invalid sort_by, valid fields: {allowed_sort_fields}"},
+                status=400,
+            )
         if sort_dir not in ("asc", "desc"):
-            return json({"message": "invalid sort_dir"}, status=400)
+            return json(
+                {"message": "invalid sort_dir, must be 'asc' or 'desc'"}, status=400
+            )
 
         items, total = postgres_client.get_quests_with_metrics_paginated(
             page=page,
@@ -219,7 +230,16 @@ async def get_all_quests_with_analytics(request: Request):
         )
 
         if not items:
-            return json({"message": "no quests found"}, status=404)
+            return json(
+                {
+                    "data": [],
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total,
+                    "sort_by": sort_by,
+                    "sort_dir": sort_dir,
+                }
+            )
 
         data = []
         for quest, metrics in items:

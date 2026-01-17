@@ -3958,7 +3958,10 @@ def get_quests_with_metrics_paginated(
 ) -> tuple[list[tuple[Quest, dict | None]], int]:
     """Fetch quests joined with quest_metrics with pagination and sorting.
 
-    Returns a list of (Quest, metrics_dict_or_none) and the total quest count.
+    Returns:
+        tuple[list[tuple[Quest, dict | None]], int]: A pair where the first
+        element is a list of ``(Quest, metrics_dict_or_none)`` tuples and the
+        second element is the total quest count.
 
     Args:
         page: 1-based page number
@@ -3996,7 +3999,7 @@ def get_quests_with_metrics_paginated(
         "heroic_popularity_relative": "qm.heroic_popularity_relative",
         "epic_popularity_relative": "qm.epic_popularity_relative",
         # JSONB-derived total_sessions cast to int
-        "total_sessions": "(qm.analytics_data->>'total_sessions')::int",
+        "total_sessions": "COALESCE((qm.analytics_data->>'total_sessions')::int, 0)",
     }
 
     order_by_sql = sort_fields_map.get(sort_by or "id")
