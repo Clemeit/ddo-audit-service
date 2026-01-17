@@ -101,8 +101,7 @@ CREATE TABLE IF NOT EXISTS public."character_activity"
 	"timestamp" timestamp with time zone NOT NULL,
 	character_id BIGINT NOT NULL,
 	activity_type TEXT,
-	data jsonb,
-	quest_session_processed boolean NOT NULL DEFAULT false
+	data jsonb
 );
 
 SELECT create_hypertable('character_activity', 'timestamp');
@@ -112,11 +111,11 @@ SELECT add_retention_policy('character_activity', INTERVAL '180 days');
 
 CREATE INDEX ON public."character_activity" (character_id);
 
--- Multi-activity partial index to support both quest location
--- and logout status events
-CREATE INDEX idx_character_activity_unprocessed_multi
-ON public."character_activity" ("timestamp", character_id)
-WHERE activity_type IN ('location', 'status') AND quest_session_processed = false;
+-- Index optimized for quest session worker queries using composite checkpoint
+-- Supports tuple comparison for composite checkpoint: (timestamp, character_id) > (last_timestamp, max_character_id)
+CREATE INDEX idx_character_activity_by_timestamp
+ON public."character_activity" (timestamp, character_id)
+WHERE activity_type IN ('location', 'status');
 
 ALTER TABLE IF EXISTS public."character_activity"
     OWNER to pgadmin;
@@ -136,6 +135,13 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."quest_sessions"
     OWNER to pgadmin;
+
+-- Unique constraint to ensure idempotent reprocessing of quest sessions
+-- Same (character_id, quest_id, entry_timestamp, exit_timestamp) tuple won't be inserted twice
+-- This allows safe reprocessing of activities without duplicate sessions
+ALTER TABLE IF EXISTS public.quest_sessions
+ADD CONSTRAINT uq_quest_sessions_activity UNIQUE (character_id, quest_id, entry_timestamp, exit_timestamp)
+WHERE exit_timestamp IS NOT NULL;
 
 -- Indexes for quest_sessions
 CREATE INDEX idx_quest_sessions_character_id ON public."quest_sessions" (character_id);

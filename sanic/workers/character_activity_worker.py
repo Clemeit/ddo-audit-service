@@ -2,7 +2,7 @@ import os
 import sys
 import time
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from collections import defaultdict
 from typing import Dict, List, Tuple
 
@@ -21,7 +21,7 @@ from services.postgres import (  # type: ignore
 )
 
 
-logger = logging.getLogger("active_backfill_worker")
+logger = logging.getLogger("character_activity_worker")
 logging.basicConfig(
     level=os.getenv("WORKER_LOG_LEVEL", "INFO"),
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
@@ -234,23 +234,31 @@ def main():
     initialize_postgres()
 
     # Config via env
-    shard_count = max(1, env_int("WORKER_SHARDS", 1))
-    auto_index = os.getenv("WORKER_AUTO_INDEX", "").lower() in ("1", "true", "yes")
+    shard_count = max(1, env_int("CHARACTER_ACTIVITY_SHARDS", 1))
+    auto_index = os.getenv("CHARACTER_ACTIVITY_AUTO_INDEX", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     if auto_index:
         shard_index = _hostname_mod(shard_count)
     else:
-        shard_index = max(0, env_int("WORKER_INDEX", 0)) % shard_count
-    batch_size = max(1, env_int("WORKER_BATCH_SIZE", 1000))
-    lookback_days = max(1, env_int("WORKER_LOOKBACK_DAYS", 90))
-    sleep_secs = max(0.0, env_float("WORKER_SLEEP_SECS", 0.0))
-    idle_sleep_secs = max(0.0, env_float("WORKER_IDLE_SECS", 300.0))
-    max_batches = env_int("WORKER_MAX_BATCHES", 0)  # 0 = run until done
-    stale_days = max(1, env_int("WORKER_STALE_DAYS", 7))
-    seed_missing = os.getenv("WORKER_SEED_MISSING", "").lower() in ("1", "true", "yes")
-    seed_limit = env_int("WORKER_SEED_LIMIT", 0)
+        shard_index = max(0, env_int("CHARACTER_ACTIVITY_INDEX", 0)) % shard_count
+    batch_size = max(1, env_int("CHARACTER_ACTIVITY_BATCH_SIZE", 1000))
+    lookback_days = max(1, env_int("CHARACTER_ACTIVITY_LOOKBACK_DAYS", 90))
+    sleep_secs = max(0.0, env_float("CHARACTER_ACTIVITY_SLEEP_SECS", 0.0))
+    idle_sleep_secs = max(0.0, env_float("CHARACTER_ACTIVITY_IDLE_SECS", 300.0))
+    max_batches = env_int("CHARACTER_ACTIVITY_MAX_BATCHES", 0)  # 0 = run until done
+    stale_days = max(1, env_int("CHARACTER_ACTIVITY_STALE_DAYS", 7))
+    seed_missing = os.getenv("CHARACTER_ACTIVITY_SEED_MISSING", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    seed_limit = env_int("CHARACTER_ACTIVITY_SEED_LIMIT", 0)
 
     logger.info(
-        "Starting active backfill worker: shard %s/%s, batch_size=%s, lookback_days=%s, stale_days=%s",
+        "Starting character activity worker: shard %s/%s, batch_size=%s, lookback_days=%s, stale_days=%s",
         shard_index,
         shard_count,
         batch_size,

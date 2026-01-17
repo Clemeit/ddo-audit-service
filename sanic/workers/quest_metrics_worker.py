@@ -18,10 +18,9 @@ Quest Length Update:
    - Batch updates 'length' column in quests table
 
 The worker uses environment variables for configuration:
-- LOOKBACK_DAYS: Days of historical data to analyze (default: 90)
-- UPDATE_INTERVAL_DAYS: Days between update runs (default: 1)
-- BATCH_SIZE: Number of quests to process per batch (default: 50)
-- MIN_SESSIONS: Minimum completed sessions required to estimate length (default: 100)
+- QUEST_METRICS_LOOKBACK_DAYS: Days of historical data to analyze (default: 90)
+- QUEST_METRICS_BATCH_SIZE: Number of quests to process per batch (default: 50)
+- QUEST_METRICS_MIN_SESSIONS: Minimum completed sessions required to estimate length (default: 100)
 - QUEST_METRICS_DELAY_SECS: Delay between quest processing in Pass 1 (default: 0.1)
 """
 
@@ -236,9 +235,9 @@ def run_metrics_update(batch_size: int = 50, min_sessions: int = 100) -> None:
 def main():
     """Main worker loop."""
     # Configuration from environment variables
-    lookback_days = env_int("LOOKBACK_DAYS", 90)
-    batch_size = env_int("BATCH_SIZE", 50)
-    min_sessions = env_int("MIN_SESSIONS", 100)
+    lookback_days = env_int("QUEST_METRICS_LOOKBACK_DAYS", 90)
+    batch_size = env_int("QUEST_METRICS_BATCH_SIZE", 50)
+    min_sessions = env_int("QUEST_METRICS_MIN_SESSIONS", 100)
 
     logger.info("Quest Metrics Worker starting")
     logger.info(
