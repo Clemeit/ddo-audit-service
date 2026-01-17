@@ -3950,6 +3950,138 @@ def get_quest_metrics_bulk(quest_ids: list[int]) -> dict[int, dict]:
             return results
 
 
+def get_quests_with_metrics_paginated(
+    page: int = 1,
+    page_size: int = 50,
+    sort_by: str = "id",
+    sort_dir: str = "asc",
+) -> tuple[list[tuple[Quest, dict | None]], int]:
+    """Fetch quests joined with quest_metrics with pagination and sorting.
+
+    Returns a list of (Quest, metrics_dict_or_none) and the total quest count.
+
+    Args:
+        page: 1-based page number
+        page_size: items per page (bounded)
+        sort_by: allowed field name for sorting
+        sort_dir: 'asc' or 'desc'
+
+    Allowed sort_by values:
+        - id, name, heroic_normal_cr, epic_normal_cr, length
+        - updated_at, heroic_xp_per_minute_relative, epic_xp_per_minute_relative,
+          heroic_popularity_relative, epic_popularity_relative
+        - total_sessions (derived from analytics_data JSONB)
+    """
+
+    # Enforce bounds and sanitize inputs
+    page = max(1, int(page or 1))
+    page_size = int(page_size or 50)
+    if page_size < 1:
+        page_size = 50
+    if page_size > 200:
+        page_size = 200
+    sort_dir_l = (sort_dir or "asc").lower()
+    sort_dir_sql = "ASC" if sort_dir_l == "asc" else "DESC"
+
+    # Strict whitelist of sortable fields mapped to safe SQL fragments
+    sort_fields_map = {
+        "id": "quests.id",
+        "name": "quests.name",
+        "heroic_normal_cr": "quests.heroic_normal_cr",
+        "epic_normal_cr": "quests.epic_normal_cr",
+        "length": "quests.length",
+        "updated_at": "qm.updated_at",
+        "heroic_xp_per_minute_relative": "qm.heroic_xp_per_minute_relative",
+        "epic_xp_per_minute_relative": "qm.epic_xp_per_minute_relative",
+        "heroic_popularity_relative": "qm.heroic_popularity_relative",
+        "epic_popularity_relative": "qm.epic_popularity_relative",
+        # JSONB-derived total_sessions cast to int
+        "total_sessions": "(qm.analytics_data->>'total_sessions')::int",
+    }
+
+    order_by_sql = sort_fields_map.get(sort_by or "id")
+    if order_by_sql is None:
+        # Fallback to id if invalid sort_by was passed
+        order_by_sql = sort_fields_map["id"]
+
+    offset = (page - 1) * page_size
+
+    # Count total quests (left join does not change quest cardinality)
+    total_count = 0
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM public.quests")
+            row = cursor.fetchone()
+            total_count = int(row[0]) if row else 0
+
+    # Fetch paginated joined rows
+    query = f"""
+        SELECT 
+            quests.*, 
+            qm.heroic_xp_per_minute_relative AS heroic_xpm_rel,
+            qm.epic_xp_per_minute_relative AS epic_xpm_rel,
+            qm.heroic_popularity_relative AS heroic_pop_rel,
+            qm.epic_popularity_relative AS epic_pop_rel,
+            qm.analytics_data AS analytics_data,
+            qm.updated_at AS updated_at,
+            COALESCE((qm.analytics_data->>'total_sessions')::int, 0) AS total_sessions
+        FROM public.quests AS quests
+        LEFT JOIN public.quest_metrics AS qm ON qm.quest_id = quests.id
+        ORDER BY {order_by_sql} {sort_dir_sql} NULLS LAST
+        LIMIT %s OFFSET %s
+    """
+
+    items: list[tuple[Quest, dict | None]] = []
+    with get_dict_cursor(commit=False) as cursor:
+        cursor.execute(query, (page_size, offset))
+        rows = cursor.fetchall() or []
+        for r in rows:
+            # Build Quest model from row fields
+            quest_row = (
+                r.get("id"),
+                r.get("alt_id"),
+                r.get("area_id"),
+                r.get("name"),
+                r.get("heroic_normal_cr"),
+                r.get("epic_normal_cr"),
+                r.get("is_free_to_vip"),
+                r.get("required_adventure_pack"),
+                r.get("adventure_area"),
+                r.get("quest_journal_area"),
+                r.get("group_size"),
+                r.get("patron"),
+                r.get("xp"),
+                r.get("length"),
+                r.get("tip"),
+            )
+
+            quest = build_quest_from_row(quest_row)  # type: ignore
+
+            metrics = None
+            # If any metric fields are present, construct dict
+            if (
+                r.get("heroic_xpm_rel") is not None
+                or r.get("epic_xpm_rel") is not None
+                or r.get("heroic_pop_rel") is not None
+                or r.get("epic_pop_rel") is not None
+                or r.get("analytics_data") is not None
+                or r.get("updated_at") is not None
+            ):
+                metrics = {
+                    "heroic_xp_per_minute_relative": r.get("heroic_xpm_rel"),
+                    "epic_xp_per_minute_relative": r.get("epic_xpm_rel"),
+                    "heroic_popularity_relative": r.get("heroic_pop_rel"),
+                    "epic_popularity_relative": r.get("epic_pop_rel"),
+                    "analytics_data": r.get("analytics_data"),
+                    "updated_at": r.get("updated_at"),
+                    "total_sessions": r.get("total_sessions"),
+                }
+
+            items.append((quest, metrics))
+
+    return items, total_count
+
+
 def get_unprocessed_quest_activities(
     last_timestamp: datetime,
     max_character_id_at_timestamp: int,

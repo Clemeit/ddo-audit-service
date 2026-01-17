@@ -156,6 +156,93 @@ async def get_all_quests(request: Request):
     return json({"data": quest_list, "source": source, "timestamp": timestamp})
 
 
+@quest_blueprint.get("/analytics")
+async def get_all_quests_with_analytics(request: Request):
+    """
+    Method: GET
+
+    Route: /quests/analytics
+
+    Description: Get all quests with associated analytics/metrics (JOIN on quest id).
+    Supports pagination and sorting by quest fields, metric fields, and
+    JSONB-derived total_sessions.
+
+    Query Parameters:
+    - page: 1-based page number (default: 1)
+    - page_size: items per page (default: 50, max: 200)
+    - sort_by: one of [id, name, heroic_normal_cr, epic_normal_cr, length,
+               updated_at, heroic_xp_per_minute_relative, epic_xp_per_minute_relative,
+               heroic_popularity_relative, epic_popularity_relative, total_sessions]
+    - sort_dir: asc | desc (default: asc)
+    """
+
+    try:
+        # Parse and validate pagination params
+        page = request.args.get("page", "1")
+        page_size = request.args.get("page_size", "50")
+        try:
+            page = int(page)
+        except Exception:
+            return json({"message": "invalid page"}, status=400)
+        try:
+            page_size = int(page_size)
+        except Exception:
+            return json({"message": "invalid page_size"}, status=400)
+
+        # Validate sort params against strict whitelist
+        allowed_sort_fields = {
+            "id",
+            "name",
+            "heroic_normal_cr",
+            "epic_normal_cr",
+            "length",
+            "updated_at",
+            "heroic_xp_per_minute_relative",
+            "epic_xp_per_minute_relative",
+            "heroic_popularity_relative",
+            "epic_popularity_relative",
+            "total_sessions",
+        }
+        sort_by = request.args.get("sort_by", "id")
+        sort_dir = request.args.get("sort_dir", "asc").lower()
+
+        if sort_by not in allowed_sort_fields:
+            return json({"message": "invalid sort_by"}, status=400)
+        if sort_dir not in ("asc", "desc"):
+            return json({"message": "invalid sort_dir"}, status=400)
+
+        items, total = postgres_client.get_quests_with_metrics_paginated(
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+        )
+
+        if not items:
+            return json({"message": "no quests found"}, status=404)
+
+        data = []
+        for quest, metrics in items:
+            item = {
+                "quest": quest.model_dump(),
+                "metrics": metrics,
+            }
+            data.append(item)
+
+        return json(
+            {
+                "data": data,
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "sort_by": sort_by,
+                "sort_dir": sort_dir,
+            }
+        )
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+
 @quest_blueprint.post("")
 async def update_quests(request: Request):
     """
