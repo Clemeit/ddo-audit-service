@@ -232,6 +232,20 @@ def run_metrics_update(batch_size: int = 50, min_sessions: int = 100) -> None:
         logger.error(f"Failed to update quest metrics: {e}", exc_info=True)
 
 
+def wait_until_next_midnight_utc() -> None:
+    """Sleep until the next midnight UTC."""
+    now = datetime.now(timezone.utc)
+    tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
+        days=1
+    )
+    seconds_until_midnight = (tomorrow - now).total_seconds()
+    logger.info(
+        f"Sleeping until next run at {tomorrow.strftime('%Y-%m-%d %H:%M:%S')} UTC "
+        f"({seconds_until_midnight:.0f} seconds)"
+    )
+    time.sleep(seconds_until_midnight)
+
+
 def main():
     """Main worker loop."""
     # Configuration from environment variables
@@ -250,6 +264,8 @@ def main():
     initialize_postgres()
     initialize_redis()
 
+    wait_until_next_midnight_utc()
+
     # Main loop: repeat daily at midnight UTC
     while True:
         # Attempt metrics and length update - continue even if it fails
@@ -260,17 +276,8 @@ def main():
                 f"Update cycle metrics and length update failed: {e}", exc_info=True
             )
 
-        # Calculate time until next midnight (UTC)
-        now = datetime.now(timezone.utc)
-        tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
-            days=1
-        )
-        seconds_until_midnight = (tomorrow - now).total_seconds()
-        logger.info(
-            f"Next run at {tomorrow.strftime('%Y-%m-%d %H:%M:%S')}. Sleeping for {seconds_until_midnight:.0f} seconds."
-        )
-        # Sleep until next update
-        time.sleep(seconds_until_midnight)
+        # Wait until next midnight UTC
+        wait_until_next_midnight_utc()
 
 
 if __name__ == "__main__":
