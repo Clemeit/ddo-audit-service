@@ -10,7 +10,7 @@ from endpoints.health import health_blueprint
 from endpoints.lfms import lfm_blueprint
 from endpoints.service import service_blueprint
 from endpoints.verification import verification_blueprint
-from endpoints.quests import quest_blueprint
+from endpoints.quests import quest_blueprint, quest_blueprint_v2
 from endpoints.areas import area_blueprint
 from endpoints.demographics import demographics_blueprint
 from endpoints.guilds import guild_blueprint
@@ -58,6 +58,7 @@ app.blueprint(
         service_blueprint,
         verification_blueprint,
         quest_blueprint,
+        quest_blueprint_v2,
         area_blueprint,
         demographics_blueprint,
         guild_blueprint,

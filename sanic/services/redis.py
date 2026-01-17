@@ -14,13 +14,14 @@ from models.redis import (
     ServerSpecificInfo,
     KnownAreasModel,
     KnownQuestsModel,
+    KnownQuestsWithMetricsModel,
     RedisKeys,
     REDIS_KEY_TYPE_MAPPING,
 )
 from time import time
 from models.area import Area
 from models.service import News, PageMessage
-from models.quest import Quest
+from models.quest import Quest, QuestV2
 
 import json
 from typing import Optional, Any
@@ -1064,7 +1065,26 @@ def set_known_quests(quests: list[Quest]):
         client.json().set("known_quests", path="$", obj=quests_entry.model_dump())
 
 
-# ======= Quests and Areas =======
+# ======= Quests with Metrics =======
+
+
+def get_quests_with_metrics() -> dict:
+    """Get all quests with metrics from the cache."""
+    with get_redis_client() as client:
+        return client.json().get("quests_with_metrics") or {}
+
+
+def set_quests_with_metrics(quests: list[QuestV2]):
+    """Set the quests with metrics in the cache. It also sets the timestamp for cache expiration."""
+    quests_entry = KnownQuestsWithMetricsModel(
+        quests=quests,
+        timestamp=time(),
+    )
+    with get_redis_client() as client:
+        client.json().set(
+            "quests_with_metrics", path="$", obj=quests_entry.model_dump()
+        )
+
 
 # ======= Game Population ========
 

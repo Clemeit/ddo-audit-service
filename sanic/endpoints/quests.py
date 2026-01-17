@@ -9,7 +9,7 @@ from sanic import Blueprint
 from sanic.response import json
 from sanic.request import Request
 from utils.areas import get_valid_area_ids
-from utils.quests import get_quests
+from utils.quests import get_quests, get_quests_with_metrics
 from utils.quest_metrics_calc import get_quest_metrics_single
 
 from models.quest import Quest
@@ -247,15 +247,25 @@ async def get_all_quests_with_analytics(request: Request):
             serialized_metrics = None
             if metrics:
                 serialized_metrics = {
-                    "heroic_xp_per_minute_relative": metrics.get("heroic_xp_per_minute_relative"),
-                    "epic_xp_per_minute_relative": metrics.get("epic_xp_per_minute_relative"),
-                    "heroic_popularity_relative": metrics.get("heroic_popularity_relative"),
+                    "heroic_xp_per_minute_relative": metrics.get(
+                        "heroic_xp_per_minute_relative"
+                    ),
+                    "epic_xp_per_minute_relative": metrics.get(
+                        "epic_xp_per_minute_relative"
+                    ),
+                    "heroic_popularity_relative": metrics.get(
+                        "heroic_popularity_relative"
+                    ),
                     "epic_popularity_relative": metrics.get("epic_popularity_relative"),
                     "analytics_data": metrics.get("analytics_data"),
-                    "updated_at": metrics["updated_at"].isoformat() if metrics.get("updated_at") else None,
+                    "updated_at": (
+                        metrics["updated_at"].isoformat()
+                        if metrics.get("updated_at")
+                        else None
+                    ),
                     "total_sessions": metrics.get("total_sessions"),
                 }
-            
+
             item = {
                 "quest": quest.model_dump(),
                 "metrics": serialized_metrics,
@@ -338,3 +348,37 @@ async def update_quests(request: Request):
     except Exception as e:
         return json({"message": str(e)}, status=500)
     return json({"message": "quest updated"})
+
+
+# ======= V2 Blueprint =======
+
+quest_blueprint_v2 = Blueprint("quests_v2", url_prefix="/quests", version=2)
+
+
+@quest_blueprint_v2.get("")
+async def get_all_quests_v2(request: Request):
+    """
+    Method: GET
+
+    Route: /quests (v2)
+
+    Description: Get all quests with associated metrics (LEFT JOIN on quest_metrics).
+    Returns quests with flattened metric fields. Data is cached with 1-hour TTL.
+
+    Query Parameters:
+    - force=true: Force refresh from database, bypassing cache (optional)
+
+    Response:
+    - data: array of quests with flattened metric fields
+    - source: "cache" or "database"
+    - timestamp: ISO format datetime of when data was retrieved
+    """
+
+    try:
+        force = request.args.get("force", "false").lower() == "true"
+        quest_list, source, timestamp = get_quests_with_metrics(skip_cache=force)
+        if not quest_list:
+            return json({"message": "no quests found"}, status=404)
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+    return json({"data": quest_list, "source": source, "timestamp": timestamp})
