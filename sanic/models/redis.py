@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from models.area import Area
 from enum import Enum
 from models.service import News, PageMessage
-from models.quest import Quest
+from models.quest import Quest, QuestV2
 
 
 class ServerSpecificInfo(BaseModel):
@@ -71,6 +71,11 @@ class KnownAreasModel(BaseModel):
 
 class KnownQuestsModel(BaseModel):
     quests: Optional[list[Quest]] = None
+    timestamp: Optional[float] = None
+
+
+class KnownQuestsWithMetricsModel(BaseModel):
+    quests: Optional[list[QuestV2]] = None
     timestamp: Optional[float] = None
 
 

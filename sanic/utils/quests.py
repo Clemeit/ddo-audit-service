@@ -89,7 +89,7 @@ def get_quests_with_metrics(skip_cache: bool = False) -> tuple[list[dict], str, 
             return ([], None, None)
 
         # Convert (Quest, metrics_dict|None) tuples to QuestV2 objects
-        quest_v2_list = []
+        quest_v2_list: list[QuestV2] = []
         for quest, metrics in quest_metrics_tuples:
             # Create QuestV2 from quest base fields
             quest_dict = quest.model_dump()

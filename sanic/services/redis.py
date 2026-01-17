@@ -14,13 +14,14 @@ from models.redis import (
     ServerSpecificInfo,
     KnownAreasModel,
     KnownQuestsModel,
+    KnownQuestsWithMetricsModel,
     RedisKeys,
     REDIS_KEY_TYPE_MAPPING,
 )
 from time import time
 from models.area import Area
 from models.service import News, PageMessage
-from models.quest import Quest
+from models.quest import Quest, QuestV2
 
 import json
 from typing import Optional, Any
@@ -1073,21 +1074,16 @@ def get_quests_with_metrics() -> dict:
         return client.json().get("quests_with_metrics") or {}
 
 
-def set_quests_with_metrics(quests):
+def set_quests_with_metrics(quests: list[QuestV2]):
     """Set the quests with metrics in the cache. It also sets the timestamp for cache expiration."""
-    from models.quest import QuestV2
-
-    # Handle both QuestV2 objects and dicts
-    quests_data = []
-    for quest in quests:
-        if isinstance(quest, QuestV2):
-            quests_data.append(quest.model_dump())
-        else:
-            quests_data.append(quest)
-
-    quests_entry = {"quests": quests_data, "timestamp": time()}
+    quests_entry = KnownQuestsWithMetricsModel(
+        quests=quests,
+        timestamp=time(),
+    )
     with get_redis_client() as client:
-        client.json().set("quests_with_metrics", path="$", obj=quests_entry)
+        client.json().set(
+            "quests_with_metrics", path="$", obj=quests_entry.model_dump()
+        )
 
 
 # ======= Game Population ========

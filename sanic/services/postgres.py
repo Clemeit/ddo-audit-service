@@ -4106,6 +4106,7 @@ def get_all_quests_with_metrics() -> list[tuple[Quest, dict | None]]:
             qm.epic_popularity_relative AS epic_pop_rel
         FROM public.quests AS quests
         LEFT JOIN public.quest_metrics AS qm ON qm.quest_id = quests.id
+        ORDER BY quests.id ASC
     """
 
     items: list[tuple] = []
