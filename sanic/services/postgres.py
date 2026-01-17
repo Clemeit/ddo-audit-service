@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from time import time
 from typing import Optional, Generator, Tuple
+import math
 
 from constants.activity import CharacterActivityType
 from models.character import (
@@ -13,9 +14,9 @@ from models.character import (
     CharacterQuestActivity,
 )
 from models.game import PopulationDataPoint, PopulationPointInTime
-from models.redis import ServerInfo, ServerInfoDict
+from models.redis import ServerInfo
 from models.service import News, PageMessage, FeedbackRequest, LogRequest
-from psycopg2 import pool, Error as PostgresError  # type: ignore
+from psycopg2 import pool  # type: ignore
 import psycopg2.extras  # type: ignore
 import psycopg2.sql  # type: ignore
 from constants.activity import (
@@ -3402,96 +3403,213 @@ def get_quest_sessions_by_character(
             ]
 
 
-def _generate_dynamic_bins(
-    min_duration: float, max_duration: float, num_bins: int = 8
-) -> list[tuple]:
-    """Generate dynamic histogram bins based on duration range.
+def get_quest_analytics_raw(quest_id: int, cutoff_date: datetime) -> tuple:
+    """Fetch raw analytics data for a quest from the database.
+
+    This is a low-level data access function that returns raw database results.
+    High-level analytics processing and formatting is handled by the business layer.
 
     Args:
-        min_duration: Minimum duration in seconds
-        max_duration: Maximum duration in seconds
-        num_bins: Target number of bins (default 8)
+        quest_id: ID of the quest
+        cutoff_date: Cutoff datetime for filtering sessions
 
     Returns:
-        List of tuples (bin_start, bin_end, label)
+        Tuple of (avg_duration, stddev, p01, q25, q75, p99, total_sessions,
+                  completed_sessions, active_sessions, histogram_rows, hour_rows,
+                  dow_rows, time_rows) or None if no data found
     """
-    if min_duration >= max_duration or max_duration <= 0:
-        # Fallback to simple range
-        return [(0, float("inf"), "All durations")]
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            # Set a higher timeout for analytics queries (they scan large datasets)
+            cursor.execute("SET statement_timeout = '120s'")
 
-    # Calculate the range and determine appropriate bin size
-    duration_range = max_duration - min_duration
-
-    # Use nice round numbers for bin sizes based on the range
-    if duration_range <= 600:  # Up to 10 minutes
-        # Use 1-minute bins
-        bin_size = 60
-    elif duration_range <= 1800:  # Up to 30 minutes
-        # Use 2 or 3-minute bins
-        bin_size = max(60, round(duration_range / num_bins / 60) * 60)
-    elif duration_range <= 3600:  # Up to 1 hour
-        # Use 5-minute bins
-        bin_size = 300
-    elif duration_range <= 7200:  # Up to 2 hours
-        # Use 10 or 15-minute bins
-        bin_size = max(300, round(duration_range / num_bins / 300) * 300)
-    else:
-        # Use 30-minute or 1-hour bins for longer quests
-        bin_size = max(1800, round(duration_range / num_bins / 1800) * 1800)
-
-    # Generate bins
-    bins = []
-    current = 0
-    bin_count = 0
-
-    while current < max_duration and bin_count < num_bins - 1:
-        next_boundary = current + bin_size
-        bins.append((current, next_boundary))
-        current = next_boundary
-        bin_count += 1
-
-    # Add final bin for remaining durations
-    bins.append((current, float("inf")))
-
-    # Generate labels
-    labeled_bins = []
-    for bin_start, bin_end in bins:
-        if bin_end == float("inf"):
-            label = _format_duration_label(bin_start, is_open_ended=True)
-        else:
-            label = (
-                f"{_format_duration_value(bin_start)}-{_format_duration_value(bin_end)}"
+            # Get basic statistics including percentiles to exclude outliers
+            logger.debug("Executing basic stats query...")
+            cursor.execute(
+                """
+                SELECT 
+                    AVG(duration_seconds) as avg_duration,
+                    STDDEV(duration_seconds) as stddev_duration,
+                    PERCENTILE_CONT(0.01) WITHIN GROUP (ORDER BY duration_seconds) as p01,
+                    PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY duration_seconds) as p25,
+                    PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY duration_seconds) as p75,
+                    PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY duration_seconds) as p99,
+                    COUNT(*) as total_sessions,
+                    COUNT(exit_timestamp) as completed_sessions,
+                    COUNT(*) - COUNT(exit_timestamp) as active_sessions
+                FROM public.quest_sessions
+                WHERE quest_id = %s 
+                  AND entry_timestamp >= %s
+                  AND exit_timestamp IS NOT NULL
+                  AND duration_seconds IS NOT NULL
+                """,
+                (quest_id, cutoff_date),
             )
-        labeled_bins.append((bin_start, bin_end, label))
+            stats = cursor.fetchone()
+            logger.debug(f"Basic stats query returned: {stats}")
 
-    return labeled_bins
+            if stats is None or len(stats) < 9:
+                # No data found for this quest in the lookback period or malformed result
+                logger.warning(
+                    f"No data or malformed result for quest_id={quest_id}: stats={stats}"
+                )
+                return None
 
+            if all(s is None for s in stats):
+                # All values are None
+                logger.warning(f"All stats are None for quest_id={quest_id}")
+                return None
 
-def _format_duration_value(seconds: float) -> str:
-    """Format duration value for display."""
-    if seconds < 60:
-        return f"{int(seconds)}s"
-    elif seconds < 3600:
-        minutes = int(seconds / 60)
-        return f"{minutes}m"
-    else:
-        hours = seconds / 3600
-        if hours == int(hours):
-            return f"{int(hours)}h"
-        else:
-            return f"{hours:.1f}h"
+            logger.debug("Parsing stats values...")
+            avg_duration = float(stats[0]) if stats[0] is not None else None
+            stddev_duration = float(stats[1]) if stats[1] is not None else None
+            p01 = float(stats[2]) if stats[2] is not None else 0.0
+            q25 = float(stats[3]) if stats[3] is not None else None
+            q75 = float(stats[4]) if stats[4] is not None else None
+            p99 = float(stats[5]) if stats[5] is not None else 0.0
+            total_sessions = int(stats[6]) if stats[6] else 0
+            completed_sessions = int(stats[7]) if stats[7] else 0
+            active_sessions = int(stats[8]) if stats[8] else 0
 
+            min_duration = p01
+            max_duration = p99
+            iqr = (q75 - q25) if (q75 is not None and q25 is not None) else None
 
-def _format_duration_label(seconds: float, is_open_ended: bool = False) -> str:
-    """Format duration as a readable label."""
-    formatted = _format_duration_value(seconds)
-    if is_open_ended:
-        return f"{formatted}+"
-    return formatted
+            # Generate dynamic bin ranges
+            num_bins_fd = 8
+            duration_range = max(0.0, max_duration - min_duration)
+            if (
+                iqr is not None
+                and iqr > 0
+                and total_sessions > 0
+                and duration_range > 0
+            ):
+                bin_width_fd = (2.0 * iqr) / (total_sessions ** (1.0 / 3.0))
+                if bin_width_fd > 0:
+                    num_bins_fd = max(1, math.ceil(duration_range / bin_width_fd))
+            else:
+                num_bins_fd = max(
+                    1, round(math.sqrt(total_sessions)) if total_sessions > 0 else 8
+                )
+
+            num_bins_fd = max(5, min(12, num_bins_fd))
+
+            # Import here to avoid circular dependency
+            from business.quests import _generate_dynamic_bins
+
+            bin_ranges = _generate_dynamic_bins(
+                min_duration, max_duration, num_bins=num_bins_fd
+            )
+
+            # Build dynamic SQL CASE statement for binning
+            case_conditions = []
+            for i, bin_range_tuple in enumerate(bin_ranges, start=1):
+                if len(bin_range_tuple) != 3:
+                    continue
+                bin_start, bin_end, _ = bin_range_tuple
+                if bin_end == float("inf"):
+                    case_conditions.append(
+                        f"WHEN duration_seconds >= {bin_start} THEN {i}"
+                    )
+                else:
+                    case_conditions.append(
+                        f"WHEN duration_seconds >= {bin_start} AND duration_seconds < {bin_end} THEN {i}"
+                    )
+
+            case_statement = " ".join(case_conditions)
+
+            # Get histogram data (only completed sessions) with dynamic bins
+            histogram_query = f"""
+                WITH bins AS (
+                    SELECT 
+                        CASE 
+                            {case_statement}
+                            ELSE 0
+                        END as bin,
+                        COUNT(*) as count
+                    FROM public.quest_sessions
+                    WHERE quest_id = %s 
+                      AND entry_timestamp >= %s 
+                      AND exit_timestamp IS NOT NULL
+                      AND duration_seconds IS NOT NULL
+                    GROUP BY bin
+                )
+                SELECT bin, count FROM bins WHERE bin > 0 ORDER BY bin
+            """
+
+            logger.debug("Executing histogram query...")
+            cursor.execute(histogram_query, (quest_id, cutoff_date))
+            histogram_rows = cursor.fetchall()
+
+            # Get activity by hour
+            logger.debug("Executing activity by hour query...")
+            cursor.execute(
+                """
+                SELECT EXTRACT(HOUR FROM entry_timestamp)::int as hour, COUNT(*) as count
+                FROM public.quest_sessions
+                WHERE quest_id = %s AND entry_timestamp >= %s
+                GROUP BY hour
+                ORDER BY hour
+                """,
+                (quest_id, cutoff_date),
+            )
+            hour_rows = cursor.fetchall()
+
+            # Get activity by day of week
+            logger.debug("Executing activity by day of week query...")
+            cursor.execute(
+                """
+                SELECT 
+                    (EXTRACT(DOW FROM entry_timestamp)::int + 6) %% 7 as day,
+                    COUNT(*) as count
+                FROM public.quest_sessions
+                WHERE quest_id = %s AND entry_timestamp >= %s
+                GROUP BY day
+                ORDER BY day
+                """,
+                (quest_id, cutoff_date),
+            )
+            dow_rows = cursor.fetchall()
+
+            # Get activity over time (daily)
+            logger.debug("Executing activity over time query...")
+            cursor.execute(
+                """
+                SELECT DATE(entry_timestamp) as date, COUNT(*) as count
+                FROM public.quest_sessions
+                WHERE quest_id = %s AND entry_timestamp >= %s
+                GROUP BY date
+                ORDER BY date
+                """,
+                (quest_id, cutoff_date),
+            )
+            time_rows = cursor.fetchall()
+
+            # Reset timeout back to default
+            cursor.execute(f"SET statement_timeout = '{POSTGRES_COMMAND_TIMEOUT}s'")
+
+            return (
+                avg_duration,
+                stddev_duration,
+                p01,
+                q25,
+                q75,
+                p99,
+                total_sessions,
+                completed_sessions,
+                active_sessions,
+                histogram_rows,
+                hour_rows,
+                dow_rows,
+                time_rows,
+            )
 
 
 def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytics:
     """Get comprehensive analytics for a quest.
+
+    This is a thin wrapper that delegates to the business layer.
+    Use business.quests.get_quest_analytics() for the actual implementation.
 
     Args:
         quest_id: ID of the quest
@@ -3500,297 +3618,9 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
     Returns:
         QuestAnalytics object with duration stats and activity patterns
     """
-    logger.info(
-        f"Getting quest analytics for quest_id={quest_id}, lookback_days={lookback_days}"
-    )
-    try:
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=lookback_days)
-        logger.debug(f"Cutoff date for analytics: {cutoff_date}")
-    except Exception as e:
-        logger.error(f"Error calculating cutoff date: {e}", exc_info=True)
-        raise
+    from business.quests import get_quest_analytics as business_get_quest_analytics
 
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cursor:
-                # Set a higher timeout for analytics queries (they scan large datasets)
-                cursor.execute("SET statement_timeout = '120s'")
-
-                # Get basic statistics including percentiles to exclude outliers
-                logger.debug("Executing basic stats query...")
-                cursor.execute(
-                    """
-                    SELECT 
-                        AVG(duration_seconds) as avg_duration,
-                        STDDEV(duration_seconds) as stddev_duration,
-                        PERCENTILE_CONT(0.01) WITHIN GROUP (ORDER BY duration_seconds) as p01,
-                        PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY duration_seconds) as p99,
-                        COUNT(*) as total_sessions,
-                        COUNT(exit_timestamp) as completed_sessions,
-                        COUNT(*) - COUNT(exit_timestamp) as active_sessions
-                    FROM public.quest_sessions
-                    WHERE quest_id = %s 
-                      AND entry_timestamp >= %s
-                      AND exit_timestamp IS NOT NULL
-                      AND duration_seconds IS NOT NULL
-                    """,
-                    (quest_id, cutoff_date),
-                )
-                stats = cursor.fetchone()
-                logger.debug(f"Basic stats query returned: {stats}")
-
-                if stats is None or len(stats) < 7:
-                    # No data found for this quest in the lookback period or malformed result
-                    logger.warning(
-                        f"No data or malformed result for quest_id={quest_id}: stats={stats}"
-                    )
-                    return QuestAnalytics(
-                        average_duration_seconds=None,
-                        standard_deviation_seconds=None,
-                        histogram=[],
-                        activity_by_hour=[],
-                        activity_by_day_of_week=[],
-                        activity_over_time=[],
-                        total_sessions=0,
-                        completed_sessions=0,
-                        active_sessions=0,
-                    )
-
-                if all(s is None for s in stats):
-                    # All values are None
-                    logger.warning(f"All stats are None for quest_id={quest_id}")
-                    return QuestAnalytics(
-                        average_duration_seconds=None,
-                        standard_deviation_seconds=None,
-                        histogram=[],
-                        activity_by_hour=[],
-                        activity_by_day_of_week=[],
-                        activity_over_time=[],
-                        total_sessions=0,
-                        completed_sessions=0,
-                        active_sessions=0,
-                    )
-
-                logger.debug("Parsing stats values...")
-                avg_duration = float(stats[0]) if stats[0] is not None else None
-                stddev_duration = float(stats[1]) if stats[1] is not None else None
-                min_duration = float(stats[2]) if stats[2] is not None else 0
-                max_duration = float(stats[3]) if stats[3] is not None else 0
-                total_sessions = int(stats[4]) if stats[4] else 0
-                completed_sessions = int(stats[5]) if stats[5] else 0
-                active_sessions = int(stats[6]) if stats[6] else 0
-
-                logger.debug(
-                    f"Computed stats - avg_duration={avg_duration}, stddev={stddev_duration}, "
-                    f"min={min_duration}, max={max_duration}, total={total_sessions}, "
-                    f"completed={completed_sessions}, active={active_sessions}"
-                )
-
-                # Generate dynamic bin ranges based on percentiles (excludes outliers)
-                logger.debug("Generating dynamic bins...")
-                bin_ranges = _generate_dynamic_bins(min_duration, max_duration)
-                logger.debug(f"Generated {len(bin_ranges)} bin ranges: {bin_ranges}")
-
-                # Verify bin_ranges structure
-                if bin_ranges and len(bin_ranges) > 0:
-                    logger.debug(
-                        f"First bin_range element: {bin_ranges[0]}, length: {len(bin_ranges[0])}"
-                    )
-                    for idx, br in enumerate(bin_ranges):
-                        if len(br) != 3:
-                            logger.error(
-                                f"Invalid bin_range at index {idx}: {br} (length {len(br)})"
-                            )
-
-                # Build dynamic SQL CASE statement for binning
-                logger.debug("Building dynamic SQL CASE statement...")
-                case_conditions = []
-                for i, bin_range_tuple in enumerate(bin_ranges, start=1):
-                    if len(bin_range_tuple) != 3:
-                        logger.error(
-                            f"Skipping invalid bin_range_tuple at index {i}: {bin_range_tuple}"
-                        )
-                        continue
-                    bin_start, bin_end, _ = bin_range_tuple
-                    if bin_end == float("inf"):
-                        case_conditions.append(
-                            f"WHEN duration_seconds >= {bin_start} THEN {i}"
-                        )
-                    else:
-                        case_conditions.append(
-                            f"WHEN duration_seconds >= {bin_start} AND duration_seconds < {bin_end} THEN {i}"
-                        )
-
-                case_statement = " ".join(case_conditions)
-                logger.debug(
-                    f"Generated CASE statement with {len(case_conditions)} conditions"
-                )
-
-                # Get histogram data (only completed sessions) with dynamic bins
-                histogram_query = f"""
-                    WITH bins AS (
-                        SELECT 
-                            CASE 
-                                {case_statement}
-                                ELSE 0
-                            END as bin,
-                            COUNT(*) as count
-                        FROM public.quest_sessions
-                        WHERE quest_id = %s 
-                          AND entry_timestamp >= %s 
-                          AND exit_timestamp IS NOT NULL
-                          AND duration_seconds IS NOT NULL
-                        GROUP BY bin
-                    )
-                    SELECT bin, count FROM bins WHERE bin > 0 ORDER BY bin
-                """
-
-                logger.debug("Executing histogram query...")
-                cursor.execute(histogram_query, (quest_id, cutoff_date))
-                histogram_rows = cursor.fetchall()
-                logger.debug(f"Retrieved {len(histogram_rows)} histogram rows")
-
-                logger.debug("Processing histogram rows...")
-                histogram = []
-                for row in histogram_rows:
-                    if len(row) < 2:
-                        logger.warning(f"Skipping malformed histogram row: {row}")
-                        continue  # Skip malformed rows
-                    bin_num = row[0]
-                    count = row[1]
-                    if 1 <= bin_num <= len(bin_ranges):
-                        if (
-                            bin_num - 1 < len(bin_ranges)
-                            and len(bin_ranges[bin_num - 1]) >= 3
-                        ):
-                            bin_start, bin_end, _ = bin_ranges[bin_num - 1]
-                            histogram.append(
-                                {
-                                    "bin_start": bin_start,
-                                    "bin_end": (
-                                        bin_end if bin_end != float("inf") else None
-                                    ),
-                                    "count": count,
-                                }
-                            )
-                        else:
-                            logger.warning(
-                                f"Invalid bin configuration for bin_num={bin_num}, "
-                                f"bin_ranges length={len(bin_ranges)}, "
-                                f"tuple length={len(bin_ranges[bin_num - 1]) if bin_num - 1 < len(bin_ranges) else 'N/A'}"
-                            )
-                    else:
-                        logger.warning(
-                            f"Bin number {bin_num} out of range [1, {len(bin_ranges)}]"
-                        )
-
-                # Get activity by hour
-                logger.debug("Executing activity by hour query...")
-                cursor.execute(
-                    """
-                    SELECT EXTRACT(HOUR FROM entry_timestamp)::int as hour, COUNT(*) as count
-                    FROM public.quest_sessions
-                    WHERE quest_id = %s AND entry_timestamp >= %s
-                    GROUP BY hour
-                    ORDER BY hour
-                    """,
-                    (quest_id, cutoff_date),
-                )
-                hour_rows = cursor.fetchall()
-                logger.debug(f"Retrieved {len(hour_rows)} activity by hour rows")
-                activity_by_hour = [
-                    {"hour": int(row[0]), "count": int(row[1])}
-                    for row in hour_rows
-                    if len(row) >= 2
-                ]
-
-                # Get activity by day of week (convert PostgreSQL's 0=Sunday to 0=Monday)
-                logger.debug("Executing activity by day of week query...")
-                cursor.execute(
-                    """
-                    SELECT 
-                        (EXTRACT(DOW FROM entry_timestamp)::int + 6) %% 7 as day,
-                        COUNT(*) as count
-                    FROM public.quest_sessions
-                    WHERE quest_id = %s AND entry_timestamp >= %s
-                    GROUP BY day
-                    ORDER BY day
-                    """,
-                    (quest_id, cutoff_date),
-                )
-                day_names = [
-                    "Monday",
-                    "Tuesday",
-                    "Wednesday",
-                    "Thursday",
-                    "Friday",
-                    "Saturday",
-                    "Sunday",
-                ]
-                dow_rows = cursor.fetchall()
-                logger.debug(f"Retrieved {len(dow_rows)} activity by day of week rows")
-                activity_by_day_of_week = []
-                for row in dow_rows:
-                    if len(row) < 2:
-                        logger.warning(f"Skipping malformed day of week row: {row}")
-                        continue  # Skip malformed rows
-                    day_num = int(row[0])
-                    if 0 <= day_num < 7:
-                        activity_by_day_of_week.append(
-                            {
-                                "day": day_num,
-                                "day_name": day_names[day_num],
-                                "count": int(row[1]),
-                            }
-                        )
-
-                # Get activity over time (daily)
-                logger.debug("Executing activity over time query...")
-                cursor.execute(
-                    """
-                    SELECT DATE(entry_timestamp) as date, COUNT(*) as count
-                    FROM public.quest_sessions
-                    WHERE quest_id = %s AND entry_timestamp >= %s
-                    GROUP BY date
-                    ORDER BY date
-                    """,
-                    (quest_id, cutoff_date),
-                )
-                time_rows = cursor.fetchall()
-                logger.debug(f"Retrieved {len(time_rows)} activity over time rows")
-                activity_over_time = [
-                    {"date": row[0].strftime("%Y-%m-%d"), "count": int(row[1])}
-                    for row in time_rows
-                    if len(row) >= 2 and row[0] is not None
-                ]
-
-                # Reset timeout back to default for this connection
-                cursor.execute(f"SET statement_timeout = '{POSTGRES_COMMAND_TIMEOUT}s'")
-
-                logger.info(
-                    f"Quest analytics completed for quest_id={quest_id}: "
-                    f"total_sessions={total_sessions}, histogram_bins={len(histogram)}, "
-                    f"hour_data_points={len(activity_by_hour)}, "
-                    f"dow_data_points={len(activity_by_day_of_week)}, "
-                    f"time_series_points={len(activity_over_time)}"
-                )
-
-                return QuestAnalytics(
-                    average_duration_seconds=avg_duration,
-                    standard_deviation_seconds=stddev_duration,
-                    histogram=histogram,
-                    activity_by_hour=activity_by_hour,
-                    activity_by_day_of_week=activity_by_day_of_week,
-                    activity_over_time=activity_over_time,
-                    total_sessions=total_sessions,
-                    completed_sessions=completed_sessions,
-                    active_sessions=active_sessions,
-                )
-    except Exception as e:
-        logger.error(
-            f"Error in get_quest_analytics for quest_id={quest_id}: {e}", exc_info=True
-        )
-        raise
+    return business_get_quest_analytics(quest_id, lookback_days)
 
 
 def get_quest_analytics_batch(
@@ -3798,7 +3628,8 @@ def get_quest_analytics_batch(
 ) -> dict[int, QuestAnalytics]:
     """Get analytics for multiple quests in a single batch operation.
 
-    Efficiently fetches total_sessions for multiple quests to avoid N+1 query pattern.
+    This is a thin wrapper that delegates to the business layer.
+    Use business.quests.get_quest_analytics_batch() for the actual implementation.
 
     Args:
         quest_ids: List of quest IDs to fetch analytics for
@@ -3807,85 +3638,18 @@ def get_quest_analytics_batch(
     Returns:
         Dictionary mapping quest_id to QuestAnalytics object
     """
-    if not quest_ids:
-        return {}
-
-    logger.info(
-        f"Getting batch quest analytics for {len(quest_ids)} quests, lookback_days={lookback_days}"
+    from business.quests import (
+        get_quest_analytics_batch as business_get_quest_analytics_batch,
     )
 
-    try:
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=lookback_days)
-    except Exception as e:
-        logger.error(f"Error calculating cutoff date: {e}", exc_info=True)
-        raise
-
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cursor:
-                # Set a higher timeout for analytics queries (they scan large datasets)
-                cursor.execute("SET statement_timeout = '120s'")
-
-                # Fetch total_sessions for all quests in one query
-                logger.debug(f"Executing batch query for {len(quest_ids)} quests...")
-                cursor.execute(
-                    """
-                    SELECT 
-                        quest_id,
-                        COUNT(*) as total_sessions
-                    FROM public.quest_sessions
-                    WHERE quest_id = ANY(%s) 
-                      AND entry_timestamp >= %s
-                      AND exit_timestamp IS NOT NULL
-                    GROUP BY quest_id
-                    """,
-                    (quest_ids, cutoff_date),
-                )
-                rows = cursor.fetchall()
-                logger.debug(f"Batch query returned {len(rows)} rows")
-
-                # Build result dictionary with minimal QuestAnalytics objects (only total_sessions populated)
-                result = {}
-                for row in rows:
-                    quest_id, total_sessions = row
-                    result[quest_id] = QuestAnalytics(
-                        average_duration_seconds=None,
-                        standard_deviation_seconds=None,
-                        histogram=[],
-                        activity_by_hour=[],
-                        activity_by_day_of_week=[],
-                        activity_over_time=[],
-                        total_sessions=total_sessions,
-                        completed_sessions=0,
-                        active_sessions=0,
-                    )
-
-                # Add quests with no sessions
-                for quest_id in quest_ids:
-                    if quest_id not in result:
-                        result[quest_id] = QuestAnalytics(
-                            average_duration_seconds=None,
-                            standard_deviation_seconds=None,
-                            histogram=[],
-                            activity_by_hour=[],
-                            activity_by_day_of_week=[],
-                            activity_over_time=[],
-                            total_sessions=0,
-                            completed_sessions=0,
-                            active_sessions=0,
-                        )
-
-                # Reset timeout back to default for this connection
-                cursor.execute(f"SET statement_timeout = '{POSTGRES_COMMAND_TIMEOUT}s'")
-
-                logger.info(f"Batch analytics completed for {len(result)} quests")
-                return result
-
-    except Exception as e:
-        logger.error(f"Error in get_quest_analytics_batch: {e}", exc_info=True)
-        raise
+    return business_get_quest_analytics_batch(quest_ids, lookback_days)
 
 
+# TODO: This is slow, taking ~1-2 seconds.
+# TODO: Might be due to checking character existence for each session.
+# TODO: Does it even matter if the character_id exists?
+# TODO: There is a FK constraint on character_id in quest_sessions table.
+# TODO: If character_id doesn't exist, the insert will fail anyway.
 def bulk_insert_quest_sessions(
     sessions: list[Tuple[int, int, datetime, datetime]],
 ) -> None:
