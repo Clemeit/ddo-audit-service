@@ -1,11 +1,11 @@
+from time import time
+
 import services.postgres as postgres_client
 import services.redis as redis_client
 from utils.time import timestamp_to_datetime_string, get_current_datetime_string
 
 from constants.redis import VALID_QUEST_CACHE_TTL
-
 from models.quest import QuestV2
-from time import time
 
 
 def get_valid_quest_ids() -> tuple[list[int], str, str]:
@@ -71,7 +71,11 @@ def get_quests_with_metrics(skip_cache: bool = False) -> tuple[list[dict], str, 
             cached_data = redis_client.get_quests_with_metrics()
             cached_quests = cached_data.get("quests")
             cached_timestamp: float = cached_data.get("timestamp")
-            if cached_quests and time() - cached_timestamp < VALID_QUEST_CACHE_TTL:
+            if (
+                cached_quests
+                and cached_timestamp is not None
+                and time() - cached_timestamp < VALID_QUEST_CACHE_TTL
+            ):
                 return (
                     cached_quests,
                     "cache",

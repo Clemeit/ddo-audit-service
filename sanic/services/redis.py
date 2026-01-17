@@ -1064,7 +1064,7 @@ def set_known_quests(quests: list[Quest]):
         client.json().set("known_quests", path="$", obj=quests_entry.model_dump())
 
 
-# ======= Quests and Areas =======
+# ======= Quests with Metrics =======
 
 
 def get_quests_with_metrics() -> dict:

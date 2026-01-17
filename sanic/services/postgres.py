@@ -4085,13 +4085,13 @@ def get_quests_with_metrics_paginated(
     return items, total_count
 
 
-def get_all_quests_with_metrics() -> list[tuple]:
+def get_all_quests_with_metrics() -> list[tuple[Quest, dict | None]]:
     """Fetch all quests joined with quest_metrics (LEFT JOIN).
 
     Returns a list of tuples where each tuple contains:
     - Quest object
     - metrics dict with fields (heroic_xp_per_minute_relative, epic_xp_per_minute_relative,
-      heroic_popularity_relative, epic_popularity_relative, analytics_data, updated_at)
+      heroic_popularity_relative, epic_popularity_relative)
       or None if no metrics exist for the quest.
 
     Returns:
@@ -4103,9 +4103,7 @@ def get_all_quests_with_metrics() -> list[tuple]:
             qm.heroic_xp_per_minute_relative AS heroic_xpm_rel,
             qm.epic_xp_per_minute_relative AS epic_xpm_rel,
             qm.heroic_popularity_relative AS heroic_pop_rel,
-            qm.epic_popularity_relative AS epic_pop_rel,
-            qm.analytics_data AS analytics_data,
-            qm.updated_at AS updated_at
+            qm.epic_popularity_relative AS epic_pop_rel
         FROM public.quests AS quests
         LEFT JOIN public.quest_metrics AS qm ON qm.quest_id = quests.id
     """
@@ -4143,16 +4141,12 @@ def get_all_quests_with_metrics() -> list[tuple]:
                 or r.get("epic_xpm_rel") is not None
                 or r.get("heroic_pop_rel") is not None
                 or r.get("epic_pop_rel") is not None
-                or r.get("analytics_data") is not None
-                or r.get("updated_at") is not None
             ):
                 metrics = {
                     "heroic_xp_per_minute_relative": r.get("heroic_xpm_rel"),
                     "epic_xp_per_minute_relative": r.get("epic_xpm_rel"),
                     "heroic_popularity_relative": r.get("heroic_pop_rel"),
                     "epic_popularity_relative": r.get("epic_pop_rel"),
-                    "analytics_data": r.get("analytics_data"),
-                    "updated_at": r.get("updated_at"),
                 }
 
             items.append((quest, metrics))
