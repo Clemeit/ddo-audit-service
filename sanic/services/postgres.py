@@ -3931,7 +3931,7 @@ def bulk_insert_quest_sessions(
         # Calculate duration and filter out sessions > 4 hours
         if entry_ts and exit_ts:
             duration_seconds = (exit_ts - entry_ts).total_seconds()
-            if duration_seconds > 14400:  # 4 hours in seconds
+            if duration_seconds <= 0 or duration_seconds > 14400:  # 4 hours in seconds
                 sessions_over_4h.append(
                     (character_id, quest_id, entry_ts, exit_ts, duration_seconds)
                 )
@@ -3958,10 +3958,16 @@ def bulk_insert_quest_sessions(
             if incomplete_sessions_count
             else ""
         )
+        sample_oversized_char_ids = [str(s[0]) for s in sessions_over_4h[:3]]
         oversized_msg = (
-            f"Skipping {len(sessions_over_4h)} sessions exceeding 4-hour limit: {[(s[0], f'{s[4]:.0f}s') for s in sessions_over_4h[:5]]}"
-            if sessions_over_4h
-            else ""
+            "Skipping {count} sessions exceeding 4-hour limit{sample}".format(
+                count=len(sessions_over_4h),
+                sample=(
+                    f" (sample character_ids: {', '.join(sample_oversized_char_ids)})"
+                    if sample_oversized_char_ids
+                    else ""
+                ),
+            )
         )
         logging.warning(
             " | ".join(
@@ -4265,12 +4271,11 @@ def truncate_quest_sessions() -> None:
                 # Reset timeout to default
                 cursor.execute("SET statement_timeout = '30s'")
                 conn.commit()
-    except Exception as e:
-        logger.error(f"Failed to truncate quest_sessions table: {e}", exc_info=True)
-        raise
-    finally:
         end_time = datetime.now(timezone.utc)
         duration = (end_time - start_time).total_seconds()
         logger.info(
             f"Truncate quest_sessions operation completed in {duration:.2f} seconds"
         )
+    except Exception as e:
+        logger.error(f"Failed to truncate quest_sessions table: {e}", exc_info=True)
+        raise

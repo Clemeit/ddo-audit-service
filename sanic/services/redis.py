@@ -1409,9 +1409,18 @@ def clear_all_active_quest_sessions() -> None:
     """
     try:
         with get_redis_client() as client:
-            keys = client.keys("active_quest_session:*")
-            if keys:
-                deleted_count = client.delete(*keys)
+            cursor = 0
+            deleted_count = 0
+            # Use SCAN to avoid blocking Redis on large keyspaces
+            while True:
+                cursor, keys = client.scan(
+                    cursor=cursor, match="active_quest_session:*", count=1000
+                )
+                if keys:
+                    deleted_count += client.delete(*keys)
+                if cursor == 0:
+                    break
+            if deleted_count > 0:
                 logger.info(
                     f"Cleared {deleted_count} stale active quest sessions from Redis"
                 )
