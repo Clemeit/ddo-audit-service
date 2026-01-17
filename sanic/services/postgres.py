@@ -4085,6 +4085,81 @@ def get_quests_with_metrics_paginated(
     return items, total_count
 
 
+def get_all_quests_with_metrics() -> list[tuple]:
+    """Fetch all quests joined with quest_metrics (LEFT JOIN).
+
+    Returns a list of tuples where each tuple contains:
+    - Quest object
+    - metrics dict with fields (heroic_xp_per_minute_relative, epic_xp_per_minute_relative,
+      heroic_popularity_relative, epic_popularity_relative, analytics_data, updated_at)
+      or None if no metrics exist for the quest.
+
+    Returns:
+        list[tuple[Quest, dict | None]]: List of (Quest, metrics_or_none) tuples
+    """
+    query = """
+        SELECT 
+            quests.*, 
+            qm.heroic_xp_per_minute_relative AS heroic_xpm_rel,
+            qm.epic_xp_per_minute_relative AS epic_xpm_rel,
+            qm.heroic_popularity_relative AS heroic_pop_rel,
+            qm.epic_popularity_relative AS epic_pop_rel,
+            qm.analytics_data AS analytics_data,
+            qm.updated_at AS updated_at
+        FROM public.quests AS quests
+        LEFT JOIN public.quest_metrics AS qm ON qm.quest_id = quests.id
+    """
+
+    items: list[tuple] = []
+    with get_dict_cursor(commit=False) as cursor:
+        cursor.execute(query)
+        rows = cursor.fetchall() or []
+        for r in rows:
+            # Build Quest model from row fields
+            quest_row = (
+                r.get("id"),
+                r.get("alt_id"),
+                r.get("area_id"),
+                r.get("name"),
+                r.get("heroic_normal_cr"),
+                r.get("epic_normal_cr"),
+                r.get("is_free_to_vip"),
+                r.get("required_adventure_pack"),
+                r.get("adventure_area"),
+                r.get("quest_journal_area"),
+                r.get("group_size"),
+                r.get("patron"),
+                r.get("xp"),
+                r.get("length"),
+                r.get("tip"),
+            )
+
+            quest = build_quest_from_row(quest_row)  # type: ignore
+
+            metrics = None
+            # If any metric fields are present, construct dict
+            if (
+                r.get("heroic_xpm_rel") is not None
+                or r.get("epic_xpm_rel") is not None
+                or r.get("heroic_pop_rel") is not None
+                or r.get("epic_pop_rel") is not None
+                or r.get("analytics_data") is not None
+                or r.get("updated_at") is not None
+            ):
+                metrics = {
+                    "heroic_xp_per_minute_relative": r.get("heroic_xpm_rel"),
+                    "epic_xp_per_minute_relative": r.get("epic_xpm_rel"),
+                    "heroic_popularity_relative": r.get("heroic_pop_rel"),
+                    "epic_popularity_relative": r.get("epic_pop_rel"),
+                    "analytics_data": r.get("analytics_data"),
+                    "updated_at": r.get("updated_at"),
+                }
+
+            items.append((quest, metrics))
+
+    return items
+
+
 def get_unprocessed_quest_activities(
     last_timestamp: datetime,
     max_character_id_at_timestamp: int,

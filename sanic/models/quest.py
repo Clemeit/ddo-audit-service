@@ -19,3 +19,12 @@ class Quest(BaseModel):
     xp: Optional[dict] = None
     length: Optional[int] = None
     tip: Optional[str] = None
+
+
+class QuestV2(Quest):
+    """Quest model for v2 API with flattened metrics fields."""
+
+    heroic_xp_per_minute_relative: Optional[float] = None
+    epic_xp_per_minute_relative: Optional[float] = None
+    heroic_popularity_relative: Optional[float] = None
+    epic_popularity_relative: Optional[float] = None

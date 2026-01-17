@@ -1066,6 +1066,30 @@ def set_known_quests(quests: list[Quest]):
 
 # ======= Quests and Areas =======
 
+
+def get_quests_with_metrics() -> dict:
+    """Get all quests with metrics from the cache."""
+    with get_redis_client() as client:
+        return client.json().get("quests_with_metrics") or {}
+
+
+def set_quests_with_metrics(quests):
+    """Set the quests with metrics in the cache. It also sets the timestamp for cache expiration."""
+    from models.quest import QuestV2
+
+    # Handle both QuestV2 objects and dicts
+    quests_data = []
+    for quest in quests:
+        if isinstance(quest, QuestV2):
+            quests_data.append(quest.model_dump())
+        else:
+            quests_data.append(quest)
+
+    quests_entry = {"quests": quests_data, "timestamp": time()}
+    with get_redis_client() as client:
+        client.json().set("quests_with_metrics", path="$", obj=quests_entry)
+
+
 # ======= Game Population ========
 
 
