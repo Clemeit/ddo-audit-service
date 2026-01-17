@@ -4261,23 +4261,32 @@ def truncate_quest_sessions() -> None:
     """
     logger.info("Truncating quest_sessions table with elevated connection timeout")
     start_time = datetime.now(timezone.utc)
-    try:
-        with get_db_connection() as conn:
+    with get_db_connection() as conn:
+        try:
             with conn.cursor() as cursor:
                 # Set statement timeout to 300 seconds for the truncate operation
                 cursor.execute("SET statement_timeout = '300s'")
                 cursor.execute("TRUNCATE public.quest_sessions CASCADE")
-                conn.commit()
-                logger.info("Successfully truncated quest_sessions table")
-
-                # Reset timeout to default
+                # Reset timeout to default within the same transaction
                 cursor.execute("SET statement_timeout = '30s'")
-                conn.commit()
-        end_time = datetime.now(timezone.utc)
-        duration = (end_time - start_time).total_seconds()
-        logger.info(
-            f"Truncate quest_sessions operation completed in {duration:.2f} seconds"
-        )
-    except Exception as e:
-        logger.error(f"Failed to truncate quest_sessions table: {e}", exc_info=True)
-        raise
+            conn.commit()
+
+            end_time = datetime.now(timezone.utc)
+            duration = (end_time - start_time).total_seconds()
+            logger.info(
+                f"Truncate quest_sessions operation succeeded in {duration:.2f} seconds"
+            )
+        except Exception as e:
+            logger.error(f"Failed to truncate quest_sessions table: {e}", exc_info=True)
+            raise
+        finally:
+            # Best-effort timeout reset to avoid returning a connection
+            # to the pool with an elevated statement_timeout, even on error.
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute("SET statement_timeout = '30s'")
+            except Exception:
+                logger.warning(
+                    "Failed to reset statement_timeout after truncate_quest_sessions",
+                    exc_info=True,
+                )
