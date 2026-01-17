@@ -137,11 +137,10 @@ ALTER TABLE IF EXISTS public."quest_sessions"
     OWNER to pgadmin;
 
 -- Unique constraint to ensure idempotent reprocessing of quest sessions
+-- Unique index to ensure idempotent reprocessing of quest sessions
 -- Same (character_id, quest_id, entry_timestamp, exit_timestamp) tuple won't be inserted twice
 -- This allows safe reprocessing of activities without duplicate sessions
--- Using a partial unique index instead of constraint since PostgreSQL doesn't support WHERE on UNIQUE constraints
-CREATE UNIQUE INDEX IF NOT EXISTS uq_quest_sessions_activity ON public."quest_sessions" (character_id, quest_id, entry_timestamp, exit_timestamp)
-WHERE exit_timestamp IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_quest_sessions_activity ON public."quest_sessions" (character_id, quest_id, entry_timestamp, exit_timestamp);
 
 -- Indexes for quest_sessions
 CREATE INDEX idx_quest_sessions_character_id ON public."quest_sessions" (character_id);
