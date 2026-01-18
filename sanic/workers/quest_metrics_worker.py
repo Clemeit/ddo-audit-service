@@ -264,7 +264,7 @@ def main():
     initialize_postgres()
     initialize_redis()
 
-    wait_until_next_midnight_utc()
+    # wait_until_next_midnight_utc()
 
     # Main loop: repeat daily at midnight UTC
     while True:

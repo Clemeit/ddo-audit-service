@@ -173,7 +173,7 @@ def get_quest_metrics_single(
         heroic_peers = []
         epic_peers = []
         all_quests = get_all_quests()
-        PEER_RANGE = 2
+        PEER_RANGE = 1
 
         if quest.heroic_normal_cr is not None:
             heroic_peers = [
