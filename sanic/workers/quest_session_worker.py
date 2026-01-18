@@ -465,7 +465,9 @@ def run_worker():
                         f"No activities found in window, advancing timestamp to {new_last_timestamp.isoformat()}"
                     )
 
-            if activities_count == 0 and not first_run:
+            if (
+                activities_count == 0 or (activities_count < 100 and batch_count >= 10)
+            ) and not first_run:
                 logger.info(
                     f"✓ No more activities found. "
                     f"Total processed: {total_activities_processed:,} activities, "
