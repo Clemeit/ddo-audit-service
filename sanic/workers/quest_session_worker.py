@@ -59,6 +59,8 @@ logging.basicConfig(
 # Preloaded quest lookup maps (area_id -> quest_id, quest_id -> area_id)
 QUEST_AREA_TO_ID: Dict[int, int] = {}
 QUEST_ID_TO_AREA: Dict[int, int] = {}
+# Quest IDs to exclude due to non-unique area mappings
+EXCLUDED_QUEST_IDS: set = set()
 
 
 def env_int(name: str, default: int) -> int:
@@ -78,19 +80,48 @@ def env_float(name: str, default: float) -> float:
 
 
 def load_quest_area_maps() -> None:
-    """Load quest metadata once to avoid per-activity DB lookups."""
-    global QUEST_AREA_TO_ID, QUEST_ID_TO_AREA
+    """Load quest metadata once to avoid per-activity DB lookups.
+
+    Also identifies and excludes quests with non-unique area IDs, since we cannot
+    reliably determine which quest a character entered based on area_id alone.
+    """
+    global QUEST_AREA_TO_ID, QUEST_ID_TO_AREA, EXCLUDED_QUEST_IDS
     quests = get_all_quests()
     area_to_id: Dict[int, int] = {}
     id_to_area: Dict[int, int] = {}
+    area_quest_map: Dict[int, List[int]] = {}  # Track all quests per area
+
+    # First pass: collect all quests per area
     for quest in quests:
         if quest.area_id is not None:
+            if quest.area_id not in area_quest_map:
+                area_quest_map[quest.area_id] = []
+            area_quest_map[quest.area_id].append(quest.id)
+
+    # Identify areas with multiple quests and mark those quest IDs as excluded
+    excluded_ids = set()
+    for _, quest_ids in area_quest_map.items():
+        if len(quest_ids) > 1:
+            excluded_ids.update(quest_ids)
+
+    # Second pass: build lookup maps excluding ambiguous quests
+    for quest in quests:
+        if quest.area_id is not None and quest.id not in excluded_ids:
             area_to_id[quest.area_id] = quest.id
             id_to_area[quest.id] = quest.area_id
 
     QUEST_AREA_TO_ID = area_to_id
     QUEST_ID_TO_AREA = id_to_area
-    logger.info(f"Loaded quest lookup maps: {len(QUEST_AREA_TO_ID)} areas -> quests")
+    EXCLUDED_QUEST_IDS = excluded_ids
+
+    logger.info(
+        f"Loaded quest lookup maps: {len(QUEST_AREA_TO_ID)} areas -> quests, "
+        f"excluding {len(excluded_ids)} quests with non-unique area IDs"
+    )
+    if excluded_ids:
+        logger.warning(
+            f"Excluded {len(excluded_ids)} quests due to non-unique area mappings"
+        )
 
 
 def process_character_activities(
@@ -250,6 +281,7 @@ def process_batch(
     all_sessions_to_insert = []
     redis_updates_set = {}
     redis_updates_clear = []
+    filtered_session_count = 0
 
     for character_id, char_activities in by_character.items():
         # Sort chronologically (should already be sorted, but ensure it)
@@ -260,16 +292,26 @@ def process_batch(
             character_id, char_activities, initial_session
         )
 
-        all_sessions_to_insert.extend(sessions)
+        # Filter out sessions for excluded quests (non-unique area IDs)
+        filtered_sessions = [
+            s for s in sessions if s[1] not in EXCLUDED_QUEST_IDS  # s[1] is quest_id
+        ]
+        filtered_session_count += len(sessions) - len(filtered_sessions)
+        all_sessions_to_insert.extend(filtered_sessions)
 
         # Collect Redis updates instead of applying immediately
         if status_seen:
             redis_updates_clear.append(character_id)
         elif final_session is not None:
-            redis_updates_set[character_id] = {
-                "quest_id": int(final_session.quest_id),
-                "entry_timestamp": final_session.entry_timestamp.isoformat(),
-            }
+            # Don't track excluded quests in Redis either
+            if final_session.quest_id not in EXCLUDED_QUEST_IDS:
+                redis_updates_set[character_id] = {
+                    "quest_id": int(final_session.quest_id),
+                    "entry_timestamp": final_session.entry_timestamp.isoformat(),
+                }
+            else:
+                # Clear any existing session for this character to avoid stale data
+                redis_updates_clear.append(character_id)
         else:
             redis_updates_clear.append(character_id)
 
