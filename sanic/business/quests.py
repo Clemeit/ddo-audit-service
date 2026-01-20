@@ -41,7 +41,7 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
     try:
         # Fetch raw analytics data from the database
         raw_analytics = postgres_client.get_quest_analytics_raw(quest_id, cutoff_date)
-        
+
         if raw_analytics is None:
             logger.warning(f"No data found for quest_id={quest_id}")
             return QuestAnalytics(
@@ -88,12 +88,7 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
         logger.debug("Generating dynamic bins (Freedman–Diaconis)...")
         num_bins_fd = 8
         duration_range = max(0.0, max_duration - min_duration)
-        if (
-            iqr is not None
-            and iqr > 0
-            and total_sessions > 0
-            and duration_range > 0
-        ):
+        if iqr is not None and iqr > 0 and total_sessions > 0 and duration_range > 0:
             bin_width_fd = (2.0 * iqr) / (total_sessions ** (1.0 / 3.0))
             if bin_width_fd > 0:
                 num_bins_fd = max(1, math.ceil(duration_range / bin_width_fd))
@@ -124,17 +119,12 @@ def get_quest_analytics(quest_id: int, lookback_days: int = 90) -> QuestAnalytic
             bin_num = row[0]
             count = row[1]
             if 1 <= bin_num <= len(bin_ranges):
-                if (
-                    bin_num - 1 < len(bin_ranges)
-                    and len(bin_ranges[bin_num - 1]) >= 3
-                ):
+                if bin_num - 1 < len(bin_ranges) and len(bin_ranges[bin_num - 1]) >= 3:
                     bin_start, bin_end, _ = bin_ranges[bin_num - 1]
                     histogram.append(
                         {
                             "bin_start": bin_start,
-                            "bin_end": (
-                                bin_end if bin_end != float("inf") else None
-                            ),
+                            "bin_end": (bin_end if bin_end != float("inf") else None),
                             "count": count,
                         }
                     )
@@ -318,8 +308,8 @@ def _generate_dynamic_bins(
 
     # Snap to the nearest candidate
     bin_size = min(candidates, key=lambda c: abs(c - raw_bin_size))
-    # Ensure a practical minimum (allow 30s for short quests)
-    bin_size = max(bin_size, 30)
+    # Ensure a practical minimum (allow 30s for short quests) and cap at 10 minutes to avoid overly coarse buckets
+    bin_size = max(30, min(bin_size, 600))
 
     # Generate bins
     bins = []
