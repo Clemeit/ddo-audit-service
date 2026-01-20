@@ -66,19 +66,25 @@ async def get_quest_analytics(request: Request, quest_id: int):
 
         if cached_metrics and not refresh:
             result = {
-                "data": cached_metrics["analytics_data"],
+                "data": {
+                    "metrics": {
+                        "heroic_xp_per_minute_relative": cached_metrics[
+                            "heroic_xp_per_minute_relative"
+                        ],
+                        "epic_xp_per_minute_relative": cached_metrics[
+                            "epic_xp_per_minute_relative"
+                        ],
+                        "heroic_popularity_relative": cached_metrics[
+                            "heroic_popularity_relative"
+                        ],
+                        "epic_popularity_relative": cached_metrics[
+                            "epic_popularity_relative"
+                        ],
+                    },
+                    "analytics_data": cached_metrics["analytics_data"],
+                },
                 "cached": True,
                 "updated_at": cached_metrics["updated_at"].isoformat(),
-                "heroic_xp_per_minute_relative": cached_metrics[
-                    "heroic_xp_per_minute_relative"
-                ],
-                "epic_xp_per_minute_relative": cached_metrics[
-                    "epic_xp_per_minute_relative"
-                ],
-                "heroic_popularity_relative": cached_metrics[
-                    "heroic_popularity_relative"
-                ],
-                "epic_popularity_relative": cached_metrics["epic_popularity_relative"],
             }
             return json(result)
 
@@ -101,15 +107,25 @@ async def get_quest_analytics(request: Request, quest_id: int):
         )
 
         result = {
-            "data": quest_metrics["analytics_data"],
+            "data": {
+                "metrics": {
+                    "heroic_xp_per_minute_relative": quest_metrics[
+                        "heroic_xp_per_minute_relative"
+                    ],
+                    "epic_xp_per_minute_relative": quest_metrics[
+                        "epic_xp_per_minute_relative"
+                    ],
+                    "heroic_popularity_relative": quest_metrics[
+                        "heroic_popularity_relative"
+                    ],
+                    "epic_popularity_relative": quest_metrics[
+                        "epic_popularity_relative"
+                    ],
+                },
+                "analytics_data": quest_metrics["analytics_data"],
+            },
             "cached": False,
             "updated_at": datetime.now(timezone.utc).isoformat(),
-            "heroic_xp_per_minute_relative": quest_metrics[
-                "heroic_xp_per_minute_relative"
-            ],
-            "epic_xp_per_minute_relative": quest_metrics["epic_xp_per_minute_relative"],
-            "heroic_popularity_relative": quest_metrics["heroic_popularity_relative"],
-            "epic_popularity_relative": quest_metrics["epic_popularity_relative"],
         }
         return json(result)
 
