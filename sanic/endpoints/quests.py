@@ -36,103 +36,6 @@ async def get_quest_by_name(request: Request, quest_name: str):
     return json({"data": quest.model_dump()})
 
 
-@quest_blueprint.get("/<quest_id:int>/analytics")
-async def get_quest_analytics(request: Request, quest_id: int):
-    """
-    Method: GET
-
-    Route: /quests/<quest_id:int>/analytics
-
-    Description: Get comprehensive analytics for a quest including duration statistics,
-    activity patterns, and time series data. Data is cached with 90-day lookback.
-
-    Query Parameters:
-    - refresh=true: Force recalculation and update of metrics (optional)
-    """
-
-    try:
-        # Verify quest exists
-        quest: Quest = postgres_client.get_quest_by_id(quest_id)
-        if not quest:
-            return json({"message": "quest not found"}, status=404)
-
-        # Check if refresh is requested
-        refresh = request.args.get("refresh", "false").lower() == "true"
-
-        # Try to get cached metrics (always used unless refresh=true)
-        cached_metrics = (
-            None if refresh else postgres_client.get_quest_metrics(quest_id)
-        )
-
-        if cached_metrics and not refresh:
-            result = {
-                "data": {
-                    "metrics": {
-                        "heroic_xp_per_minute_relative": cached_metrics[
-                            "heroic_xp_per_minute_relative"
-                        ],
-                        "epic_xp_per_minute_relative": cached_metrics[
-                            "epic_xp_per_minute_relative"
-                        ],
-                        "heroic_popularity_relative": cached_metrics[
-                            "heroic_popularity_relative"
-                        ],
-                        "epic_popularity_relative": cached_metrics[
-                            "epic_popularity_relative"
-                        ],
-                    },
-                    "analytics_data": cached_metrics["analytics_data"],
-                },
-                "cached": True,
-                "updated_at": cached_metrics["updated_at"].isoformat(),
-            }
-            return json(result)
-
-        # Cache miss or refresh requested: calculate metrics for this quest only
-        quest_metrics = get_quest_metrics_single(
-            quest_id, force_refresh=refresh, cached_metrics=cached_metrics
-        )
-
-        if not quest_metrics:
-            return json({"message": "insufficient data for metrics"}, status=404)
-
-        # Upsert to database
-        postgres_client.upsert_quest_metrics(
-            quest_id,
-            quest_metrics["heroic_xp_per_minute_relative"],
-            quest_metrics["epic_xp_per_minute_relative"],
-            quest_metrics["heroic_popularity_relative"],
-            quest_metrics["epic_popularity_relative"],
-            quest_metrics["analytics_data"],
-        )
-
-        result = {
-            "data": {
-                "metrics": {
-                    "heroic_xp_per_minute_relative": quest_metrics[
-                        "heroic_xp_per_minute_relative"
-                    ],
-                    "epic_xp_per_minute_relative": quest_metrics[
-                        "epic_xp_per_minute_relative"
-                    ],
-                    "heroic_popularity_relative": quest_metrics[
-                        "heroic_popularity_relative"
-                    ],
-                    "epic_popularity_relative": quest_metrics[
-                        "epic_popularity_relative"
-                    ],
-                },
-                "analytics_data": quest_metrics["analytics_data"],
-            },
-            "cached": False,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        return json(result)
-
-    except Exception as e:
-        return json({"message": str(e)}, status=500)
-
-
 @quest_blueprint.get("/<quest_id:int>")
 async def get_quest_by_id(request: Request, quest_id: int):
     """
@@ -369,6 +272,103 @@ async def update_quests(request: Request):
 # ======= V2 Blueprint =======
 
 quest_blueprint_v2 = Blueprint("quests_v2", url_prefix="/quests", version=2)
+
+
+@quest_blueprint_v2.get("/<quest_id:int>/analytics")
+async def get_quest_analytics(request: Request, quest_id: int):
+    """
+    Method: GET
+
+    Route: /quests/<quest_id:int>/analytics
+
+    Description: Get comprehensive analytics for a quest including duration statistics,
+    activity patterns, and time series data. Data is cached with 90-day lookback.
+
+    Query Parameters:
+    - refresh=true: Force recalculation and update of metrics (optional)
+    """
+
+    try:
+        # Verify quest exists
+        quest: Quest = postgres_client.get_quest_by_id(quest_id)
+        if not quest:
+            return json({"message": "quest not found"}, status=404)
+
+        # Check if refresh is requested
+        refresh = request.args.get("refresh", "false").lower() == "true"
+
+        # Try to get cached metrics (always used unless refresh=true)
+        cached_metrics = (
+            None if refresh else postgres_client.get_quest_metrics(quest_id)
+        )
+
+        if cached_metrics and not refresh:
+            result = {
+                "data": {
+                    "metrics": {
+                        "heroic_xp_per_minute_relative": cached_metrics[
+                            "heroic_xp_per_minute_relative"
+                        ],
+                        "epic_xp_per_minute_relative": cached_metrics[
+                            "epic_xp_per_minute_relative"
+                        ],
+                        "heroic_popularity_relative": cached_metrics[
+                            "heroic_popularity_relative"
+                        ],
+                        "epic_popularity_relative": cached_metrics[
+                            "epic_popularity_relative"
+                        ],
+                    },
+                    "analytics_data": cached_metrics["analytics_data"],
+                },
+                "cached": True,
+                "updated_at": cached_metrics["updated_at"].isoformat(),
+            }
+            return json(result)
+
+        # Cache miss or refresh requested: calculate metrics for this quest only
+        quest_metrics = get_quest_metrics_single(
+            quest_id, force_refresh=refresh, cached_metrics=cached_metrics
+        )
+
+        if not quest_metrics:
+            return json({"message": "insufficient data for metrics"}, status=404)
+
+        # Upsert to database
+        postgres_client.upsert_quest_metrics(
+            quest_id,
+            quest_metrics["heroic_xp_per_minute_relative"],
+            quest_metrics["epic_xp_per_minute_relative"],
+            quest_metrics["heroic_popularity_relative"],
+            quest_metrics["epic_popularity_relative"],
+            quest_metrics["analytics_data"],
+        )
+
+        result = {
+            "data": {
+                "metrics": {
+                    "heroic_xp_per_minute_relative": quest_metrics[
+                        "heroic_xp_per_minute_relative"
+                    ],
+                    "epic_xp_per_minute_relative": quest_metrics[
+                        "epic_xp_per_minute_relative"
+                    ],
+                    "heroic_popularity_relative": quest_metrics[
+                        "heroic_popularity_relative"
+                    ],
+                    "epic_popularity_relative": quest_metrics[
+                        "epic_popularity_relative"
+                    ],
+                },
+                "analytics_data": quest_metrics["analytics_data"],
+            },
+            "cached": False,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        return json(result)
+
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
 
 
 @quest_blueprint_v2.get("")
