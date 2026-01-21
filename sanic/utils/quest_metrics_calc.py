@@ -59,7 +59,7 @@ def calculate_xp_per_minute(
     """Calculate XP per minute from raw XP and quest duration.
 
     Args:
-        xp_value: XP reward (from heroic_elite or epic_elite)
+        xp_value: XP reward (from heroic_* or epic_* fields)
         length_seconds: Quest length in seconds
 
     Returns:
@@ -111,6 +111,27 @@ def calculate_relative_metric(
 
     # Clamp to 0-1
     return max(0.0, min(1.0, normalized))
+
+
+def get_xp_with_fallback(xp_dict: Optional[dict], difficulty: str) -> Optional[int]:
+    """Get XP value with fallback from elite -> hard -> normal -> casual.
+
+    Args:
+        xp_dict: Quest XP dictionary
+        difficulty: Either 'heroic' or 'epic'
+
+    Returns:
+        XP value or None if no valid XP found
+    """
+    if not xp_dict:
+        return None
+
+    for suffix in ["elite", "hard", "normal", "casual"]:
+        key = f"{difficulty}_{suffix}"
+        if key in xp_dict and xp_dict[key] is not None:
+            return xp_dict[key]
+
+    return None
 
 
 def get_quest_metrics_single(
@@ -198,64 +219,52 @@ def get_quest_metrics_single(
         peer_metrics_map = get_quest_metrics_bulk(peer_ids) if peer_ids else {}
 
         # Calculate Heroic XP/min relative metric
-        if (
-            quest.heroic_normal_cr is not None
-            and quest.xp
-            and "heroic_elite" in quest.xp
-            and quest.length is not None
-        ):
-            heroic_xp_per_min = calculate_xp_per_minute(
-                quest.xp.get("heroic_elite"), quest.length
-            )
+        if quest.heroic_normal_cr is not None and quest.length is not None:
+            heroic_xp = get_xp_with_fallback(quest.xp, "heroic")
+            if heroic_xp is not None:
+                heroic_xp_per_min = calculate_xp_per_minute(heroic_xp, quest.length)
 
-            if heroic_xp_per_min is not None:
-                # Collect peer XP/min values
-                peer_xp_per_mins = []
-                for peer_quest in heroic_peers:
-                    if (
-                        peer_quest.xp
-                        and "heroic_elite" in peer_quest.xp
-                        and peer_quest.length is not None
-                    ):
-                        peer_xpm = calculate_xp_per_minute(
-                            peer_quest.xp.get("heroic_elite"), peer_quest.length
-                        )
-                        if peer_xpm is not None:
-                            peer_xp_per_mins.append(peer_xpm)
+                if heroic_xp_per_min is not None:
+                    # Collect peer XP/min values
+                    peer_xp_per_mins = []
+                    for peer_quest in heroic_peers:
+                        if peer_quest.length is not None:
+                            peer_xp = get_xp_with_fallback(peer_quest.xp, "heroic")
+                            if peer_xp is not None:
+                                peer_xpm = calculate_xp_per_minute(
+                                    peer_xp, peer_quest.length
+                                )
+                                if peer_xpm is not None:
+                                    peer_xp_per_mins.append(peer_xpm)
 
-                relative = calculate_relative_metric(
-                    heroic_xp_per_min, peer_xp_per_mins
-                )
-                quest_metrics["heroic_xp_per_minute_relative"] = relative
+                    relative = calculate_relative_metric(
+                        heroic_xp_per_min, peer_xp_per_mins
+                    )
+                    quest_metrics["heroic_xp_per_minute_relative"] = relative
 
         # Calculate Epic XP/min relative metric
-        if (
-            quest.epic_normal_cr is not None
-            and quest.xp
-            and "epic_elite" in quest.xp
-            and quest.length is not None
-        ):
-            epic_xp_per_min = calculate_xp_per_minute(
-                quest.xp.get("epic_elite"), quest.length
-            )
+        if quest.epic_normal_cr is not None and quest.length is not None:
+            epic_xp = get_xp_with_fallback(quest.xp, "epic")
+            if epic_xp is not None:
+                epic_xp_per_min = calculate_xp_per_minute(epic_xp, quest.length)
 
-            if epic_xp_per_min is not None:
-                # Collect peer XP/min values
-                peer_xp_per_mins = []
-                for peer_quest in epic_peers:
-                    if (
-                        peer_quest.xp
-                        and "epic_elite" in peer_quest.xp
-                        and peer_quest.length is not None
-                    ):
-                        peer_xpm = calculate_xp_per_minute(
-                            peer_quest.xp.get("epic_elite"), peer_quest.length
-                        )
-                        if peer_xpm is not None:
-                            peer_xp_per_mins.append(peer_xpm)
+                if epic_xp_per_min is not None:
+                    # Collect peer XP/min values
+                    peer_xp_per_mins = []
+                    for peer_quest in epic_peers:
+                        if peer_quest.length is not None:
+                            peer_xp = get_xp_with_fallback(peer_quest.xp, "epic")
+                            if peer_xp is not None:
+                                peer_xpm = calculate_xp_per_minute(
+                                    peer_xp, peer_quest.length
+                                )
+                                if peer_xpm is not None:
+                                    peer_xp_per_mins.append(peer_xpm)
 
-                relative = calculate_relative_metric(epic_xp_per_min, peer_xp_per_mins)
-                quest_metrics["epic_xp_per_minute_relative"] = relative
+                    relative = calculate_relative_metric(
+                        epic_xp_per_min, peer_xp_per_mins
+                    )
+                    quest_metrics["epic_xp_per_minute_relative"] = relative
 
         # Calculate popularity relative metric using cached peer analytics
         # Use heroic CR if available, fall back to epic CR if not
@@ -446,66 +455,52 @@ def compute_all_quest_relative_metrics_pass2(all_quests: list[Quest]) -> dict:
             }
 
             # Calculate Heroic XP/min relative metric
-            if (
-                quest.heroic_normal_cr is not None
-                and quest.xp
-                and "heroic_elite" in quest.xp
-                and quest.length is not None
-            ):
-                heroic_xp_per_min = calculate_xp_per_minute(
-                    quest.xp.get("heroic_elite"), quest.length
-                )
+            if quest.heroic_normal_cr is not None and quest.length is not None:
+                heroic_xp = get_xp_with_fallback(quest.xp, "heroic")
+                if heroic_xp is not None:
+                    heroic_xp_per_min = calculate_xp_per_minute(heroic_xp, quest.length)
 
-                if heroic_xp_per_min is not None:
-                    cr = quest.heroic_normal_cr
-                    peer_xp_per_mins = []
-                    for peer_quest in heroic_cr_groups.get(cr, []):
-                        if (
-                            peer_quest.xp
-                            and "heroic_elite" in peer_quest.xp
-                            and peer_quest.length is not None
-                        ):
-                            peer_xpm = calculate_xp_per_minute(
-                                peer_quest.xp.get("heroic_elite"), peer_quest.length
-                            )
-                            if peer_xpm is not None:
-                                peer_xp_per_mins.append(peer_xpm)
+                    if heroic_xp_per_min is not None:
+                        cr = quest.heroic_normal_cr
+                        peer_xp_per_mins = []
+                        for peer_quest in heroic_cr_groups.get(cr, []):
+                            if peer_quest.length is not None:
+                                peer_xp = get_xp_with_fallback(peer_quest.xp, "heroic")
+                                if peer_xp is not None:
+                                    peer_xpm = calculate_xp_per_minute(
+                                        peer_xp, peer_quest.length
+                                    )
+                                    if peer_xpm is not None:
+                                        peer_xp_per_mins.append(peer_xpm)
 
-                    relative = calculate_relative_metric(
-                        heroic_xp_per_min, peer_xp_per_mins
-                    )
-                    quest_metrics["heroic_xp_per_minute_relative"] = relative
+                        relative = calculate_relative_metric(
+                            heroic_xp_per_min, peer_xp_per_mins
+                        )
+                        quest_metrics["heroic_xp_per_minute_relative"] = relative
 
             # Calculate Epic XP/min relative metric
-            if (
-                quest.epic_normal_cr is not None
-                and quest.xp
-                and "epic_elite" in quest.xp
-                and quest.length is not None
-            ):
-                epic_xp_per_min = calculate_xp_per_minute(
-                    quest.xp.get("epic_elite"), quest.length
-                )
+            if quest.epic_normal_cr is not None and quest.length is not None:
+                epic_xp = get_xp_with_fallback(quest.xp, "epic")
+                if epic_xp is not None:
+                    epic_xp_per_min = calculate_xp_per_minute(epic_xp, quest.length)
 
-                if epic_xp_per_min is not None:
-                    cr = quest.epic_normal_cr
-                    peer_xp_per_mins = []
-                    for peer_quest in epic_cr_groups.get(cr, []):
-                        if (
-                            peer_quest.xp
-                            and "epic_elite" in peer_quest.xp
-                            and peer_quest.length is not None
-                        ):
-                            peer_xpm = calculate_xp_per_minute(
-                                peer_quest.xp.get("epic_elite"), peer_quest.length
-                            )
-                            if peer_xpm is not None:
-                                peer_xp_per_mins.append(peer_xpm)
+                    if epic_xp_per_min is not None:
+                        cr = quest.epic_normal_cr
+                        peer_xp_per_mins = []
+                        for peer_quest in epic_cr_groups.get(cr, []):
+                            if peer_quest.length is not None:
+                                peer_xp = get_xp_with_fallback(peer_quest.xp, "epic")
+                                if peer_xp is not None:
+                                    peer_xpm = calculate_xp_per_minute(
+                                        peer_xp, peer_quest.length
+                                    )
+                                    if peer_xpm is not None:
+                                        peer_xp_per_mins.append(peer_xpm)
 
-                    relative = calculate_relative_metric(
-                        epic_xp_per_min, peer_xp_per_mins
-                    )
-                    quest_metrics["epic_xp_per_minute_relative"] = relative
+                        relative = calculate_relative_metric(
+                            epic_xp_per_min, peer_xp_per_mins
+                        )
+                        quest_metrics["epic_xp_per_minute_relative"] = relative
 
             # Calculate popularity relative metric using cached analytics
             # Use heroic CR if available, fall back to epic CR if not
