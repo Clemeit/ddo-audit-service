@@ -7,6 +7,7 @@ class CharacterActivityType(str, Enum):
     GUILD_NAME = "guild_name"
     SERVER_NAME = "server_name"
     STATUS = "status"
+    GROUP_ID = "group_id"
 
 
 MAX_CHARACTER_ACTIVITY_READ_LENGTH = 500  # 500 activity events
