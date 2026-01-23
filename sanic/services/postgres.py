@@ -3668,6 +3668,26 @@ def bulk_insert_quest_sessions(
         entry_classes = session.get("entry_classes")
         entry_group_id = session.get("entry_group_id")
 
+        # Validate character_id (should be positive bigint)
+        try:
+            char_id_val = int(character_id)
+            if char_id_val <= 0:
+                logger.warning(f"Skipping session with invalid character_id {char_id_val}, expected positive")
+                continue
+        except (ValueError, TypeError):
+            logger.warning(f"Skipping session with non-numeric character_id {character_id}")
+            continue
+
+        # Validate quest_id (should be positive int, max ~10000)
+        try:
+            quest_id_val = int(quest_id)
+            if quest_id_val <= 0 or quest_id_val > 100000:  # Add reasonable upper bound
+                logger.warning(f"Skipping session with invalid quest_id {quest_id_val}, expected 1-100000")
+                continue
+        except (ValueError, TypeError):
+            logger.warning(f"Skipping session with non-numeric quest_id {quest_id}")
+            continue
+
         # Skip if character doesn't exist
         if character_id not in existing_character_ids:
             continue
@@ -3702,28 +3722,32 @@ def bulk_insert_quest_sessions(
                     validated_total_level = val
                 else:
                     logger.warning(
-                        f"Skipping invalid entry_total_level {val} for character {character_id}, expected 1-60"
+                        f"Skipping session with invalid entry_total_level {val}, expected 1-60"
                     )
+                    continue
             except (ValueError, TypeError):
                 logger.warning(
-                    f"Skipping invalid entry_total_level type for character {character_id}"
+                    f"Skipping session with invalid entry_total_level type"
                 )
+                continue
 
         # Validate entry_group_id (should be None or positive int)
         validated_group_id = None
         if entry_group_id is not None:
             try:
                 val = int(entry_group_id)
-                if val > 0:
+                if val > 0 and val < 2147483647:  # 32-bit int max
                     validated_group_id = val
                 else:
                     logger.warning(
-                        f"Skipping invalid entry_group_id {val} for character {character_id}, expected positive"
+                        f"Skipping session with invalid entry_group_id {val}, expected positive int"
                     )
+                    continue
             except (ValueError, TypeError):
                 logger.warning(
-                    f"Skipping invalid entry_group_id type for character {character_id}"
+                    f"Skipping session with invalid entry_group_id type"
                 )
+                continue
 
         # Convert entry_classes to JSON string for PostgreSQL JSONB storage
         entry_classes_json = json.dumps(entry_classes) if entry_classes else None
@@ -3795,10 +3819,34 @@ def bulk_insert_quest_sessions(
         ON CONFLICT (character_id, quest_id, entry_timestamp, exit_timestamp)
         DO NOTHING
     """
+    
+    # Final defensive check before insert - log any suspicious values
+    for i, session in enumerate(valid_sessions):
+        char_id = session.get("character_id")
+        quest_id = session.get("quest_id")
+        total_level = session.get("entry_total_level")
+        group_id = session.get("entry_group_id")
+        
+        if char_id is not None and (not isinstance(char_id, int) or char_id <= 0):
+            logger.error(f"Session {i}: Invalid character_id={char_id}, type={type(char_id)}")
+        if quest_id is not None and (not isinstance(quest_id, int) or quest_id <= 0 or quest_id > 100000):
+            logger.error(f"Session {i}: Invalid quest_id={quest_id}, type={type(quest_id)}")
+        if total_level is not None and (not isinstance(total_level, int) or total_level < 1 or total_level > 60):
+            logger.error(f"Session {i}: Invalid entry_total_level={total_level}, type={type(total_level)}")
+        if group_id is not None and (not isinstance(group_id, int) or group_id <= 0 or group_id >= 2147483647):
+            logger.error(f"Session {i}: Invalid entry_group_id={group_id}, type={type(group_id)}")
+    
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
-            cursor.executemany(query, valid_sessions)
-            conn.commit()
+            try:
+                cursor.executemany(query, valid_sessions)
+                conn.commit()
+            except Exception as e:
+                logger.error(f"Failed to insert {len(valid_sessions)} quest sessions: {e}")
+                # Log first few invalid sessions for debugging
+                for i, session in enumerate(valid_sessions[:3]):
+                    logger.error(f"Sample session {i}: {session}")
+                raise
 
 
 def upsert_quest_metrics(
