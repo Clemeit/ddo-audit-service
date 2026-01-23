@@ -3693,6 +3693,38 @@ def bulk_insert_quest_sessions(
             )
             continue
 
+        # Validate entry_total_level (should be None or in 1-60 range)
+        validated_total_level = None
+        if entry_total_level is not None:
+            try:
+                val = int(entry_total_level)
+                if 1 <= val <= 60:
+                    validated_total_level = val
+                else:
+                    logger.warning(
+                        f"Skipping invalid entry_total_level {val} for character {character_id}, expected 1-60"
+                    )
+            except (ValueError, TypeError):
+                logger.warning(
+                    f"Skipping invalid entry_total_level type for character {character_id}"
+                )
+
+        # Validate entry_group_id (should be None or positive int)
+        validated_group_id = None
+        if entry_group_id is not None:
+            try:
+                val = int(entry_group_id)
+                if val > 0:
+                    validated_group_id = val
+                else:
+                    logger.warning(
+                        f"Skipping invalid entry_group_id {val} for character {character_id}, expected positive"
+                    )
+            except (ValueError, TypeError):
+                logger.warning(
+                    f"Skipping invalid entry_group_id type for character {character_id}"
+                )
+
         # Convert entry_classes to JSON string for PostgreSQL JSONB storage
         entry_classes_json = json.dumps(entry_classes) if entry_classes else None
 
@@ -3702,9 +3734,9 @@ def bulk_insert_quest_sessions(
                 "quest_id": quest_id,
                 "entry_timestamp": entry_ts,
                 "exit_timestamp": exit_ts,
-                "entry_total_level": entry_total_level,
+                "entry_total_level": validated_total_level,
                 "entry_classes": entry_classes_json,
-                "entry_group_id": entry_group_id,
+                "entry_group_id": validated_group_id,
             }
         )
 
@@ -4322,9 +4354,22 @@ def get_latest_character_states(
                     "classes": None,
                     "group_id": None,
                 }
-            states[character_id]["total_level"] = (
-                int(total_level) if total_level else None
-            )
+            # Safely parse total_level with validation (should be 1-60 range)
+            parsed_total_level = None
+            if total_level:
+                try:
+                    parsed_val = int(total_level)
+                    if 1 <= parsed_val <= 60:
+                        parsed_total_level = parsed_val
+                    else:
+                        logger.warning(
+                            f"Invalid total_level {parsed_val} for character {character_id}, expected 1-60"
+                        )
+                except (ValueError, TypeError):
+                    logger.warning(
+                        f"Failed to parse total_level '{total_level}' for character {character_id}"
+                    )
+            states[character_id]["total_level"] = parsed_total_level
             states[character_id]["classes"] = classes
 
         # Process GROUP_ID results
@@ -4335,7 +4380,22 @@ def get_latest_character_states(
                     "classes": None,
                     "group_id": None,
                 }
-            states[character_id]["group_id"] = int(group_id) if group_id else None
+            # Safely parse group_id (should be a valid positive integer)
+            parsed_group_id = None
+            if group_id:
+                try:
+                    parsed_val = int(group_id)
+                    if parsed_val > 0:
+                        parsed_group_id = parsed_val
+                    else:
+                        logger.warning(
+                            f"Invalid group_id {parsed_val} for character {character_id}, expected positive"
+                        )
+                except (ValueError, TypeError):
+                    logger.warning(
+                        f"Failed to parse group_id '{group_id}' for character {character_id}"
+                    )
+            states[character_id]["group_id"] = parsed_group_id
 
     elapsed_time = time() - start_time
     num_results = len(states)
