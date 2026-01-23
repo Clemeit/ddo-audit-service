@@ -117,6 +117,16 @@ CREATE INDEX idx_character_activity_by_timestamp
 ON public."character_activity" (timestamp, character_id)
 WHERE activity_type IN ('location', 'status');
 
+-- Indexes for efficient lookback queries in get_latest_character_states()
+-- Supports finding the most recent TOTAL_LEVEL and GROUP_ID activities for a set of characters
+CREATE INDEX idx_character_activity_total_level
+ON public."character_activity" (character_id, timestamp DESC)
+WHERE activity_type = 'total_level';
+
+CREATE INDEX idx_character_activity_group_id
+ON public."character_activity" (character_id, timestamp DESC)
+WHERE activity_type = 'group_id';
+
 ALTER TABLE IF EXISTS public."character_activity"
     OWNER to pgadmin;
 

@@ -4271,10 +4271,16 @@ def get_latest_character_states(
     total_level_cutoff = now - timedelta(days=total_level_lookback_days)
     group_id_cutoff = now - timedelta(days=group_id_lookback_days)
 
-    # Query for the most recent TOTAL_LEVEL activity for each character (within lookback window)
-    # and the most recent GROUP_ID activity for each character (within lookback window)
-    query = """
-        WITH latest_total_level AS (
+    # Process in batches to avoid query timeout on large character_id lists
+    batch_size = 500
+    states = {}
+
+    for i in range(0, len(character_ids), batch_size):
+        batch = character_ids[i : i + batch_size]
+
+        # Separate queries for each activity type to maximize index usage
+        # Query 1: Get latest TOTAL_LEVEL activities
+        tl_query = """
             SELECT DISTINCT ON (character_id)
                 character_id,
                 data->>'total_level' AS total_level,
@@ -4284,8 +4290,10 @@ def get_latest_character_states(
               AND activity_type = 'total_level'
               AND timestamp > %s
             ORDER BY character_id, timestamp DESC
-        ),
-        latest_group_id AS (
+        """
+
+        # Query 2: Get latest GROUP_ID activities
+        gi_query = """
             SELECT DISTINCT ON (character_id)
                 character_id,
                 data->>'value' AS group_id
@@ -4294,38 +4302,38 @@ def get_latest_character_states(
               AND activity_type = 'group_id'
               AND timestamp > %s
             ORDER BY character_id, timestamp DESC
-        )
-        SELECT
-            COALESCE(tl.character_id, gi.character_id) AS character_id,
-            tl.total_level,
-            tl.classes,
-            gi.group_id
-        FROM latest_total_level tl
-        FULL OUTER JOIN latest_group_id gi ON tl.character_id = gi.character_id
-    """
+        """
 
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                query,
-                (
-                    character_ids,
-                    total_level_cutoff,
-                    character_ids,
-                    group_id_cutoff,
-                ),
-            )
-            result = cursor.fetchall()
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                # Execute TOTAL_LEVEL query
+                cursor.execute(tl_query, (batch, total_level_cutoff))
+                tl_results = cursor.fetchall()
 
-    # Convert to dict format
-    states = {}
-    for row in result:
-        character_id, total_level, classes, group_id = row
-        states[character_id] = {
-            "total_level": int(total_level) if total_level else None,
-            "classes": classes if classes else None,
-            "group_id": int(group_id) if group_id else None,
-        }
+                # Execute GROUP_ID query
+                cursor.execute(gi_query, (batch, group_id_cutoff))
+                gi_results = cursor.fetchall()
+
+        # Process TOTAL_LEVEL results
+        for character_id, total_level, classes in tl_results:
+            if character_id not in states:
+                states[character_id] = {
+                    "total_level": None,
+                    "classes": None,
+                    "group_id": None,
+                }
+            states[character_id]["total_level"] = int(total_level) if total_level else None
+            states[character_id]["classes"] = classes
+
+        # Process GROUP_ID results
+        for character_id, group_id in gi_results:
+            if character_id not in states:
+                states[character_id] = {
+                    "total_level": None,
+                    "classes": None,
+                    "group_id": None,
+                }
+            states[character_id]["group_id"] = int(group_id) if group_id else None
 
     elapsed_time = time() - start_time
     num_results = len(states)
