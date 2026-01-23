@@ -53,14 +53,6 @@ class CharacterActivity(BaseModel):
     data: dict
 
 
-class CharacterActivitySummary(BaseModel):
-    level_event_count: Optional[int] = None
-    location_event_count: Optional[int] = None
-    guild_name_event_count: Optional[int] = None
-    server_name_event_count: Optional[int] = None
-    status_event_count: Optional[int] = None
-
-
 class CharacterQuestActivity(BaseModel):
     timestamp: Optional[str] = None
     quest_id: Optional[int] = None

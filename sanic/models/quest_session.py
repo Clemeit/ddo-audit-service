@@ -14,6 +14,9 @@ class QuestSession(BaseModel):
     exit_timestamp: Optional[datetime] = None
     duration_seconds: Optional[float] = None
     created_at: Optional[datetime] = None
+    entry_total_level: Optional[int] = None
+    entry_classes: Optional[list] = None  # List of {name, level} dicts stored as JSONB
+    entry_group_id: Optional[int] = None
 
 
 class QuestAnalytics(BaseModel):
