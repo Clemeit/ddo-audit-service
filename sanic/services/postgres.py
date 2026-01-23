@@ -4259,9 +4259,7 @@ def get_latest_character_states(
     if not character_ids:
         return {}
 
-    import time
-
-    start_time = time.time()
+    start_time = time()
     num_characters = len(character_ids)
 
     logger.debug(

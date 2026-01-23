@@ -132,7 +132,7 @@ def process_character_activities(
     initial_total_level: Optional[int] = None,
     initial_classes: Optional[list] = None,
     initial_group_id: Optional[int] = None,
-) -> Tuple[List[Tuple], Optional[QuestSession], bool]:
+) -> Tuple[List[dict], Optional[QuestSession], bool]:
     """Process all activities for a single character and generate session changes.
 
     Args:
@@ -149,7 +149,7 @@ def process_character_activities(
         - final_session: Active session at end of processing (None if none)
         - status_seen: True if any status event (login/logout) was processed
     """
-    sessions_to_insert = []
+    sessions_to_insert: list[dict] = []
     current_session = initial_session
     last_area_id = None
     status_seen = False
@@ -168,11 +168,17 @@ def process_character_activities(
     for timestamp, activity_type, area_id, is_active, activity_data in activities:
         # Update character state from TOTAL_LEVEL and GROUP_ID activities
         if activity_type == "total_level" and activity_data:
-            character_total_level = activity_data.get("total_level")
-            character_classes = activity_data.get("classes")
+            total_level_val = activity_data.get("total_level")
+            if total_level_val is not None:
+                character_total_level = total_level_val
+            classes_val = activity_data.get("classes")
+            if classes_val is not None:
+                character_classes = classes_val
 
         if activity_type == "group_id" and activity_data:
-            character_group_id = activity_data.get("value")
+            group_id_val = activity_data.get("value")
+            if group_id_val is not None:
+                character_group_id = group_id_val
 
         # Handle status events (login/logout) first
         if activity_type == "status":
@@ -293,6 +299,7 @@ def process_batch(
     for character_id, state in session_states.items():
         if state:
             # Build a lightweight QuestSession object for processing continuity
+            # Include entry state fields so they're preserved when session is later closed
             try:
                 session = QuestSession(
                     id=None,
@@ -304,6 +311,9 @@ def process_batch(
                     exit_timestamp=None,
                     duration_seconds=None,
                     created_at=None,
+                    entry_total_level=state.get("entry_total_level"),
+                    entry_classes=state.get("entry_classes"),
+                    entry_group_id=state.get("entry_group_id"),
                 )
             except Exception:
                 session = None
@@ -387,7 +397,7 @@ def process_batch(
 
         # Filter out sessions for excluded quests (non-unique area IDs)
         filtered_sessions = [
-            s for s in sessions if s[1] not in EXCLUDED_QUEST_IDS  # s[1] is quest_id
+            s for s in sessions if s["quest_id"] not in EXCLUDED_QUEST_IDS
         ]
         filtered_session_count += len(sessions) - len(filtered_sessions)
         all_sessions_to_insert.extend(filtered_sessions)
@@ -401,6 +411,9 @@ def process_batch(
                 redis_updates_set[character_id] = {
                     "quest_id": int(final_session.quest_id),
                     "entry_timestamp": final_session.entry_timestamp.isoformat(),
+                    "entry_total_level": final_session.entry_total_level,
+                    "entry_classes": final_session.entry_classes,
+                    "entry_group_id": final_session.entry_group_id,
                 }
             else:
                 # Clear any existing session for this character to avoid stale data
