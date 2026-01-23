@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS public."quest_sessions"
     created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
     entry_total_level integer,
     entry_classes jsonb,
-    entry_group_id integer,
+    entry_group_id bigint,
     PRIMARY KEY (id)
 )
 TABLESPACE pg_default;

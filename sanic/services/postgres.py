@@ -3682,7 +3682,7 @@ def bulk_insert_quest_sessions(
             )
             continue
 
-        # Validate quest_id (should be >= 0; 0 can mean no quest or special case)
+        # Validate quest_id (can be a large bigint, >= 0)
         try:
             quest_id_val = int(quest_id)
             if quest_id_val >= 0:  # Allow 0 and any positive int
