@@ -195,6 +195,18 @@ def aggregate_character_activity_for_server(
                         },
                     )
                 )
+
+            # check for group change
+            current_group = current_character.get("group_id")
+            previous_group = previous_character.get("group_id")
+            if current_group != previous_group:
+                character_activity.append(
+                    CharacterActivity(
+                        character_id=character_id,
+                        activity_type=CharacterActivityType.GROUP_ID,
+                        data={"value": current_group},
+                    )
+                )
         except Exception as e:
             print(f"Error processing character {character_id}: {e}")
             error_messages.append(f"Error processing character {character_id}: {e}")
