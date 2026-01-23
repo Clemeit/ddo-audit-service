@@ -10,7 +10,6 @@ import math
 from constants.activity import CharacterActivityType
 from models.character import (
     Character,
-    CharacterActivitySummary,
     CharacterQuestActivity,
 )
 from models.game import PopulationDataPoint, PopulationPointInTime
@@ -869,37 +868,6 @@ def get_characters_by_name(character_name: str) -> list[Character]:
                 return []
 
             return [build_character_from_row(character) for character in characters]
-
-
-def get_character_activity_summary_by_character_id(
-    character_id: str,
-) -> CharacterActivitySummary:
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT
-                    jsonb_array_length(total_level),
-                    jsonb_array_length(location),
-                    jsonb_array_length(guild_name),
-                    jsonb_array_length(server_name),
-                    jsonb_array_length(is_online)
-                FROM public.character_activity
-                WHERE id = %s
-                """,
-                (character_id,),
-            )
-            activity = cursor.fetchone()
-            if not activity:
-                return CharacterActivitySummary(
-                    level_event_count=0,
-                    location_event_count=0,
-                    guild_name_event_count=0,
-                    server_name_event_count=0,
-                    status_event_count=0,
-                )
-
-            return build_character_activity_summary_from_row(activity)
 
 
 def get_all_character_activity_by_character_id(
@@ -2205,16 +2173,6 @@ def build_page_message_from_row(row: tuple) -> PageMessage:
         end_date=(
             datetime_to_datetime_string(row[6]) if isinstance(row[6], datetime) else ""
         ),
-    )
-
-
-def build_character_activity_summary_from_row(row: tuple) -> CharacterActivitySummary:
-    return CharacterActivitySummary(
-        level_event_count=row[0],
-        location_event_count=row[1],
-        guild_name_event_count=row[2],
-        server_name_event_count=row[3],
-        status_event_count=row[4],
     )
 
 
@@ -3655,7 +3613,7 @@ def get_quest_analytics_batch(
 # TODO: There is a FK constraint on character_id in quest_sessions table.
 # TODO: If character_id doesn't exist, the insert will fail anyway.
 def bulk_insert_quest_sessions(
-    sessions: list[Tuple[int, int, datetime, datetime]],
+    sessions: list[Tuple[int, int, datetime, datetime]] | list[dict],
 ) -> None:
     """Bulk insert quest sessions for efficient batch processing.
 
@@ -3664,12 +3622,28 @@ def bulk_insert_quest_sessions(
 
     Args:
         sessions: List of tuples (character_id, quest_id, entry_timestamp, exit_timestamp)
+                 or list of dicts with session data including entry state
     """
     if not sessions:
         return
 
+    # Convert old tuple format to new dict format for backward compatibility
+    if sessions and isinstance(sessions[0], tuple):
+        sessions = [
+            {
+                "character_id": s[0],
+                "quest_id": s[1],
+                "entry_timestamp": s[2],
+                "exit_timestamp": s[3],
+                "entry_total_level": None,
+                "entry_classes": None,
+                "entry_group_id": None,
+            }
+            for s in sessions
+        ]
+
     # Extract unique character IDs from the sessions
-    character_ids = list(set(session[0] for session in sessions))
+    character_ids = list(set(session["character_id"] for session in sessions))
 
     # Query which character IDs actually exist in the database
     with get_db_connection() as conn:
@@ -3686,7 +3660,13 @@ def bulk_insert_quest_sessions(
     sessions_over_4h = []
 
     for session in sessions:
-        character_id, quest_id, entry_ts, exit_ts = session
+        character_id = session["character_id"]
+        quest_id = session["quest_id"]
+        entry_ts = session["entry_timestamp"]
+        exit_ts = session["exit_timestamp"]
+        entry_total_level = session.get("entry_total_level")
+        entry_classes = session.get("entry_classes")
+        entry_group_id = session.get("entry_group_id")
 
         # Skip if character doesn't exist
         if character_id not in existing_character_ids:
@@ -3703,32 +3683,55 @@ def bulk_insert_quest_sessions(
         duration_seconds = (exit_ts - entry_ts).total_seconds()
         if duration_seconds <= 0 or duration_seconds > 14400:
             sessions_over_4h.append(
-                (character_id, quest_id, entry_ts, exit_ts, duration_seconds)
+                {
+                    "character_id": character_id,
+                    "quest_id": quest_id,
+                    "entry_timestamp": entry_ts,
+                    "exit_timestamp": exit_ts,
+                    "duration_seconds": duration_seconds,
+                }
             )
             continue
 
-        valid_sessions.append(session)
+        # Convert entry_classes to JSON string for PostgreSQL JSONB storage
+        entry_classes_json = json.dumps(entry_classes) if entry_classes else None
+
+        valid_sessions.append(
+            {
+                "character_id": character_id,
+                "quest_id": quest_id,
+                "entry_timestamp": entry_ts,
+                "exit_timestamp": exit_ts,
+                "entry_total_level": entry_total_level,
+                "entry_classes": entry_classes_json,
+                "entry_group_id": entry_group_id,
+            }
+        )
 
     # Log filtered sessions
     skipped_count = len(sessions) - len(valid_sessions)
     if skipped_count > 0:
         missing_char_ids = set(
-            session[0]
+            session["character_id"]
             for session in sessions
-            if session[0] not in existing_character_ids
+            if session["character_id"] not in existing_character_ids
         )
         missing_char_msg = (
             f"Skipping {len(missing_char_ids)} sessions with non-existent character IDs: {missing_char_ids}"
             if missing_char_ids
             else ""
         )
-        incomplete_sessions_count = sum(1 for s in sessions if s[3] is None)
+        incomplete_sessions_count = sum(
+            1 for s in sessions if s["exit_timestamp"] is None
+        )
         incomplete_msg = (
             f"Skipping {incomplete_sessions_count} incomplete sessions without exit_timestamp"
             if incomplete_sessions_count
             else ""
         )
-        sample_oversized_char_ids = [str(s[0]) for s in sessions_over_4h[:3]]
+        sample_oversized_char_ids = [
+            str(s["character_id"]) for s in sessions_over_4h[:3]
+        ]
         oversized_msg = (
             "Skipping {count} sessions exceeding 4-hour limit{sample}".format(
                 count=len(sessions_over_4h),
@@ -3755,8 +3758,8 @@ def bulk_insert_quest_sessions(
     # but ON CONFLICT will still prevent duplicates on the full column set
     query = """
         INSERT INTO public.quest_sessions 
-        (character_id, quest_id, entry_timestamp, exit_timestamp)
-        VALUES (%s, %s, %s, %s)
+        (character_id, quest_id, entry_timestamp, exit_timestamp, entry_total_level, entry_classes, entry_group_id)
+        VALUES (%(character_id)s, %(quest_id)s, %(entry_timestamp)s, %(exit_timestamp)s, %(entry_total_level)s, %(entry_classes)s, %(entry_group_id)s)
         ON CONFLICT (character_id, quest_id, entry_timestamp, exit_timestamp)
         DO NOTHING
     """
@@ -4161,7 +4164,7 @@ def get_unprocessed_quest_activities(
     batch_size: int,
     time_window_hours: int = 24,
 ) -> list[tuple]:
-    """Fetch quest-related activities (location + status events) using composite checkpoint.
+    """Fetch quest-related activities (location + status + level + group events) using composite checkpoint.
 
     Uses composite checkpoint (timestamp + max_character_id) to handle batches that cross
     same-timestamp groups. This ensures no activities are skipped or duplicated when many
@@ -4181,7 +4184,7 @@ def get_unprocessed_quest_activities(
         time_window_hours: Time window in hours for batch (default 24)
 
     Returns:
-        List of tuples (character_id, timestamp, activity_type, area_id, is_active)
+        List of tuples (character_id, timestamp, activity_type, area_id, is_active, data)
     """
     if time_window_hours <= 0:
         logger.warning(
@@ -4203,13 +4206,16 @@ def get_unprocessed_quest_activities(
             timestamp,
             activity_type,
             CASE WHEN activity_type = 'location' THEN (data->>'value')::int END AS area_id,
-            CASE WHEN activity_type = 'status' THEN (data->>'value')::boolean END AS is_active
+            CASE WHEN activity_type = 'status' THEN (data->>'value')::boolean END AS is_active,
+            data
         FROM public.character_activity
         WHERE (timestamp, character_id) > (%s, %s)
           AND timestamp <= %s
           AND (
               activity_type = 'location'
               OR activity_type = 'status'
+              OR activity_type = 'total_level'
+              OR activity_type = 'group_id'
           )
         ORDER BY timestamp ASC, character_id ASC
         LIMIT %s
@@ -4226,6 +4232,112 @@ def get_unprocessed_quest_activities(
                 ),
             )
             return cursor.fetchall()
+
+
+def get_latest_character_states(
+    character_ids: list[int],
+    total_level_lookback_days: int = 90,
+    group_id_lookback_days: int = 2,
+) -> dict[int, dict]:
+    """Fetch the most recent TOTAL_LEVEL and GROUP_ID activities for a batch of characters.
+
+    This function finds the most recent state for each character, looking back:
+    - up to total_level_lookback_days for TOTAL_LEVEL activities (sparse, can be very old)
+    - up to group_id_lookback_days for GROUP_ID activities (more frequent)
+
+    Returns a dict mapping character_id -> {
+        "total_level": int or None,
+        "classes": list or None,
+        "group_id": int or None
+    }
+
+    Args:
+        character_ids: List of character IDs to fetch state for
+        total_level_lookback_days: How far back to search for TOTAL_LEVEL activities
+        group_id_lookback_days: How far back to search for GROUP_ID activities
+    """
+    if not character_ids:
+        return {}
+
+    import time
+
+    start_time = time.time()
+    num_characters = len(character_ids)
+
+    logger.debug(
+        f"get_latest_character_states: starting query for {num_characters} characters "
+        f"(total_level lookback: {total_level_lookback_days}d, group_id lookback: {group_id_lookback_days}d)"
+    )
+
+    now = datetime.now(timezone.utc)
+    total_level_cutoff = now - timedelta(days=total_level_lookback_days)
+    group_id_cutoff = now - timedelta(days=group_id_lookback_days)
+
+    # Query for the most recent TOTAL_LEVEL activity for each character (within lookback window)
+    # and the most recent GROUP_ID activity for each character (within lookback window)
+    query = """
+        WITH latest_total_level AS (
+            SELECT DISTINCT ON (character_id)
+                character_id,
+                data->>'total_level' AS total_level,
+                data->'classes' AS classes
+            FROM public.character_activity
+            WHERE character_id = ANY(%s)
+              AND activity_type = 'total_level'
+              AND timestamp > %s
+            ORDER BY character_id, timestamp DESC
+        ),
+        latest_group_id AS (
+            SELECT DISTINCT ON (character_id)
+                character_id,
+                data->>'value' AS group_id
+            FROM public.character_activity
+            WHERE character_id = ANY(%s)
+              AND activity_type = 'group_id'
+              AND timestamp > %s
+            ORDER BY character_id, timestamp DESC
+        )
+        SELECT
+            COALESCE(tl.character_id, gi.character_id) AS character_id,
+            tl.total_level,
+            tl.classes,
+            gi.group_id
+        FROM latest_total_level tl
+        FULL OUTER JOIN latest_group_id gi ON tl.character_id = gi.character_id
+    """
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                query,
+                (
+                    character_ids,
+                    total_level_cutoff,
+                    character_ids,
+                    group_id_cutoff,
+                ),
+            )
+            result = cursor.fetchall()
+
+    # Convert to dict format
+    states = {}
+    for row in result:
+        character_id, total_level, classes, group_id = row
+        states[character_id] = {
+            "total_level": int(total_level) if total_level else None,
+            "classes": classes if classes else None,
+            "group_id": int(group_id) if group_id else None,
+        }
+
+    elapsed_time = time.time() - start_time
+    num_results = len(states)
+
+    logger.debug(
+        f"get_latest_character_states: query completed in {elapsed_time:.3f}s, "
+        f"returned {num_results}/{num_characters} characters with state data"
+    )
+
+    return states
 
 
 def truncate_quest_sessions() -> None:

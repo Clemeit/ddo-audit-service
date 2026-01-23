@@ -36,6 +36,7 @@ from services.postgres import (  # type: ignore
     initialize_postgres,
     bulk_insert_quest_sessions,
     get_unprocessed_quest_activities,
+    get_latest_character_states,
     get_all_quests,
     truncate_quest_sessions,
 )
@@ -126,19 +127,25 @@ def load_quest_area_maps() -> None:
 
 def process_character_activities(
     character_id: int,
-    activities: List[Tuple[datetime, str, Optional[int], Optional[bool]]],
+    activities: List[Tuple[datetime, str, Optional[int], Optional[bool], dict]],
     initial_session: Optional[QuestSession],
+    initial_total_level: Optional[int] = None,
+    initial_classes: Optional[list] = None,
+    initial_group_id: Optional[int] = None,
 ) -> Tuple[List[Tuple], Optional[QuestSession], bool]:
     """Process all activities for a single character and generate session changes.
 
     Args:
         character_id: ID of the character
-        activities: List of (timestamp, activity_type, area_id, is_active) sorted chronologically
+        activities: List of (timestamp, activity_type, area_id, is_active, data) sorted chronologically
         initial_session: The character's active session at the start (if any)
+        initial_total_level: Starting total level (from latest TOTAL_LEVEL activity)
+        initial_classes: Starting classes (from latest TOTAL_LEVEL activity)
+        initial_group_id: Starting group ID (from latest GROUP_ID activity)
 
     Returns:
         Tuple of (sessions_to_insert, final_session, status_seen)
-        - sessions_to_insert: List of tuples (character_id, quest_id, entry_timestamp, exit_timestamp)
+        - sessions_to_insert: List of dicts with session data including entry state
         - final_session: Active session at end of processing (None if none)
         - status_seen: True if any status event (login/logout) was processed
     """
@@ -147,12 +154,26 @@ def process_character_activities(
     last_area_id = None
     status_seen = False
 
+    # Track character state: level, classes, and group_id
+    # Initialize with the latest known state (may be from weeks/months ago)
+    character_total_level: Optional[int] = initial_total_level
+    character_classes: Optional[list] = initial_classes
+    character_group_id: Optional[int] = initial_group_id
+
     # Get quest's area if there's an initial session
     current_quest_area = None
     if current_session:
         current_quest_area = QUEST_ID_TO_AREA.get(current_session.quest_id)
 
-    for timestamp, activity_type, area_id, is_active in activities:
+    for timestamp, activity_type, area_id, is_active, activity_data in activities:
+        # Update character state from TOTAL_LEVEL and GROUP_ID activities
+        if activity_type == "total_level" and activity_data:
+            character_total_level = activity_data.get("total_level")
+            character_classes = activity_data.get("classes")
+
+        if activity_type == "group_id" and activity_data:
+            character_group_id = activity_data.get("value")
+
         # Handle status events (login/logout) first
         if activity_type == "status":
             # Discard any active session without persisting it when a status change occurs
@@ -175,12 +196,15 @@ def process_character_activities(
             # This prevents negative durations from out-of-order or clock-skewed data
             if timestamp >= current_session.entry_timestamp:
                 sessions_to_insert.append(
-                    (
-                        current_session.character_id,
-                        current_session.quest_id,
-                        current_session.entry_timestamp,
-                        timestamp,  # exit_timestamp
-                    )
+                    {
+                        "character_id": current_session.character_id,
+                        "quest_id": current_session.quest_id,
+                        "entry_timestamp": current_session.entry_timestamp,
+                        "exit_timestamp": timestamp,
+                        "entry_total_level": current_session.entry_total_level,
+                        "entry_classes": current_session.entry_classes,
+                        "entry_group_id": current_session.entry_group_id,
+                    }
                 )
                 current_session = None
                 current_quest_area = None
@@ -203,6 +227,9 @@ def process_character_activities(
                     quest_id=new_quest_id,
                     entry_timestamp=timestamp,
                     exit_timestamp=None,
+                    entry_total_level=character_total_level,
+                    entry_classes=character_classes,
+                    entry_group_id=character_group_id,
                 )
                 current_quest_area = area_id
 
@@ -244,11 +271,18 @@ def process_batch(
 
     # Group activities by character_id
     by_character: Dict[
-        int, List[Tuple[datetime, str, Optional[int], Optional[bool]]]
+        int, List[Tuple[datetime, str, Optional[int], Optional[bool], dict]]
     ] = defaultdict(list)
-    for character_id, timestamp, activity_type, area_id, is_active in activities:
+    for (
+        character_id,
+        timestamp,
+        activity_type,
+        area_id,
+        is_active,
+        activity_data,
+    ) in activities:
         by_character[character_id].append(
-            (timestamp, activity_type, area_id, is_active)
+            (timestamp, activity_type, area_id, is_active, activity_data)
         )
 
     # Batch fetch initial active sessions for all characters from Redis
@@ -277,6 +311,53 @@ def process_batch(
             session = None
         character_sessions[character_id] = session
 
+    # Fetch the most recent TOTAL_LEVEL and GROUP_ID activities for all characters
+    # This ensures we have current state even if activities are sparse (weeks/months old)
+    character_ids_list = list(by_character.keys())
+    latest_states = get_latest_character_states(character_ids_list)
+
+    # Track which characters have TOTAL_LEVEL and GROUP_ID in current batch vs from history
+    characters_with_recent_total_level = set()
+    characters_with_recent_group_id = set()
+
+    for character_id, char_activities in by_character.items():
+        for _, activity_type, _, _, _ in char_activities:
+            if activity_type == "total_level":
+                characters_with_recent_total_level.add(character_id)
+            elif activity_type == "group_id":
+                characters_with_recent_group_id.add(character_id)
+
+    # Calculate statistics for logging
+    total_characters = len(character_ids_list)
+    total_level_from_history = sum(
+        1
+        for char_id in character_ids_list
+        if char_id not in characters_with_recent_total_level
+        and latest_states.get(char_id, {}).get("total_level") is not None
+    )
+    group_id_from_history = sum(
+        1
+        for char_id in character_ids_list
+        if char_id not in characters_with_recent_group_id
+        and latest_states.get(char_id, {}).get("group_id") is not None
+    )
+
+    # Log statistics about historical data usage
+    total_level_pct = (
+        (total_level_from_history / total_characters * 100)
+        if total_characters > 0
+        else 0
+    )
+    group_id_pct = (
+        (group_id_from_history / total_characters * 100) if total_characters > 0 else 0
+    )
+
+    logger.info(
+        f"Character state lookback stats: "
+        f"total_level from history {total_level_from_history}/{total_characters} ({total_level_pct:.1f}%) | "
+        f"group_id from history {group_id_from_history}/{total_characters} ({group_id_pct:.1f}%)"
+    )
+
     # Process each character's activities and collect Redis updates
     all_sessions_to_insert = []
     redis_updates_set = {}
@@ -288,8 +369,20 @@ def process_batch(
         char_activities.sort(key=lambda x: x[0])
 
         initial_session = character_sessions.get(character_id)
+
+        # Get the latest state for this character to use as initial state
+        latest_state = latest_states.get(character_id, {})
+        initial_total_level = latest_state.get("total_level")
+        initial_classes = latest_state.get("classes")
+        initial_group_id = latest_state.get("group_id")
+
         sessions, final_session, status_seen = process_character_activities(
-            character_id, char_activities, initial_session
+            character_id,
+            char_activities,
+            initial_session,
+            initial_total_level,
+            initial_classes,
+            initial_group_id,
         )
 
         # Filter out sessions for excluded quests (non-unique area IDs)
