@@ -4322,7 +4322,9 @@ def get_latest_character_states(
                     "classes": None,
                     "group_id": None,
                 }
-            states[character_id]["total_level"] = int(total_level) if total_level else None
+            states[character_id]["total_level"] = (
+                int(total_level) if total_level else None
+            )
             states[character_id]["classes"] = classes
 
         # Process GROUP_ID results
