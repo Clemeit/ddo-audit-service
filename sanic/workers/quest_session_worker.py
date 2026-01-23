@@ -36,7 +36,6 @@ from services.postgres import (  # type: ignore
     initialize_postgres,
     bulk_insert_quest_sessions,
     get_unprocessed_quest_activities,
-    get_latest_character_states,
     get_all_quests,
     truncate_quest_sessions,
 )
@@ -47,6 +46,7 @@ from services.redis import (  # type: ignore
     get_quest_worker_checkpoint,
     set_quest_worker_checkpoint,
     clear_all_active_quest_sessions,
+    get_characters_by_ids_as_dict,
 )
 from models.quest_session import QuestSession  # type: ignore
 
@@ -135,13 +135,20 @@ def process_character_activities(
 ) -> Tuple[List[dict], Optional[QuestSession], bool]:
     """Process all activities for a single character and generate session changes.
 
+    Character state (level, classes, group_id) is built from the real-time Redis cache.
+    Initial state is fetched from Redis (updated constantly by data collection),
+    then updated as TOTAL_LEVEL and GROUP_ID activities are processed.
+
+    With worker running every 5 seconds, captured state is within ~5 seconds of actual
+    quest entry time, providing minimal lag without complex historical lookback.
+
     Args:
         character_id: ID of the character
         activities: List of (timestamp, activity_type, area_id, is_active, data) sorted chronologically
         initial_session: The character's active session at the start (if any)
-        initial_total_level: Starting total level (from latest TOTAL_LEVEL activity)
-        initial_classes: Starting classes (from latest TOTAL_LEVEL activity)
-        initial_group_id: Starting group ID (from latest GROUP_ID activity)
+        initial_total_level: Starting total level (from Redis, or None if offline)
+        initial_classes: Starting classes (from Redis, or None if offline)
+        initial_group_id: Starting group ID (from Redis, or None if offline)
 
     Returns:
         Tuple of (sessions_to_insert, final_session, status_seen)
@@ -321,52 +328,11 @@ def process_batch(
             session = None
         character_sessions[character_id] = session
 
-    # Fetch the most recent TOTAL_LEVEL and GROUP_ID activities for all characters
-    # This ensures we have current state even if activities are sparse (weeks/months old)
+    # Fetch real-time character state from Redis
+    # Character data is maintained in real-time by the data collection program
+    # With worker running every 5 seconds, we capture state within ~5 seconds of quest entry
     character_ids_list = list(by_character.keys())
-    latest_states = get_latest_character_states(character_ids_list)
-
-    # Track which characters have TOTAL_LEVEL and GROUP_ID in current batch vs from history
-    characters_with_recent_total_level = set()
-    characters_with_recent_group_id = set()
-
-    for character_id, char_activities in by_character.items():
-        for _, activity_type, _, _, _ in char_activities:
-            if activity_type == "total_level":
-                characters_with_recent_total_level.add(character_id)
-            elif activity_type == "group_id":
-                characters_with_recent_group_id.add(character_id)
-
-    # Calculate statistics for logging
-    total_characters = len(character_ids_list)
-    total_level_from_history = sum(
-        1
-        for char_id in character_ids_list
-        if char_id not in characters_with_recent_total_level
-        and latest_states.get(char_id, {}).get("total_level") is not None
-    )
-    group_id_from_history = sum(
-        1
-        for char_id in character_ids_list
-        if char_id not in characters_with_recent_group_id
-        and latest_states.get(char_id, {}).get("group_id") is not None
-    )
-
-    # Log statistics about historical data usage
-    total_level_pct = (
-        (total_level_from_history / total_characters * 100)
-        if total_characters > 0
-        else 0
-    )
-    group_id_pct = (
-        (group_id_from_history / total_characters * 100) if total_characters > 0 else 0
-    )
-
-    logger.info(
-        f"Character state lookback stats: "
-        f"total_level from history {total_level_from_history}/{total_characters} ({total_level_pct:.1f}%) | "
-        f"group_id from history {group_id_from_history}/{total_characters} ({group_id_pct:.1f}%)"
-    )
+    redis_characters = get_characters_by_ids_as_dict(character_ids_list)
 
     # Process each character's activities and collect Redis updates
     all_sessions_to_insert = []
@@ -380,11 +346,11 @@ def process_batch(
 
         initial_session = character_sessions.get(character_id)
 
-        # Get the latest state for this character to use as initial state
-        latest_state = latest_states.get(character_id, {})
-        initial_total_level = latest_state.get("total_level")
-        initial_classes = latest_state.get("classes")
-        initial_group_id = latest_state.get("group_id")
+        # Get the real-time character state from Redis
+        redis_char = redis_characters.get(character_id, {})
+        initial_total_level = redis_char.get("total_level")
+        initial_classes = redis_char.get("classes")
+        initial_group_id = redis_char.get("group_id")
 
         sessions, final_session, status_seen = process_character_activities(
             character_id,
@@ -464,14 +430,13 @@ def run_worker():
     """Main worker loop - scheduled batch processing."""
     time_window_hours = 24
     batch_size = env_int("QUEST_WORKER_BATCH_SIZE", 10000)
-    lookback_days = env_int("QUEST_WORKER_LOOKBACK_DAYS", 90)
-    sleep_between_batches = env_float("QUEST_WORKER_SLEEP_SECS", 1.0)
-    idle_sleep = env_float("QUEST_WORKER_IDLE_SECS", 300.0)
+    sleep_between_batches = env_float("QUEST_WORKER_SLEEP_SECS", 5.0)
+    idle_sleep = env_float("QUEST_WORKER_IDLE_SECS", 5.0)
     allow_truncate = os.getenv("QUEST_WORKER_ALLOW_TRUNCATE", "false").lower() == "true"
 
     logger.info(
         f"Quest Session Worker starting (batch_size={batch_size}, "
-        f"time_window_hours={time_window_hours}, lookback_days={lookback_days})"
+        f"time_window_hours={time_window_hours}, sleep_interval={sleep_between_batches}s)"
     )
 
     # Initialize database and Redis connections
@@ -509,7 +474,8 @@ def run_worker():
         logger.info("Clearing active quest sessions from Redis for clean cold start")
         clear_all_active_quest_sessions()
 
-        # Set last_timestamp to lookback_days ago
+        # Set last_timestamp to 90 days ago to catch any historical quest entries
+        lookback_days = 90
         last_timestamp = datetime.now(timezone.utc) - timedelta(days=lookback_days)
         max_character_id_at_timestamp = 0
         logger.info(

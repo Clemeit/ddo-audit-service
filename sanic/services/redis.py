@@ -689,7 +689,7 @@ def get_character_by_id(character_id: int) -> Character | None:
     return None
 
 
-def get_characters_by_ids_as_dict(character_ids: int) -> dict[int, dict]:
+def get_characters_by_ids_as_dict(character_ids: list[int]) -> dict[int, dict]:
     """Get a dict of character id to character dict"""
     characters: dict[int, dict] = {}
     for server_name in SERVER_NAMES_LOWERCASE:
