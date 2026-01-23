@@ -4327,7 +4327,7 @@ def get_latest_character_states(
             "group_id": int(group_id) if group_id else None,
         }
 
-    elapsed_time = time.time() - start_time
+    elapsed_time = time() - start_time
     num_results = len(states)
 
     logger.debug(
