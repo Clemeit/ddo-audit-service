@@ -148,11 +148,6 @@ async def change_user_password(request: Request):
         # Parse and validate request body
         change_password_req = ChangePassword(**(request.json or {}))
 
-        if not change_password_req.new_password or not change_password_req.old_password:
-            return json(
-                {"error": "Both old_password and new_password are required"}, status=400
-            )
-
         # Change password
         success, error_msg = auth_service.change_password(
             user_id,

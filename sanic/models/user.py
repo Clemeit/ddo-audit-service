@@ -55,7 +55,7 @@ class UserProfile(BaseModel):
 class ChangePassword(BaseModel):
     """Request model for changing password."""
 
-    old_password: str
+    old_password: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=5, max_length=25)
 
     @field_validator("new_password")
@@ -64,14 +64,6 @@ class ChangePassword(BaseModel):
         """Password must be alphanumeric and common symbols."""
         if not re.match(r'^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};:\'",.<>?/`~|\\]+$', v):
             raise ValueError("Password contains invalid characters")
-        return v
-
-    @field_validator("new_password")
-    @classmethod
-    def password_not_equal_username(cls, v: str, info) -> str:
-        """Password cannot be the same as username."""
-        # Note: We can't validate against username here as it's not in the request
-        # This will be checked at the endpoint level
         return v
 
 

@@ -97,8 +97,17 @@ async def rate_limit_middleware(request: Request):
         user_id = getattr(request.ctx, "user_id", None)
 
         if user_id:
-            # Create a rate limit key for this user and endpoint
-            rate_limit_key = f"rate_limit:user:{user_id}:{path}"
+            # Normalize endpoint path to be version-independent for rate limiting
+            endpoint_match = re.match(
+                r"^/v?\d*/user/(settings/persistent|profile/password)", path
+            )
+            endpoint_identifier = (
+                endpoint_match.group(1).replace("/", ":")
+                if endpoint_match
+                else "unknown-endpoint"
+            )
+            # Create a rate limit key for this user and logical endpoint
+            rate_limit_key = f"rate_limit:user:{user_id}:{endpoint_identifier}"
 
             try:
                 allowed, retry_after = _increment_and_check_limit(
