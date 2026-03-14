@@ -43,6 +43,7 @@ jobs:
           POSTGRES_MIN_CONN=${{ vars.POSTGRES_MIN_CONN }}
           POSTGRES_MAX_CONN=${{ vars.POSTGRES_MAX_CONN }}
           API_KEY=${{ secrets.API_KEY }}
+          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
           APP_HOST=${{ vars.APP_HOST }}
           APP_PORT=${{ vars.APP_PORT }}
           APP_WORKERS=${{ vars.APP_WORKERS }}
@@ -170,6 +171,7 @@ jobs:
           POSTGRES_MIN_CONN=${{ vars.POSTGRES_MIN_CONN }}
           POSTGRES_MAX_CONN=${{ vars.POSTGRES_MAX_CONN }}
           API_KEY=${{ secrets.API_KEY }}
+          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
           APP_HOST=${{ vars.APP_HOST }}
           APP_PORT=${{ vars.APP_PORT }}
           APP_WORKERS=${{ vars.APP_WORKERS }}

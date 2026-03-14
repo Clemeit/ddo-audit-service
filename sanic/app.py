@@ -15,13 +15,13 @@ from endpoints.areas import area_blueprint
 from endpoints.demographics import demographics_blueprint
 from endpoints.guilds import guild_blueprint
 from endpoints.user import user_blueprint
+from endpoints.auth import auth_blueprint
 from reports.server_status import get_game_info_scheduler
 from services.redis import close_redis_async, initialize_redis
 from services.postgres import initialize_postgres, close_postgres_client
-from utils.route import is_method_open, is_route_open
+from utils.route import is_method_open, is_route_open, is_jwt_protected
 from utils.access_log import (
     build_access_event,
-    dumps_event,
     get_client_ip,
     get_request_id,
     monotonic_duration_ms,
@@ -29,6 +29,8 @@ from utils.access_log import (
     response_size_bytes,
     should_log,
 )
+from middleware.jwt import jwt_middleware
+from middleware.rate_limit import rate_limit_middleware
 
 from sanic import Sanic, json
 from sanic.request import Request
@@ -63,6 +65,7 @@ app.blueprint(
         demographics_blueprint,
         guild_blueprint,
         user_blueprint,
+        auth_blueprint,
     ]
 )
 
@@ -73,6 +76,18 @@ start_game_info_polling, stop_game_info_polling = get_game_info_scheduler()
 async def start_request_context(request: Request):
     request.ctx.start_ns = monotonic_start_ns()
     request.ctx.request_id = get_request_id(request)
+
+
+@app.middleware("request")
+async def jwt_auth_middleware(request: Request):
+    """JWT authentication middleware."""
+    return await jwt_middleware(request)
+
+
+@app.middleware("request")
+async def rate_limiting_middleware(request: Request):
+    """Rate limiting middleware."""
+    return await rate_limit_middleware(request)
 
 
 @app.listener("before_server_start")
@@ -96,6 +111,8 @@ async def check_api_key(request: Request):
         return
     if is_route_open(request):
         return
+    if is_jwt_protected(request):
+        return  # JWT-protected routes handled by jwt_middleware
 
     api_key = request.headers.get("Authorization")
     if not api_key:

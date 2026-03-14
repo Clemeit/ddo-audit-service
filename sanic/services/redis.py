@@ -1448,6 +1448,3 @@ def clear_all_active_quest_sessions() -> None:
                 logger.info("No stale active quest sessions found in Redis")
     except Exception as e:
         logger.warning(f"Failed to clear active quest sessions from Redis: {e}")
-
-
-# ======= Game Population ========

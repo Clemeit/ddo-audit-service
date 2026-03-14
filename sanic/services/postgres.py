@@ -18,6 +18,7 @@ from models.service import News, PageMessage, FeedbackRequest, LogRequest
 from psycopg2 import pool  # type: ignore
 import psycopg2.extras  # type: ignore
 import psycopg2.sql  # type: ignore
+import psycopg2.errors  # type: ignore
 from constants.activity import (
     MAX_CHARACTER_ACTIVITY_READ_LENGTH,
     MAX_CHARACTER_AGG_ACTIVITY_READ_LENGTH,
@@ -57,6 +58,10 @@ DB_CONFIG = {
     "application_name": POSTGRES_APPLICATION_NAME,
     # Removed cursor_factory to use default tuple cursors for compatibility
 }
+
+
+class UsernameAlreadyExistsError(Exception):
+    """Raised when attempting to create a user with a duplicate username."""
 
 
 class PostgresConnectionManager:
@@ -4509,3 +4514,132 @@ def truncate_quest_sessions() -> None:
                     "Failed to reset statement_timeout after truncate_quest_sessions",
                     exc_info=True,
                 )
+
+
+# User management functions
+def get_user_by_username(username: str) -> Optional[dict]:
+    """Get user by username."""
+    try:
+        with get_dict_cursor(commit=False) as cursor:
+            cursor.execute(
+                "SELECT id, username, password_hash, created_at, updated_at FROM users WHERE LOWER(username) = LOWER(%s)",
+                (username,),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"Failed to get user by username: {e}")
+        return None
+
+
+def get_user_by_id(user_id: int) -> Optional[dict]:
+    """Get user by ID."""
+    try:
+        with get_dict_cursor(commit=False) as cursor:
+            cursor.execute(
+                "SELECT id, username, password_hash, created_at, updated_at FROM users WHERE id = %s",
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"Failed to get user by ID: {e}")
+        return None
+
+
+def create_user(username: str, password_hash: str) -> Optional[dict]:
+    """Create a new user."""
+    try:
+        with get_dict_cursor(commit=True) as cursor:
+            cursor.execute(
+                "INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id, username, created_at, updated_at",
+                (username, password_hash),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    except psycopg2.errors.UniqueViolation as e:
+        raise UsernameAlreadyExistsError("Username already exists") from e
+    except Exception as e:
+        logger.error(f"Failed to create user: {e}")
+        return None
+
+
+def create_user_with_settings(username: str, password_hash: str) -> Optional[dict]:
+    """Create a new user and their settings row in a single transaction."""
+    try:
+        with get_dict_cursor(commit=True) as cursor:
+            cursor.execute(
+                "INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id, username, created_at, updated_at",
+                (username, password_hash),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise RuntimeError("User INSERT returned no row")
+            user = dict(row)
+            cursor.execute(
+                "INSERT INTO user_settings (user_id, settings) VALUES (%s, '{}'::jsonb)",
+                (user["id"],),
+            )
+            return user
+    except psycopg2.errors.UniqueViolation as e:
+        raise UsernameAlreadyExistsError("Username already exists") from e
+    except Exception as e:
+        logger.error(f"Failed to create user with settings: {e}")
+        raise
+
+
+def update_user_password(user_id: int, password_hash: str) -> bool:
+    """Update user's password."""
+    try:
+        with get_db_cursor(commit=True) as cursor:
+            cursor.execute(
+                "UPDATE users SET password_hash = %s, updated_at = NOW() WHERE id = %s",
+                (password_hash, user_id),
+            )
+            return cursor.rowcount > 0
+    except Exception as e:
+        logger.error(f"Failed to update user password: {e}")
+        return False
+
+
+def create_user_settings(user_id: int) -> bool:
+    """Create empty settings for a new user."""
+    try:
+        with get_db_cursor(commit=True) as cursor:
+            cursor.execute(
+                "INSERT INTO user_settings (user_id, settings) VALUES (%s, '{}'::jsonb) ON CONFLICT DO NOTHING",
+                (user_id,),
+            )
+            return True
+    except Exception as e:
+        logger.error(f"Failed to create user settings: {e}")
+        return False
+
+
+def get_user_settings(user_id: int) -> Optional[dict]:
+    """Get user settings."""
+    try:
+        with get_dict_cursor(commit=False) as cursor:
+            cursor.execute(
+                "SELECT id, user_id, settings, created_at, updated_at FROM user_settings WHERE user_id = %s",
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"Failed to get user settings: {e}")
+        return None
+
+
+def update_user_settings(user_id: int, settings: dict) -> bool:
+    """Update user settings."""
+    try:
+        with get_db_cursor(commit=True) as cursor:
+            cursor.execute(
+                "UPDATE user_settings SET settings = %s, updated_at = NOW() WHERE user_id = %s",
+                (json.dumps(settings), user_id),
+            )
+            return cursor.rowcount > 0
+    except Exception as e:
+        logger.error(f"Failed to update user settings: {e}")
+        return False

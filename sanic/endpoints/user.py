@@ -1,19 +1,25 @@
 """
-User endpoints.
+User endpoints for profile, settings, and account management.
 """
 
 import services.redis as redis_client
+import services.postgres as postgres_client
+import services.auth as auth_service
 
 from sanic import Blueprint
 from sanic.response import json
+from sanic.request import Request
+from pydantic import ValidationError
 
 import secrets
 import string
+import json as json_lib
+from models.user import ChangePassword
 
 user_blueprint = Blueprint("user", url_prefix="/user", version=1)
 
 
-# ===== Client-facing endpoints =====
+# ===== One-time settings endpoints (backward compatibility) =====
 @user_blueprint.post("/settings")
 async def post_user_settings(request):
     """
@@ -55,7 +61,7 @@ async def post_user_settings(request):
 
 
 @user_blueprint.get("/settings/<user_id:str>")
-async def get_user_settings(request, user_id: str):
+async def get_user_settings_one_time(request, user_id: str):
     """
     Method: GET
 
@@ -73,3 +79,178 @@ async def get_user_settings(request, user_id: str):
         return json({"message": "Internal server error"}, status=500)
 
     return json({"data": settings})
+
+
+# ===== Authenticated user endpoints =====
+@user_blueprint.get("/profile")
+async def get_user_profile(request: Request):
+    """
+    Get authenticated user's profile.
+
+    Method: GET
+    Route: /user/profile
+
+    Requires: Valid JWT token in Authorization header
+
+    Returns:
+        {
+            "data": {
+                "id": int,
+                "username": "string",
+                "created_at": "string"
+            }
+        }
+    """
+    try:
+        # User ID should be set by JWT middleware
+        user_id = getattr(request.ctx, "user_id", None)
+        if not user_id:
+            return json({"error": "Unauthorized"}, status=401)
+
+        user = auth_service.get_user_by_id(user_id)
+        if not user:
+            return json({"error": "User not found"}, status=404)
+
+        return json({"data": user}, status=200)
+    except Exception as e:
+        return json({"error": "Internal server error"}, status=500)
+
+
+@user_blueprint.put("/profile/password")
+async def change_user_password(request: Request):
+    """
+    Change authenticated user's password.
+
+    Method: PUT
+    Route: /user/profile/password
+
+    Requires: Valid JWT token in Authorization header
+
+    Request body:
+        {
+            "old_password": "string",
+            "new_password": "string (5-25 chars, alphanumeric + symbols)"
+        }
+
+    Returns:
+        {
+            "data": {
+                "message": "Password changed successfully"
+            }
+        }
+    """
+    try:
+        # User ID should be set by JWT middleware
+        user_id = getattr(request.ctx, "user_id", None)
+        username = getattr(request.ctx, "username", None)
+        if not user_id or not username:
+            return json({"error": "Unauthorized"}, status=401)
+
+        # Parse and validate request body
+        change_password_req = ChangePassword(**(request.json or {}))
+
+        # Change password
+        success, error_msg = auth_service.change_password(
+            user_id,
+            change_password_req.old_password,
+            change_password_req.new_password,
+            username,
+        )
+
+        if not success:
+            return json({"error": error_msg}, status=400)
+
+        return json({"data": {"message": "Password changed successfully"}}, status=200)
+
+    except ValidationError as e:
+        errors = e.errors()
+        error_msgs = [f"{err['loc'][0]}: {err['msg']}" for err in errors]
+        return json({"error": ", ".join(error_msgs)}, status=400)
+    except Exception as e:
+        return json({"error": "Internal server error"}, status=500)
+
+
+@user_blueprint.get("/settings/persistent")
+async def get_persistent_settings(request: Request):
+    """
+    Get authenticated user's persistent settings from database.
+
+    Method: GET
+    Route: /user/settings/persistent
+
+    Requires: Valid JWT token in Authorization header
+
+    Returns:
+        {
+            "data": {
+                "settings": {}
+            }
+        }
+    """
+    try:
+        # User ID should be set by JWT middleware
+        user_id = getattr(request.ctx, "user_id", None)
+        if not user_id:
+            return json({"error": "Unauthorized"}, status=401)
+
+        user_settings = postgres_client.get_user_settings(user_id)
+        if not user_settings:
+            return json({"error": "Settings not found"}, status=404)
+
+        return json(
+            {"data": {"settings": user_settings.get("settings", {})}}, status=200
+        )
+    except Exception as e:
+        return json({"error": "Internal server error"}, status=500)
+
+
+@user_blueprint.put("/settings/persistent")
+async def update_persistent_settings(request: Request):
+    """
+    Update authenticated user's persistent settings in database.
+
+    Method: PUT
+    Route: /user/settings/persistent
+
+    Requires: Valid JWT token in Authorization header
+
+    Request body:
+        {
+            "settings": {}
+        }
+
+    Returns:
+        {
+            "data": {
+                "settings": {}
+            }
+        }
+    """
+    try:
+        # User ID should be set by JWT middleware
+        user_id = getattr(request.ctx, "user_id", None)
+        if not user_id:
+            return json({"error": "Unauthorized"}, status=401)
+
+        body = request.json
+        if not body or "settings" not in body:
+            return json(
+                {"error": "Invalid request body: 'settings' field required"}, status=400
+            )
+
+        settings = body.get("settings")
+        if not isinstance(settings, dict):
+            return json({"error": "Settings must be a JSON object"}, status=400)
+
+        # Ensure size is reasonable (e.g., less than 1 MB)
+        if len(json_lib.dumps(settings)) > 1024 * 1024:
+            return json({"error": "Settings too large"}, status=413)
+
+        # Update settings
+        success = postgres_client.update_user_settings(user_id, settings)
+        if not success:
+            return json({"error": "Failed to update settings"}, status=500)
+
+        return json({"data": {"settings": settings}}, status=200)
+    except Exception as e:
+        return json({"error": "Internal server error"}, status=500)
