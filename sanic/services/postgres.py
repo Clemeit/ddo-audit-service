@@ -4564,6 +4564,30 @@ def create_user(username: str, password_hash: str) -> Optional[dict]:
         return None
 
 
+def create_user_with_settings(username: str, password_hash: str) -> Optional[dict]:
+    """Create a new user and their settings row in a single transaction."""
+    try:
+        with get_dict_cursor(commit=True) as cursor:
+            cursor.execute(
+                "INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id, username, created_at, updated_at",
+                (username, password_hash),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise RuntimeError("User INSERT returned no row")
+            user = dict(row)
+            cursor.execute(
+                "INSERT INTO user_settings (user_id, settings) VALUES (%s, '{}'::jsonb)",
+                (user["id"],),
+            )
+            return user
+    except psycopg2.errors.UniqueViolation as e:
+        raise UsernameAlreadyExistsError("Username already exists") from e
+    except Exception as e:
+        logger.error(f"Failed to create user with settings: {e}")
+        raise
+
+
 def update_user_password(user_id: int, password_hash: str) -> bool:
     """Update user's password."""
     try:

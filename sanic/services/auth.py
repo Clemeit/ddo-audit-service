@@ -142,24 +142,8 @@ def register_user(username: str, password: str) -> Tuple[bool, Optional[dict], s
         # Hash password
         password_hash = hash_password(password)
 
-        # Create user in database
-        user = postgres_client.create_user(username, password_hash)
-
-        if not user:
-            return False, None, "Failed to create user"
-
-        # Create settings for user
-        settings = postgres_client.create_user_settings(user["id"])
-        if not settings:
-            # Attempt to roll back user creation if a delete function is available
-            delete_user = getattr(postgres_client, "delete_user", None)
-            if callable(delete_user):
-                try:
-                    delete_user(user["id"])
-                except Exception:
-                    # If rollback fails, still report registration failure
-                    pass
-            raise RuntimeError("Failed to create user settings")
+        # Create user and their settings row in a single transaction
+        user = postgres_client.create_user_with_settings(username, password_hash)
 
         # Generate JWT token
         token = generate_jwt_token(user["id"], user["username"])

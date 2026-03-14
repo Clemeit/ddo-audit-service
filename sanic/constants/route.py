@@ -11,8 +11,8 @@ OPEN_ROUTES = [
 
 # Routes that use JWT authentication instead of API key
 JWT_PROTECTED_ROUTES = [
-    r"^/v?\d*/user/profile(/|$)",
-    r"^/v?\d*/user/settings/persistent(/|$)",
+    r"^/v?\d*/user/profile",
+    r"^/v?\d*/user/settings/persistent",
 ]
 
 OPEN_METHODS = ["GET"]
