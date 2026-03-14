@@ -62,8 +62,8 @@ async def rate_limit_middleware(request: Request):
     if re.match(r"^/v?\d*/auth/", path):
         ip = get_client_ip(request)
 
-        # Create a rate limit key for this IP and endpoint
-        rate_limit_key = f"rate_limit:auth:{ip}"
+        # Create a rate limit key for this IP and specific auth endpoint path
+        rate_limit_key = f"rate_limit:auth:{ip}:{path}"
 
         try:
             allowed, retry_after = _increment_and_check_limit(

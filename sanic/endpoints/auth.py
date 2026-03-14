@@ -6,12 +6,14 @@ from sanic import Blueprint
 from sanic.response import json
 from sanic.request import Request
 from pydantic import ValidationError
+import logging
 
 from models.user import UserRegister, UserLogin
 import services.auth as auth_service
 
 
 auth_blueprint = Blueprint("auth", url_prefix="/auth", version=1)
+logger = logging.getLogger(__name__)
 
 
 @auth_blueprint.post("/register")
@@ -55,7 +57,9 @@ async def register(request: Request):
         )
 
         if not success:
-            return json({"error": error_msg}, status=400)
+            logger.warning("Registration request failed: %s", error_msg)
+            # Do not leak account enumeration details (e.g., existing usernames).
+            return json({"error": "Unable to register account"}, status=400)
 
         return json(
             {
@@ -76,6 +80,7 @@ async def register(request: Request):
     except TypeError:
         return json({"error": "Invalid request body format"}, status=400)
     except Exception as e:
+        logger.exception("Unhandled error in register endpoint")
         return json({"error": "Internal server error"}, status=500)
 
 
@@ -120,7 +125,10 @@ async def login(request: Request):
         )
 
         if not success:
-            return json({"error": error_msg}, status=401)
+            # Only expose a generic auth error to avoid information leakage.
+            if error_msg != "Invalid username or password":
+                logger.warning("Login request failed: %s", error_msg)
+            return json({"error": "Invalid username or password"}, status=401)
 
         return json(
             {
@@ -141,4 +149,5 @@ async def login(request: Request):
     except TypeError:
         return json({"error": "Invalid request body format"}, status=400)
     except Exception as e:
+        logger.exception("Unhandled error in login endpoint")
         return json({"error": "Internal server error"}, status=500)

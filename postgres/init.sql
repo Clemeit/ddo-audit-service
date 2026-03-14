@@ -341,7 +341,8 @@ TABLESPACE pg_default;
 ALTER TABLE IF EXISTS public."users"
     OWNER to pgadmin;
 
-CREATE INDEX idx_users_username ON public."users" (LOWER(username));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower_unique
+    ON public."users" (LOWER(username));
 
 CREATE TABLE IF NOT EXISTS public."user_settings"
 (

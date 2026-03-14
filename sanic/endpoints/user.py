@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 import secrets
 import string
+import json
 from models.user import ChangePassword
 
 user_blueprint = Blueprint("user", url_prefix="/user", version=1)
@@ -242,7 +243,7 @@ async def update_persistent_settings(request: Request):
             return json({"error": "Settings must be a JSON object"}, status=400)
 
         # Ensure size is reasonable (e.g., less than 1 MB)
-        if len(str(settings)) > 1024 * 1024:
+        if len(json.dumps(settings)) > 1024 * 1024:
             return json({"error": "Settings too large"}, status=413)
 
         # Update settings

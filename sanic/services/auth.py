@@ -13,6 +13,9 @@ from typing import Optional, Tuple
 import services.postgres as postgres_client
 
 
+logger = logging.getLogger(__name__)
+
+
 # JWT Configuration
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
 JWT_ALGORITHM = "HS256"
@@ -20,7 +23,6 @@ JWT_EXPIRATION_DAYS = 7  # 7 days
 
 # Validate JWT secret key on import
 if not JWT_SECRET_KEY:
-    logger = logging.getLogger(__name__)
     logger.error(
         "JWT_SECRET_KEY is not set! Refusing to start without a secure JWT secret key."
     )
@@ -147,7 +149,17 @@ def register_user(username: str, password: str) -> Tuple[bool, Optional[dict], s
             return False, None, "Failed to create user"
 
         # Create settings for user
-        postgres_client.create_user_settings(user["id"])
+        settings = postgres_client.create_user_settings(user["id"])
+        if not settings:
+            # Attempt to roll back user creation if a delete function is available
+            delete_user = getattr(postgres_client, "delete_user", None)
+            if callable(delete_user):
+                try:
+                    delete_user(user["id"])
+                except Exception:
+                    # If rollback fails, still report registration failure
+                    pass
+            raise RuntimeError("Failed to create user settings")
 
         # Generate JWT token
         token = generate_jwt_token(user["id"], user["username"])
@@ -165,8 +177,13 @@ def register_user(username: str, password: str) -> Tuple[bool, Optional[dict], s
             "",
         )
 
-    except Exception as e:
-        return False, None, f"Registration failed: {str(e)}"
+    except postgres_client.UsernameAlreadyExistsError:
+        # Handle check-then-insert race where another request created the same
+        # username (case-insensitive) between existence check and insert.
+        return False, None, "Username already exists"
+    except Exception:
+        logger.exception("Registration failed")
+        return False, None, "Registration failed"
 
 
 def login_user(username: str, password: str) -> Tuple[bool, Optional[dict], str]:
@@ -207,8 +224,9 @@ def login_user(username: str, password: str) -> Tuple[bool, Optional[dict], str]
             "",
         )
 
-    except Exception as e:
-        return False, None, f"Login failed: {str(e)}"
+    except Exception:
+        logger.exception("Login failed")
+        return False, None, "Authentication failed"
 
 
 def change_password(
@@ -256,8 +274,9 @@ def change_password(
 
         return True, ""
 
-    except Exception as e:
-        return False, f"Password change failed: {str(e)}"
+    except Exception:
+        logger.exception("Password change failed")
+        return False, "Password change failed"
 
 
 def get_user_by_id(user_id: int) -> Optional[dict]:

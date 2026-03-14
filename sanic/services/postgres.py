@@ -18,6 +18,7 @@ from models.service import News, PageMessage, FeedbackRequest, LogRequest
 from psycopg2 import pool  # type: ignore
 import psycopg2.extras  # type: ignore
 import psycopg2.sql  # type: ignore
+import psycopg2.errors  # type: ignore
 from constants.activity import (
     MAX_CHARACTER_ACTIVITY_READ_LENGTH,
     MAX_CHARACTER_AGG_ACTIVITY_READ_LENGTH,
@@ -57,6 +58,10 @@ DB_CONFIG = {
     "application_name": POSTGRES_APPLICATION_NAME,
     # Removed cursor_factory to use default tuple cursors for compatibility
 }
+
+
+class UsernameAlreadyExistsError(Exception):
+    """Raised when attempting to create a user with a duplicate username."""
 
 
 class PostgresConnectionManager:
@@ -4518,7 +4523,7 @@ def get_user_by_username(username: str) -> Optional[dict]:
         with get_dict_cursor(commit=False) as cursor:
             cursor.execute(
                 "SELECT id, username, password_hash, created_at, updated_at FROM users WHERE LOWER(username) = LOWER(%s)",
-                (username,)
+                (username,),
             )
             row = cursor.fetchone()
             return dict(row) if row else None
@@ -4533,7 +4538,7 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
         with get_dict_cursor(commit=False) as cursor:
             cursor.execute(
                 "SELECT id, username, password_hash, created_at, updated_at FROM users WHERE id = %s",
-                (user_id,)
+                (user_id,),
             )
             row = cursor.fetchone()
             return dict(row) if row else None
@@ -4548,10 +4553,12 @@ def create_user(username: str, password_hash: str) -> Optional[dict]:
         with get_dict_cursor(commit=True) as cursor:
             cursor.execute(
                 "INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id, username, created_at, updated_at",
-                (username, password_hash)
+                (username, password_hash),
             )
             row = cursor.fetchone()
             return dict(row) if row else None
+    except psycopg2.errors.UniqueViolation as e:
+        raise UsernameAlreadyExistsError("Username already exists") from e
     except Exception as e:
         logger.error(f"Failed to create user: {e}")
         return None
@@ -4563,7 +4570,7 @@ def update_user_password(user_id: int, password_hash: str) -> bool:
         with get_db_cursor(commit=True) as cursor:
             cursor.execute(
                 "UPDATE users SET password_hash = %s, updated_at = NOW() WHERE id = %s",
-                (password_hash, user_id)
+                (password_hash, user_id),
             )
             return cursor.rowcount > 0
     except Exception as e:
@@ -4577,7 +4584,7 @@ def create_user_settings(user_id: int) -> bool:
         with get_db_cursor(commit=True) as cursor:
             cursor.execute(
                 "INSERT INTO user_settings (user_id, settings) VALUES (%s, '{}'::jsonb) ON CONFLICT DO NOTHING",
-                (user_id,)
+                (user_id,),
             )
             return True
     except Exception as e:
@@ -4591,7 +4598,7 @@ def get_user_settings(user_id: int) -> Optional[dict]:
         with get_dict_cursor(commit=False) as cursor:
             cursor.execute(
                 "SELECT id, user_id, settings, created_at, updated_at FROM user_settings WHERE user_id = %s",
-                (user_id,)
+                (user_id,),
             )
             row = cursor.fetchone()
             return dict(row) if row else None
@@ -4606,10 +4613,9 @@ def update_user_settings(user_id: int, settings: dict) -> bool:
         with get_db_cursor(commit=True) as cursor:
             cursor.execute(
                 "UPDATE user_settings SET settings = %s, updated_at = NOW() WHERE user_id = %s",
-                (json.dumps(settings), user_id)
+                (json.dumps(settings), user_id),
             )
             return cursor.rowcount > 0
     except Exception as e:
         logger.error(f"Failed to update user settings: {e}")
         return False
-
