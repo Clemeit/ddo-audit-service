@@ -1450,4 +1450,33 @@ def clear_all_active_quest_sessions() -> None:
         logger.warning(f"Failed to clear active quest sessions from Redis: {e}")
 
 
-# ======= Game Population ========
+# ======= Rate Limiting ========
+
+
+def get_rate_limit(key: str) -> Optional[int]:
+    """Get current rate limit count for a key."""
+    try:
+        with get_redis_client() as client:
+            value = client.get(key)
+            return int(value) if value else None
+    except Exception as e:
+        logger.warning(f"Failed to get rate limit: {e}")
+        return None
+
+
+def set_rate_limit(key: str, value: int, ttl: int):
+    """Set rate limit counter with TTL."""
+    try:
+        with get_redis_client() as client:
+            client.setex(key, ttl, value)
+    except Exception as e:
+        logger.warning(f"Failed to set rate limit: {e}")
+
+
+def increment_rate_limit(key: str):
+    """Increment rate limit counter."""
+    try:
+        with get_redis_client() as client:
+            client.incr(key)
+    except Exception as e:
+        logger.warning(f"Failed to increment rate limit: {e}")

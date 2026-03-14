@@ -324,3 +324,39 @@ ALTER TABLE IF EXISTS public."quest_metrics"
     OWNER to pgadmin;
 
 CREATE INDEX idx_quest_metrics_updated_at ON public."quest_metrics" (updated_at);
+
+-- User Authentication and Settings Tables
+CREATE TABLE IF NOT EXISTS public."users"
+(
+    id serial NOT NULL,
+    username text NOT NULL UNIQUE,
+    password_hash text NOT NULL,
+    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    PRIMARY KEY (id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."users"
+    OWNER to pgadmin;
+
+CREATE INDEX idx_users_username ON public."users" (LOWER(username));
+
+CREATE TABLE IF NOT EXISTS public."user_settings"
+(
+    id serial NOT NULL,
+    user_id integer NOT NULL REFERENCES public."users"(id) ON DELETE CASCADE,
+    settings jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    PRIMARY KEY (id),
+    UNIQUE (user_id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."user_settings"
+    OWNER to pgadmin;
+
+CREATE INDEX idx_user_settings_user_id ON public."user_settings" (user_id);
