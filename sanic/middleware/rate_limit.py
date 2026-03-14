@@ -24,6 +24,30 @@ USER_RATE_LIMIT = {
 }
 
 
+def _increment_and_check_limit(rate_limit_key: str, limit: int, window: int):
+    """
+    Atomically increment the rate limit counter and determine if the request is allowed.
+    Returns a tuple (allowed: bool, retry_after: int | None), where retry_after is
+    the remaining TTL in seconds for this rate limit window.
+    """
+    try:
+        with redis_client.get_redis_client() as client:
+            # INCR is atomic in Redis and will create the key with value 1 if it does not exist.
+            current_count = client.incr(rate_limit_key)
+            # Ensure the key has a TTL corresponding to the rate limit window.
+            ttl = client.ttl(rate_limit_key)
+            if current_count == 1 or ttl is None or ttl < 0:
+                client.expire(rate_limit_key, window)
+                ttl = window
+            # If the incremented count exceeds the allowed limit, the request is not allowed.
+            if current_count > limit:
+                return False, ttl
+            return True, ttl
+    except RuntimeError:
+        # Redis not initialized — fail open
+        return True, None
+
+
 async def rate_limit_middleware(request: Request):
     """
     Rate limiting middleware to prevent abuse.
@@ -42,26 +66,28 @@ async def rate_limit_middleware(request: Request):
         rate_limit_key = f"rate_limit:auth:{ip}"
 
         try:
-            current_count = redis_client.get_rate_limit(rate_limit_key)
+            allowed, retry_after = _increment_and_check_limit(
+                rate_limit_key,
+                AUTH_RATE_LIMIT["requests"],
+                AUTH_RATE_LIMIT["window"],
+            )
 
-            if current_count is None:
-                # First request in this window
-                redis_client.set_rate_limit(
-                    rate_limit_key, 1, AUTH_RATE_LIMIT["window"]
-                )
-            elif current_count >= AUTH_RATE_LIMIT["requests"]:
+            if not allowed:
                 # Rate limit exceeded
                 return json(
                     {
                         "error": "Rate limit exceeded. Try again in 15 minutes.",
-                        "retry_after": AUTH_RATE_LIMIT["window"],
+                        "retry_after": retry_after,
                     },
                     status=429,
-                    headers={"Retry-After": str(AUTH_RATE_LIMIT["window"])},
+                    headers={
+                        "Retry-After": (
+                            str(retry_after)
+                            if retry_after is not None
+                            else str(AUTH_RATE_LIMIT["window"])
+                        )
+                    },
                 )
-            else:
-                # Increment counter
-                redis_client.increment_rate_limit(rate_limit_key)
         except Exception as e:
             # Fail open - allow request if Redis is down
             pass
@@ -75,26 +101,28 @@ async def rate_limit_middleware(request: Request):
             rate_limit_key = f"rate_limit:user:{user_id}:{path}"
 
             try:
-                current_count = redis_client.get_rate_limit(rate_limit_key)
+                allowed, retry_after = _increment_and_check_limit(
+                    rate_limit_key,
+                    USER_RATE_LIMIT["requests"],
+                    USER_RATE_LIMIT["window"],
+                )
 
-                if current_count is None:
-                    # First request in this window
-                    redis_client.set_rate_limit(
-                        rate_limit_key, 1, USER_RATE_LIMIT["window"]
-                    )
-                elif current_count >= USER_RATE_LIMIT["requests"]:
+                if not allowed:
                     # Rate limit exceeded
                     return json(
                         {
                             "error": "Rate limit exceeded. Try again later.",
-                            "retry_after": USER_RATE_LIMIT["window"],
+                            "retry_after": retry_after,
                         },
                         status=429,
-                        headers={"Retry-After": str(USER_RATE_LIMIT["window"])},
+                        headers={
+                            "Retry-After": (
+                                str(retry_after)
+                                if retry_after is not None
+                                else str(USER_RATE_LIMIT["window"])
+                            )
+                        },
                     )
-                else:
-                    # Increment counter
-                    redis_client.increment_rate_limit(rate_limit_key)
             except Exception as e:
                 # Fail open - allow request if Redis is down
                 pass

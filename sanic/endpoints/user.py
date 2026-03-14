@@ -85,12 +85,12 @@ async def get_user_settings_one_time(request, user_id: str):
 async def get_user_profile(request: Request):
     """
     Get authenticated user's profile.
-    
+
     Method: GET
     Route: /user/profile
-    
+
     Requires: Valid JWT token in Authorization header
-    
+
     Returns:
         {
             "data": {
@@ -105,11 +105,11 @@ async def get_user_profile(request: Request):
         user_id = getattr(request.ctx, "user_id", None)
         if not user_id:
             return json({"error": "Unauthorized"}, status=401)
-        
+
         user = auth_service.get_user_by_id(user_id)
         if not user:
             return json({"error": "User not found"}, status=404)
-        
+
         return json({"data": user}, status=200)
     except Exception as e:
         return json({"error": "Internal server error"}, status=500)
@@ -119,18 +119,18 @@ async def get_user_profile(request: Request):
 async def change_user_password(request: Request):
     """
     Change authenticated user's password.
-    
+
     Method: PUT
     Route: /user/profile/password
-    
+
     Requires: Valid JWT token in Authorization header
-    
+
     Request body:
         {
             "old_password": "string",
             "new_password": "string (5-25 chars, alphanumeric + symbols)"
         }
-    
+
     Returns:
         {
             "data": {
@@ -144,27 +144,28 @@ async def change_user_password(request: Request):
         username = getattr(request.ctx, "username", None)
         if not user_id or not username:
             return json({"error": "Unauthorized"}, status=401)
-        
+
         # Parse and validate request body
-        change_password_req = ChangePassword(**request.json)
-        
+        change_password_req = ChangePassword(**(request.json or {}))
+
+        if not change_password_req.new_password or not change_password_req.old_password:
+            return json(
+                {"error": "Both old_password and new_password are required"}, status=400
+            )
+
         # Change password
         success, error_msg = auth_service.change_password(
             user_id,
             change_password_req.old_password,
             change_password_req.new_password,
-            username
+            username,
         )
-        
+
         if not success:
             return json({"error": error_msg}, status=400)
-        
-        return json({
-            "data": {
-                "message": "Password changed successfully"
-            }
-        }, status=200)
-        
+
+        return json({"data": {"message": "Password changed successfully"}}, status=200)
+
     except ValidationError as e:
         errors = e.errors()
         error_msgs = [f"{err['loc'][0]}: {err['msg']}" for err in errors]
@@ -177,12 +178,12 @@ async def change_user_password(request: Request):
 async def get_persistent_settings(request: Request):
     """
     Get authenticated user's persistent settings from database.
-    
+
     Method: GET
     Route: /user/settings/persistent
-    
+
     Requires: Valid JWT token in Authorization header
-    
+
     Returns:
         {
             "data": {
@@ -195,16 +196,14 @@ async def get_persistent_settings(request: Request):
         user_id = getattr(request.ctx, "user_id", None)
         if not user_id:
             return json({"error": "Unauthorized"}, status=401)
-        
+
         user_settings = postgres_client.get_user_settings(user_id)
         if not user_settings:
             return json({"error": "Settings not found"}, status=404)
-        
-        return json({
-            "data": {
-                "settings": user_settings.get("settings", {})
-            }
-        }, status=200)
+
+        return json(
+            {"data": {"settings": user_settings.get("settings", {})}}, status=200
+        )
     except Exception as e:
         return json({"error": "Internal server error"}, status=500)
 
@@ -213,17 +212,17 @@ async def get_persistent_settings(request: Request):
 async def update_persistent_settings(request: Request):
     """
     Update authenticated user's persistent settings in database.
-    
+
     Method: PUT
     Route: /user/settings/persistent
-    
+
     Requires: Valid JWT token in Authorization header
-    
+
     Request body:
         {
             "settings": {}
         }
-    
+
     Returns:
         {
             "data": {
@@ -236,28 +235,26 @@ async def update_persistent_settings(request: Request):
         user_id = getattr(request.ctx, "user_id", None)
         if not user_id:
             return json({"error": "Unauthorized"}, status=401)
-        
+
         body = request.json
         if not body or "settings" not in body:
-            return json({"error": "Invalid request body: 'settings' field required"}, status=400)
-        
+            return json(
+                {"error": "Invalid request body: 'settings' field required"}, status=400
+            )
+
         settings = body.get("settings")
         if not isinstance(settings, dict):
             return json({"error": "Settings must be a JSON object"}, status=400)
-        
+
         # Ensure size is reasonable (e.g., less than 1 MB)
         if len(str(settings)) > 1024 * 1024:
             return json({"error": "Settings too large"}, status=413)
-        
+
         # Update settings
         success = postgres_client.update_user_settings(user_id, settings)
         if not success:
             return json({"error": "Failed to update settings"}, status=500)
-        
-        return json({
-            "data": {
-                "settings": settings
-            }
-        }, status=200)
+
+        return json({"data": {"settings": settings}}, status=200)
     except Exception as e:
         return json({"error": "Internal server error"}, status=500)

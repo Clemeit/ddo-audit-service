@@ -44,7 +44,10 @@ async def register(request: Request):
     """
     try:
         # Parse and validate request body
-        user_register = UserRegister(**request.json)
+        body = request.json
+        if body is None:
+            return json({"error": "Invalid or missing JSON body"}, status=400)
+        user_register = UserRegister(**body)
 
         # Register user
         success, user_data, error_msg = auth_service.register_user(
@@ -70,6 +73,8 @@ async def register(request: Request):
         errors = e.errors()
         error_msgs = [f"{err['loc'][0]}: {err['msg']}" for err in errors]
         return json({"error": ", ".join(error_msgs)}, status=400)
+    except TypeError:
+        return json({"error": "Invalid request body format"}, status=400)
     except Exception as e:
         return json({"error": "Internal server error"}, status=500)
 
@@ -104,7 +109,10 @@ async def login(request: Request):
     """
     try:
         # Parse and validate request body
-        user_login = UserLogin(**request.json)
+        body = request.json
+        if body is None:
+            return json({"error": "Invalid or missing JSON body"}, status=400)
+        user_login = UserLogin(**body)
 
         # Authenticate user
         success, user_data, error_msg = auth_service.login_user(
@@ -130,5 +138,7 @@ async def login(request: Request):
         errors = e.errors()
         error_msgs = [f"{err['loc'][0]}: {err['msg']}" for err in errors]
         return json({"error": ", ".join(error_msgs)}, status=400)
+    except TypeError:
+        return json({"error": "Invalid request body format"}, status=400)
     except Exception as e:
         return json({"error": "Internal server error"}, status=500)

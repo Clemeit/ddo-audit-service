@@ -11,7 +11,6 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple
 import services.postgres as postgres_client
-from models.user import UserProfile
 
 
 # JWT Configuration
@@ -22,12 +21,25 @@ JWT_EXPIRATION_DAYS = 7  # 7 days
 # Validate JWT secret key on import
 if not JWT_SECRET_KEY:
     logger = logging.getLogger(__name__)
-    logger.warning(
-        "JWT_SECRET_KEY is not set! "
-        "Set JWT_SECRET_KEY environment variable to a secure random string in production. "
-        "Using insecure fallback for development only."
+    logger.error(
+        "JWT_SECRET_KEY is not set! Refusing to start without a secure JWT secret key."
     )
-    JWT_SECRET_KEY = "insecure-development-key-change-immediately"
+    raise RuntimeError(
+        "JWT_SECRET_KEY environment variable is required for authentication service."
+    )
+
+
+def serialize_datetime(value):
+    """
+    Convert datetime objects to an ISO 8601 string for JSON serialization.
+    If the value is not a datetime instance, it is returned unchanged.
+    """
+    if isinstance(value, datetime):
+        # Ensure we have a timezone-aware datetime; default to UTC if naive
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.isoformat()
+    return value
 
 
 def hash_password(password: str) -> str:
@@ -146,7 +158,7 @@ def register_user(username: str, password: str) -> Tuple[bool, Optional[dict], s
                 "user": {
                     "id": user["id"],
                     "username": user["username"],
-                    "created_at": user["created_at"],
+                    "created_at": serialize_datetime(user["created_at"]),
                 },
                 "token": token,
             },
@@ -188,7 +200,7 @@ def login_user(username: str, password: str) -> Tuple[bool, Optional[dict], str]
                 "user": {
                     "id": user["id"],
                     "username": user["username"],
-                    "created_at": user["created_at"],
+                    "created_at": serialize_datetime(user["created_at"]),
                 },
                 "token": token,
             },
@@ -266,7 +278,7 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
         return {
             "id": user["id"],
             "username": user["username"],
-            "created_at": user["created_at"],
+            "created_at": serialize_datetime(user["created_at"]),
         }
     except Exception:
         return None
