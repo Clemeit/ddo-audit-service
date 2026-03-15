@@ -3,6 +3,7 @@ import os
 import logging
 from collections import defaultdict
 from contextlib import contextmanager, asynccontextmanager
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from time import time
 from typing import Optional, Generator, Tuple
@@ -61,6 +62,75 @@ DB_CONFIG = {
     # without an extra round-trip per checkout.
     "options": f"-c statement_timeout={POSTGRES_COMMAND_TIMEOUT * 1000}",
 }
+
+
+@dataclass(frozen=True)
+class OnConflict:
+    """Structured ON CONFLICT clause for safe SQL composition.
+
+    *conflict_columns*  - column(s) that form the unique constraint
+                          (used in ``ON CONFLICT (col, ...)``)
+    *action*            - ``"nothing"`` or ``"update"``
+    *update_columns*    - columns to SET on conflict when *action* is ``"update"``.
+                          Each column is set to ``EXCLUDED.<col>``.
+    *update_expressions*- raw SQL expressions keyed by column name for cases
+                          that need more than ``col = EXCLUDED.col``
+                          (e.g. ``"last_save": "NOW()"``).  Keys are validated as
+                          identifiers; values are emitted verbatim so they must
+                          **never** originate from user input.
+    """
+
+    conflict_columns: list[str]
+    action: str = "nothing"  # "nothing" | "update"
+    update_columns: list[str] = field(default_factory=list)
+    update_expressions: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if not self.conflict_columns:
+            raise ValueError(
+                "OnConflict conflict_columns must be a non-empty list of column names"
+            )
+        if self.action not in ("nothing", "update"):
+            raise ValueError(
+                f"OnConflict action must be 'nothing' or 'update', got {self.action!r}"
+            )
+        if (
+            self.action == "update"
+            and not self.update_columns
+            and not self.update_expressions
+        ):
+            raise ValueError(
+                "OnConflict action='update' requires at least one of "
+                "update_columns or update_expressions"
+            )
+
+
+def _build_on_conflict_psycopg2(oc: OnConflict) -> psycopg2.sql.Composed:
+    """Build an ON CONFLICT clause using psycopg2.sql safe composition."""
+    conflict_cols = psycopg2.sql.SQL(", ").join(
+        psycopg2.sql.Identifier(c) for c in oc.conflict_columns
+    )
+    if oc.action == "nothing":
+        return psycopg2.sql.SQL("ON CONFLICT ({cols}) DO NOTHING").format(
+            cols=conflict_cols
+        )
+
+    # action == "update"
+    set_parts: list[psycopg2.sql.Composable] = [
+        psycopg2.sql.SQL("{col} = EXCLUDED.{col}").format(
+            col=psycopg2.sql.Identifier(c)
+        )
+        for c in oc.update_columns
+    ]
+    for col, expr in oc.update_expressions.items():
+        set_parts.append(
+            psycopg2.sql.SQL("{col} = ").format(col=psycopg2.sql.Identifier(col))
+            + psycopg2.sql.SQL(expr)
+        )
+    return psycopg2.sql.SQL("ON CONFLICT ({cols}) DO UPDATE SET {sets}").format(
+        cols=conflict_cols,
+        sets=psycopg2.sql.SQL(", ").join(set_parts),
+    )
 
 
 class UsernameAlreadyExistsError(Exception):
@@ -212,7 +282,7 @@ class PostgresConnectionManager:
         table: str,
         columns: list,
         data: list,
-        on_conflict: str = None,
+        on_conflict: OnConflict | None = None,
         commit: bool = True,
     ):
         """Perform bulk insert with optional conflict resolution."""
@@ -238,7 +308,8 @@ class PostgresConnectionManager:
 
                 if on_conflict:
                     query = psycopg2.sql.SQL("{query} {conflict}").format(
-                        query=query, conflict=psycopg2.sql.SQL(on_conflict)
+                        query=query,
+                        conflict=_build_on_conflict_psycopg2(on_conflict),
                     )
 
                 cursor.executemany(query, data)
@@ -419,12 +490,13 @@ def reset_postgres_connection_stats():
 import psycopg
 import psycopg.conninfo
 import psycopg.rows
+import psycopg.sql
 from psycopg_pool import AsyncConnectionPool
 
 _async_pool: Optional[AsyncConnectionPool] = None
 
 POSTGRES_ASYNC_MIN_CONN = int(os.getenv("POSTGRES_ASYNC_MIN_SIZE", "2"))
-POSTGRES_ASYNC_MAX_CONN = int(os.getenv("POSTGRES_ASYNC_MAX_SIZE", "10"))
+POSTGRES_ASYNC_MAX_CONN = int(os.getenv("POSTGRES_ASYNC_MAX_SIZE", "20"))
 
 _ASYNC_CONNINFO = psycopg.conninfo.make_conninfo(
     host=POSTGRES_HOST,
@@ -483,6 +555,78 @@ async def get_async_dict_cursor(commit: bool = True):
                 await conn.commit()
 
 
+async def async_execute_many(query: str, params_list: list):
+    """Execute a parameterised query for each item in *params_list*.
+
+    Uses psycopg3's ``executemany`` which pipelines the statements for
+    better throughput than looping ``execute`` calls.
+    """
+    async with get_async_dict_cursor(commit=True) as cur:
+        await cur.executemany(query, params_list)
+        return cur.rowcount
+
+
+def _build_on_conflict_psycopg3(oc: OnConflict) -> psycopg.sql.Composed:
+    """Build an ON CONFLICT clause using psycopg3 sql safe composition."""
+    conflict_cols = psycopg.sql.SQL(", ").join(
+        psycopg.sql.Identifier(c) for c in oc.conflict_columns
+    )
+    if oc.action == "nothing":
+        return psycopg.sql.SQL("ON CONFLICT ({cols}) DO NOTHING").format(
+            cols=conflict_cols
+        )
+
+    # action == "update"
+    set_parts: list[psycopg.sql.Composable] = [
+        psycopg.sql.SQL("{col} = EXCLUDED.{col}").format(col=psycopg.sql.Identifier(c))
+        for c in oc.update_columns
+    ]
+    for col, expr in oc.update_expressions.items():
+        set_parts.append(
+            psycopg.sql.SQL("{col} = ").format(col=psycopg.sql.Identifier(col))
+            + psycopg.sql.SQL(expr)
+        )
+    return psycopg.sql.SQL("ON CONFLICT ({cols}) DO UPDATE SET {sets}").format(
+        cols=conflict_cols,
+        sets=psycopg.sql.SQL(", ").join(set_parts),
+    )
+
+
+async def async_bulk_insert(
+    table: str,
+    columns: list[str],
+    data: list[tuple],
+    on_conflict: OnConflict | None = None,
+):
+    """Async bulk insert with optional ON CONFLICT clause.
+
+    Mirrors the sync ``PostgresConnectionManager.bulk_insert`` method but
+    uses the psycopg3 async pool.  SQL composition uses ``psycopg.sql``
+    for safe identifier quoting.
+    """
+    if not data:
+        return 0
+
+    table_id = psycopg.sql.Identifier(table)
+    col_ids = psycopg.sql.SQL(", ").join(psycopg.sql.Identifier(c) for c in columns)
+    placeholders = psycopg.sql.SQL(", ").join(
+        psycopg.sql.Placeholder() for _ in columns
+    )
+
+    query = psycopg.sql.SQL(
+        "INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+    ).format(table=table_id, columns=col_ids, placeholders=placeholders)
+
+    if on_conflict:
+        query = psycopg.sql.SQL("{query} {conflict}").format(
+            query=query, conflict=_build_on_conflict_psycopg3(on_conflict)
+        )
+
+    async with get_async_dict_cursor(commit=True) as cur:
+        await cur.executemany(query, data)
+        return cur.rowcount
+
+
 @contextmanager
 def get_db_connection():
     """Get a database connection context manager for backward compatibility."""
@@ -512,7 +656,7 @@ def get_dict_cursor(commit: bool = True):
 
 
 def execute_bulk_operation(
-    table: str, columns: list, data: list, on_conflict: str = None
+    table: str, columns: list, data: list, on_conflict: OnConflict | None = None
 ):
     """Execute bulk insert operation with optimized performance."""
     return _postgres_manager.bulk_insert(table, columns, data, on_conflict)

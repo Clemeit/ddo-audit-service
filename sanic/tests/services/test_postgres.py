@@ -1,11 +1,12 @@
-from contextlib import contextmanager
+from contextlib import contextmanager, asynccontextmanager
 from datetime import datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 
 import services.postgres as postgres_service
+from services.postgres import OnConflict
 
 
 def _mock_connection_and_cursor():
@@ -247,7 +248,7 @@ def test_bulk_insert_executes_many_and_returns_rowcount(monkeypatch):
         table="characters",
         columns=["id", "name"],
         data=data,
-        on_conflict="ON CONFLICT (id) DO NOTHING",
+        on_conflict=OnConflict(conflict_columns=["id"], action="nothing"),
     )
 
     assert result == 2
@@ -369,3 +370,107 @@ def test_get_pool_stats_returns_runtime_and_pool_metrics():
     assert stats["runtime_stats"]["connection_errors"] == 2
     assert stats["runtime_stats"]["uptime_seconds"] >= 0
     assert stats["runtime_stats"]["requests_per_second"] >= 0
+
+
+# ============================
+# Async helper tests (Phase 1)
+# ============================
+
+
+def _mock_async_cursor():
+    """Create a mock async cursor and context manager for get_async_dict_cursor."""
+    cursor = AsyncMock()
+    cursor.rowcount = 0
+
+    @asynccontextmanager
+    async def _fake_cursor(commit=True):
+        yield cursor
+
+    return cursor, _fake_cursor
+
+
+def test_async_execute_many_returns_rowcount(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.rowcount = 5
+
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(
+        postgres_service.async_execute_many(
+            "INSERT INTO t (a) VALUES (%s)", [(1,), (2,), (3,), (4,), (5,)]
+        )
+    )
+
+    assert result == 5
+    cursor.executemany.assert_awaited_once()
+    call_args = cursor.executemany.call_args
+    assert call_args[0][1] == [(1,), (2,), (3,), (4,), (5,)]
+
+
+def test_async_bulk_insert_returns_zero_for_empty_data(run_async):
+    result = run_async(postgres_service.async_bulk_insert("characters", ["id"], []))
+    assert result == 0
+
+
+def test_async_bulk_insert_executes_with_conflict(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.rowcount = 2
+
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    data = [(1, "Alice"), (2, "Bob")]
+    result = run_async(
+        postgres_service.async_bulk_insert(
+            table="characters",
+            columns=["id", "name"],
+            data=data,
+            on_conflict=OnConflict(conflict_columns=["id"], action="nothing"),
+        )
+    )
+
+    assert result == 2
+    cursor.executemany.assert_awaited_once()
+    call_args = cursor.executemany.call_args
+    # Verify the data was passed correctly
+    assert call_args[0][1] == data
+
+
+def test_async_bulk_insert_without_conflict(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.rowcount = 3
+
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    data = [(1,), (2,), (3,)]
+    result = run_async(
+        postgres_service.async_bulk_insert(
+            table="items",
+            columns=["id"],
+            data=data,
+        )
+    )
+
+    assert result == 3
+    cursor.executemany.assert_awaited_once()
+
+
+def test_async_pool_default_max_size_is_twenty():
+    """Verify the async pool max size default was bumped to 20."""
+    assert postgres_service.POSTGRES_ASYNC_MAX_CONN == 20
+
+
+def test_get_async_dict_cursor_raises_when_pool_not_initialized(monkeypatch, run_async):
+    monkeypatch.setattr(postgres_service, "_async_pool", None)
+
+    with pytest.raises(RuntimeError, match="Async Postgres pool not initialized"):
+        run_async(postgres_service.async_execute_many("SELECT 1", []))
+
+
+def test_on_conflict_rejects_invalid_action():
+    with pytest.raises(ValueError, match="must be 'nothing' or 'update'"):
+        OnConflict(conflict_columns=["id"], action="drop")
+
+
+def test_on_conflict_update_requires_columns_or_expressions():
+    with pytest.raises(ValueError, match="requires at least one"):
+        OnConflict(conflict_columns=["id"], action="update")

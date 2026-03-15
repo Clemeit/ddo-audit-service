@@ -35,7 +35,7 @@ class TestGetCachedDataWithFallback:
         assert result is cached
         assert set_calls == []
 
-    def test_regenerates_and_caches_when_cache_miss(self, monkeypatch):
+    def test_returns_empty_dict_as_valid_cached_value(self, monkeypatch):
         set_calls = []
 
         monkeypatch.setattr(population.redis_client, "get_by_key", lambda key: {})
@@ -45,13 +45,20 @@ class TestGetCachedDataWithFallback:
             lambda key, value, ttl=None: set_calls.append((key, value, ttl)),
         )
 
-        fresh = {"from": "db"}
+        fallback_called = False
+
+        def fallback():
+            nonlocal fallback_called
+            fallback_called = True
+            return {"from": "db"}
+
         result = population.get_cached_data_with_fallback(
-            "population_day", lambda: fresh, 90
+            "population_day", fallback, 90
         )
 
-        assert result == fresh
-        assert set_calls == [("population_day", fresh, 90)]
+        assert result == {}
+        assert fallback_called is False
+        assert set_calls == []
 
 
 class TestPopulationHelperFunctions:

@@ -396,7 +396,7 @@ def compute_all_quest_relative_metrics_pass2(all_quests: list[Quest]) -> dict:
 
         with get_redis_client() as redis_client:
             cached_data = redis_client.hgetall(REDIS_QUEST_ANALYTICS_CACHE_KEY)
-            if not cached_data:
+            if cached_data is None:
                 logger.error("[PASS 2] No cached analytics found in Redis")
                 raise RuntimeError(
                     "Pass 2 requires Pass 1 analytics cache in Redis. Run Pass 1 first."
