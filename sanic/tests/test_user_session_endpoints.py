@@ -1,15 +1,7 @@
 from types import SimpleNamespace
 
 import endpoints.user as user_endpoints
-
-
-def _amock(fn):
-    """Wrap a sync function to return a coroutine."""
-
-    async def wrapper(*a, **kw):
-        return fn(*a, **kw)
-
-    return wrapper
+from conftest import _amock
 
 
 def test_get_user_profile_requires_authenticated_user_id(

@@ -1,15 +1,7 @@
 from types import SimpleNamespace
 
 import endpoints.auth as auth_endpoints
-
-
-def _amock(fn):
-    """Wrap a sync function to return a coroutine."""
-
-    async def wrapper(*a, **kw):
-        return fn(*a, **kw)
-
-    return wrapper
+from conftest import _amock
 
 
 def test_register_returns_400_when_json_body_missing(

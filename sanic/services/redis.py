@@ -178,7 +178,13 @@ class RedisConnectionManager:
             pass
 
     async def get_async_client(self) -> aioredis.Redis:
-        """Get an asynchronous Redis client from the connection pool."""
+        """Get an asynchronous Redis client from the connection pool.
+
+        The returned client is backed by the shared connection pool; callers
+        should NOT call ``aclose()`` — connections are returned to the pool
+        automatically when the client goes out of scope, mirroring the
+        synchronous ``get_sync_client`` behaviour.
+        """
         if not self._is_initialized:
             raise RuntimeError("Redis connection manager not initialized")
 
@@ -199,7 +205,6 @@ class RedisConnectionManager:
         try:
             client = await self.get_async_client()
             response = await client.ping()
-            await client.aclose()
             return response is True
         except Exception as e:
             logger.error(f"Async Redis health check failed: {e}")
@@ -365,11 +370,6 @@ async def traffic_increment(
     except Exception as e:
         # Never break requests if Redis is degraded.
         logger.warning(f"traffic_increment failed: {e}")
-    finally:
-        try:
-            await client.aclose()
-        except Exception:
-            pass
 
 
 async def _traffic_top_zset(
@@ -415,11 +415,6 @@ async def _traffic_top_zset(
     except Exception as e:
         logger.warning(f"_traffic_top_zset failed: {e}")
         return []
-    finally:
-        try:
-            await client.aclose()
-        except Exception:
-            pass
 
 
 async def traffic_top_ips(
@@ -1255,107 +1250,6 @@ def _compute_auth_cache_ttl(expires_at: Optional[Any]) -> int:
     return AUTH_CACHE_TTL_SECONDS
 
 
-def get_cached_user_auth_version(user_id: int) -> Optional[int]:
-    """Get a cached auth version for a user."""
-    try:
-        with get_redis_client() as client:
-            raw_value = client.get(f"{AUTH_USER_VERSION_PREFIX}{user_id}")
-            if raw_value is None:
-                return None
-            if isinstance(raw_value, bytes):
-                raw_value = raw_value.decode("utf-8")
-            return int(raw_value)
-    except Exception:
-        return None
-
-
-def cache_user_auth_version(user_id: int, auth_version: int) -> None:
-    """Cache a user's auth version."""
-    try:
-        with get_redis_client() as client:
-            client.setex(
-                f"{AUTH_USER_VERSION_PREFIX}{user_id}",
-                AUTH_CACHE_TTL_SECONDS,
-                int(auth_version),
-            )
-    except Exception:
-        pass
-
-
-def clear_cached_user_auth_version(user_id: int) -> None:
-    """Remove a cached auth version for a user."""
-    try:
-        with get_redis_client() as client:
-            client.delete(f"{AUTH_USER_VERSION_PREFIX}{user_id}")
-    except Exception:
-        pass
-
-
-def get_cached_auth_session(session_id: str) -> Optional[dict]:
-    """Get a cached auth session by session id."""
-    try:
-        with get_redis_client() as client:
-            raw_value = client.get(f"{AUTH_SESSION_PREFIX}{session_id}")
-            if not raw_value:
-                return None
-            if isinstance(raw_value, bytes):
-                raw_value = raw_value.decode("utf-8")
-            payload = json.loads(raw_value)
-            return payload if isinstance(payload, dict) else None
-    except Exception:
-        return None
-
-
-def cache_auth_session(session_id: str, session_data: dict) -> None:
-    """Cache auth session metadata used by JWT middleware."""
-    try:
-        payload = {
-            key: _normalize_datetime_for_cache(value)
-            for key, value in session_data.items()
-            if key
-            in {
-                "session_id",
-                "user_id",
-                "auth_version",
-                "expires_at",
-                "revoked_at",
-                "revoke_reason",
-                "updated_at",
-            }
-        }
-        ttl = _compute_auth_cache_ttl(payload.get("expires_at"))
-        with get_redis_client() as client:
-            client.setex(
-                f"{AUTH_SESSION_PREFIX}{session_id}",
-                ttl,
-                json.dumps(payload),
-            )
-    except Exception:
-        pass
-
-
-def clear_cached_auth_session(session_id: str) -> None:
-    """Remove a cached auth session."""
-    try:
-        with get_redis_client() as client:
-            client.delete(f"{AUTH_SESSION_PREFIX}{session_id}")
-    except Exception:
-        pass
-
-
-def clear_cached_auth_sessions(session_ids: List[str]) -> None:
-    """Remove multiple cached auth sessions in one call."""
-    if not session_ids:
-        return
-
-    try:
-        with get_redis_client() as client:
-            keys = [f"{AUTH_SESSION_PREFIX}{session_id}" for session_id in session_ids]
-            client.delete(*keys)
-    except Exception:
-        pass
-
-
 # ========================================
 # Async auth cache operations (non-blocking, for use in Sanic middleware/endpoints)
 # ========================================
@@ -1363,7 +1257,6 @@ def clear_cached_auth_sessions(session_ids: List[str]) -> None:
 
 async def async_get_cached_user_auth_version(user_id: int) -> Optional[int]:
     """Get a cached auth version for a user (async)."""
-    client = None
     try:
         client = await get_async_redis_client()
         raw_value = await client.get(f"{AUTH_USER_VERSION_PREFIX}{user_id}")
@@ -1374,17 +1267,10 @@ async def async_get_cached_user_auth_version(user_id: int) -> Optional[int]:
         return int(raw_value)
     except Exception:
         return None
-    finally:
-        if client:
-            try:
-                await client.aclose()
-            except Exception:
-                pass
 
 
 async def async_cache_user_auth_version(user_id: int, auth_version: int) -> None:
     """Cache a user's auth version (async)."""
-    client = None
     try:
         client = await get_async_redis_client()
         await client.setex(
@@ -1394,17 +1280,10 @@ async def async_cache_user_auth_version(user_id: int, auth_version: int) -> None
         )
     except Exception:
         pass
-    finally:
-        if client:
-            try:
-                await client.aclose()
-            except Exception:
-                pass
 
 
 async def async_get_cached_auth_session(session_id: str) -> Optional[dict]:
     """Get a cached auth session by session id (async)."""
-    client = None
     try:
         client = await get_async_redis_client()
         raw_value = await client.get(f"{AUTH_SESSION_PREFIX}{session_id}")
@@ -1416,17 +1295,10 @@ async def async_get_cached_auth_session(session_id: str) -> Optional[dict]:
         return payload if isinstance(payload, dict) else None
     except Exception:
         return None
-    finally:
-        if client:
-            try:
-                await client.aclose()
-            except Exception:
-                pass
 
 
 async def async_cache_auth_session(session_id: str, session_data: dict) -> None:
     """Cache auth session metadata used by JWT middleware (async)."""
-    client = None
     try:
         payload = {
             key: _normalize_datetime_for_cache(value)
@@ -1451,28 +1323,15 @@ async def async_cache_auth_session(session_id: str, session_data: dict) -> None:
         )
     except Exception:
         pass
-    finally:
-        if client:
-            try:
-                await client.aclose()
-            except Exception:
-                pass
 
 
 async def async_clear_cached_auth_session(session_id: str) -> None:
     """Remove a cached auth session (async)."""
-    client = None
     try:
         client = await get_async_redis_client()
         await client.delete(f"{AUTH_SESSION_PREFIX}{session_id}")
     except Exception:
         pass
-    finally:
-        if client:
-            try:
-                await client.aclose()
-            except Exception:
-                pass
 
 
 async def async_clear_cached_auth_sessions(session_ids: List[str]) -> None:
@@ -1480,19 +1339,12 @@ async def async_clear_cached_auth_sessions(session_ids: List[str]) -> None:
     if not session_ids:
         return
 
-    client = None
     try:
         client = await get_async_redis_client()
         keys = [f"{AUTH_SESSION_PREFIX}{session_id}" for session_id in session_ids]
         await client.delete(*keys)
     except Exception:
         pass
-    finally:
-        if client:
-            try:
-                await client.aclose()
-            except Exception:
-                pass
 
 
 def store_one_time_user_settings(user_id: str, settings: dict):

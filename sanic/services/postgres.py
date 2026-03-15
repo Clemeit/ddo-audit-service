@@ -1,6 +1,7 @@
 import json
 import os
 import logging
+from collections import defaultdict
 from contextlib import contextmanager, asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from time import time
@@ -91,7 +92,7 @@ class PostgresConnectionManager:
         logger.info("Initializing PostgreSQL connection pool...")
 
         try:
-            self._connection_pool = pool.ThreadedConnectionPool(
+            self._connection_pool = pool.SimpleConnectionPool(
                 minconn=POSTGRES_MIN_CONN,
                 maxconn=POSTGRES_MAX_CONN,
                 **DB_CONFIG,
@@ -416,6 +417,7 @@ def reset_postgres_connection_stats():
 # ========================================
 
 import psycopg
+import psycopg.conninfo
 import psycopg.rows
 from psycopg_pool import AsyncConnectionPool
 
@@ -424,12 +426,15 @@ _async_pool: Optional[AsyncConnectionPool] = None
 POSTGRES_ASYNC_MIN_CONN = int(os.getenv("POSTGRES_ASYNC_MIN_SIZE", "2"))
 POSTGRES_ASYNC_MAX_CONN = int(os.getenv("POSTGRES_ASYNC_MAX_SIZE", "10"))
 
-_ASYNC_CONNINFO = (
-    f"host={POSTGRES_HOST} port={POSTGRES_PORT} dbname={POSTGRES_DB} "
-    f"user={POSTGRES_USER} password={POSTGRES_PASSWORD} "
-    f"connect_timeout={POSTGRES_CONNECT_TIMEOUT} "
-    f"application_name={POSTGRES_APPLICATION_NAME} "
-    f"options='-c statement_timeout={POSTGRES_COMMAND_TIMEOUT * 1000}'"
+_ASYNC_CONNINFO = psycopg.conninfo.make_conninfo(
+    host=POSTGRES_HOST,
+    port=POSTGRES_PORT,
+    dbname=POSTGRES_DB,
+    user=POSTGRES_USER,
+    password=POSTGRES_PASSWORD,
+    connect_timeout=POSTGRES_CONNECT_TIMEOUT,
+    application_name=POSTGRES_APPLICATION_NAME,
+    options=f"-c statement_timeout={POSTGRES_COMMAND_TIMEOUT * 1000}",
 )
 
 
@@ -463,7 +468,12 @@ async def close_async_postgres():
 
 @asynccontextmanager
 async def get_async_dict_cursor(commit: bool = True):
-    """Async dict cursor backed by the psycopg3 pool."""
+    """Async dict cursor backed by the psycopg3 pool.
+
+    On normal exit the transaction is committed (when *commit* is True).
+    If the caller raises, psycopg3's pool context manager automatically
+    rolls back the uncommitted transaction so no partial writes persist.
+    """
     if _async_pool is None:
         raise RuntimeError("Async Postgres pool not initialized")
     async with _async_pool.connection() as conn:
@@ -873,8 +883,6 @@ def add_or_update_characters(characters: list[dict]):
 
                 # Group characters by their field set so we can reuse
                 # the same query for all characters with the same shape
-                from collections import defaultdict
-
                 groups = defaultdict(list)
                 for character in batch:
                     fields = tuple(
@@ -4698,464 +4706,6 @@ def truncate_quest_sessions() -> None:
                     "Failed to reset statement_timeout after truncate_quest_sessions",
                     exc_info=True,
                 )
-
-
-# User management functions
-def get_user_by_username(username: str) -> Optional[dict]:
-    """Get user by username."""
-    try:
-        with get_dict_cursor(commit=False) as cursor:
-            cursor.execute(
-                "SELECT id, username, password_hash, auth_version, created_at, updated_at FROM users WHERE LOWER(username) = LOWER(%s)",
-                (username,),
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-    except Exception as e:
-        logger.error(f"Failed to get user by username: {e}")
-        return None
-
-
-def get_user_by_id(user_id: int) -> Optional[dict]:
-    """Get user by ID."""
-    try:
-        with get_dict_cursor(commit=False) as cursor:
-            cursor.execute(
-                "SELECT id, username, password_hash, auth_version, created_at, updated_at FROM users WHERE id = %s",
-                (user_id,),
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-    except Exception as e:
-        logger.error(f"Failed to get user by ID: {e}")
-        return None
-
-
-def create_user(username: str, password_hash: str) -> Optional[dict]:
-    """Create a new user."""
-    try:
-        with get_dict_cursor(commit=True) as cursor:
-            cursor.execute(
-                "INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id, username, auth_version, created_at, updated_at",
-                (username, password_hash),
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-    except psycopg2.errors.UniqueViolation as e:
-        raise UsernameAlreadyExistsError("Username already exists") from e
-    except Exception as e:
-        logger.error(f"Failed to create user: {e}")
-        return None
-
-
-def create_user_with_settings(username: str, password_hash: str) -> Optional[dict]:
-    """Create a new user and their settings row in a single transaction."""
-    try:
-        with get_dict_cursor(commit=True) as cursor:
-            cursor.execute(
-                "INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id, username, auth_version, created_at, updated_at",
-                (username, password_hash),
-            )
-            row = cursor.fetchone()
-            if not row:
-                raise RuntimeError("User INSERT returned no row")
-            user = dict(row)
-            cursor.execute(
-                "INSERT INTO user_settings (user_id, settings) VALUES (%s, '{}'::jsonb)",
-                (user["id"],),
-            )
-            return user
-    except psycopg2.errors.UniqueViolation as e:
-        raise UsernameAlreadyExistsError("Username already exists") from e
-    except Exception as e:
-        logger.error(f"Failed to create user with settings: {e}")
-        raise
-
-
-def create_user_with_settings_and_auth_session(
-    username: str,
-    password_hash: str,
-    session_id: str,
-    refresh_token_hash: str,
-    expires_at: datetime,
-    created_ip: Optional[str] = None,
-    created_user_agent: Optional[str] = None,
-) -> Optional[dict]:
-    """Create user/settings/session atomically in one transaction."""
-    try:
-        with get_dict_cursor(commit=True) as cursor:
-            cursor.execute(
-                "INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id, username, auth_version, created_at, updated_at",
-                (username, password_hash),
-            )
-            user_row = cursor.fetchone()
-            if not user_row:
-                raise RuntimeError("User INSERT returned no row")
-            user = dict(user_row)
-
-            cursor.execute(
-                "INSERT INTO user_settings (user_id, settings) VALUES (%s, '{}'::jsonb)",
-                (user["id"],),
-            )
-
-            cursor.execute(
-                """
-                INSERT INTO auth_sessions (
-                    session_id,
-                    user_id,
-                    refresh_token_hash,
-                    auth_version,
-                    expires_at,
-                    created_ip,
-                    created_user_agent
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING session_id, user_id, refresh_token_hash, auth_version,
-                          created_at, last_used_at, expires_at, revoked_at,
-                          revoke_reason, created_ip, created_user_agent, updated_at
-                """,
-                (
-                    session_id,
-                    user["id"],
-                    refresh_token_hash,
-                    int(user["auth_version"]),
-                    expires_at,
-                    created_ip,
-                    created_user_agent,
-                ),
-            )
-            session_row = cursor.fetchone()
-            if not session_row:
-                raise RuntimeError("Auth session INSERT returned no row")
-
-            return {
-                "user": user,
-                "session": dict(session_row),
-            }
-    except psycopg2.errors.UniqueViolation as e:
-        if e.diag.constraint_name in (
-            "users_username_key",
-            "idx_users_username_lower_unique",
-        ):
-            raise UsernameAlreadyExistsError("Username already exists") from e
-        logger.error(f"Unexpected unique violation: {e.diag.constraint_name}")
-        return None
-    except Exception as e:
-        logger.error(f"Failed to create user/settings/session atomically: {e}")
-        return None
-
-
-def update_user_password(user_id: int, password_hash: str) -> bool:
-    """Update user's password."""
-    try:
-        with get_db_cursor(commit=True) as cursor:
-            cursor.execute(
-                "UPDATE users SET password_hash = %s, updated_at = NOW() WHERE id = %s",
-                (password_hash, user_id),
-            )
-            return cursor.rowcount > 0
-    except Exception as e:
-        logger.error(f"Failed to update user password: {e}")
-        return False
-
-
-def get_user_auth_version(user_id: int) -> Optional[int]:
-    """Get the current auth version for a user."""
-    try:
-        with get_db_cursor(commit=False) as cursor:
-            cursor.execute("SELECT auth_version FROM users WHERE id = %s", (user_id,))
-            row = cursor.fetchone()
-            return int(row[0]) if row else None
-    except Exception as e:
-        logger.error(f"Failed to get user auth version: {e}")
-        return None
-
-
-def create_auth_session(
-    session_id: str,
-    user_id: int,
-    refresh_token_hash: str,
-    auth_version: int,
-    expires_at: datetime,
-    created_ip: Optional[str] = None,
-    created_user_agent: Optional[str] = None,
-) -> Optional[dict]:
-    """Create a persistent auth session for a user."""
-    try:
-        with get_dict_cursor(commit=True) as cursor:
-            cursor.execute(
-                """
-                INSERT INTO auth_sessions (
-                    session_id,
-                    user_id,
-                    refresh_token_hash,
-                    auth_version,
-                    expires_at,
-                    created_ip,
-                    created_user_agent
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING session_id, user_id, refresh_token_hash, auth_version,
-                          created_at, last_used_at, expires_at, revoked_at,
-                          revoke_reason, created_ip, created_user_agent, updated_at
-                """,
-                (
-                    session_id,
-                    user_id,
-                    refresh_token_hash,
-                    auth_version,
-                    expires_at,
-                    created_ip,
-                    created_user_agent,
-                ),
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-    except Exception as e:
-        logger.error(f"Failed to create auth session: {e}")
-        return None
-
-
-def get_auth_session(session_id: str) -> Optional[dict]:
-    """Get an auth session by its session id."""
-    try:
-        with get_dict_cursor(commit=False) as cursor:
-            cursor.execute(
-                """
-                SELECT session_id, user_id, refresh_token_hash, auth_version,
-                       created_at, last_used_at, expires_at, revoked_at,
-                       revoke_reason, created_ip, created_user_agent, updated_at
-                FROM auth_sessions
-                WHERE session_id = %s
-                """,
-                (session_id,),
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-    except Exception as e:
-        logger.error(f"Failed to get auth session: {e}")
-        return None
-
-
-def get_auth_session_by_refresh_token_hash(refresh_token_hash: str) -> Optional[dict]:
-    """Get an auth session by the stored refresh token hash."""
-    try:
-        with get_dict_cursor(commit=False) as cursor:
-            cursor.execute(
-                """
-                SELECT session_id, user_id, refresh_token_hash, auth_version,
-                       created_at, last_used_at, expires_at, revoked_at,
-                       revoke_reason, created_ip, created_user_agent, updated_at
-                FROM auth_sessions
-                WHERE refresh_token_hash = %s
-                """,
-                (refresh_token_hash,),
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-    except Exception as e:
-        logger.error(f"Failed to get auth session by refresh token hash: {e}")
-        return None
-
-
-def rotate_auth_session_refresh_token(
-    session_id: str,
-    current_refresh_token_hash: str,
-    refresh_token_hash: str,
-    expires_at: datetime,
-) -> Optional[dict]:
-    """Rotate the refresh token for an existing session using compare-and-set."""
-    try:
-        with get_dict_cursor(commit=True) as cursor:
-            cursor.execute(
-                """
-                UPDATE auth_sessions
-                SET refresh_token_hash = %s,
-                    expires_at = %s,
-                    last_used_at = NOW(),
-                    updated_at = NOW()
-                WHERE session_id = %s
-                  AND refresh_token_hash = %s
-                  AND revoked_at IS NULL
-                  AND expires_at > NOW()
-                RETURNING session_id, user_id, refresh_token_hash, auth_version,
-                          created_at, last_used_at, expires_at, revoked_at,
-                          revoke_reason, created_ip, created_user_agent, updated_at
-                """,
-                (
-                    refresh_token_hash,
-                    expires_at,
-                    session_id,
-                    current_refresh_token_hash,
-                ),
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-    except Exception as e:
-        logger.error(f"Failed to rotate auth session refresh token: {e}")
-        return None
-
-
-def revoke_auth_session(session_id: str, revoke_reason: str) -> bool:
-    """Idempotently revoke a single auth session."""
-    try:
-        with get_db_cursor(commit=True) as cursor:
-            cursor.execute(
-                """
-                UPDATE auth_sessions
-                SET revoked_at = NOW(), revoke_reason = %s, updated_at = NOW()
-                WHERE session_id = %s AND revoked_at IS NULL
-                """,
-                (revoke_reason, session_id),
-            )
-            # Idempotent behavior: missing or already-revoked sessions are success.
-            return True
-    except Exception as e:
-        logger.error(f"Failed to revoke auth session: {e}")
-        return False
-
-
-def revoke_all_auth_sessions_for_user(user_id: int, revoke_reason: str) -> list[str]:
-    """Revoke all active auth sessions for a user and return the affected session ids."""
-    try:
-        with get_dict_cursor(commit=True) as cursor:
-            cursor.execute(
-                """
-                UPDATE auth_sessions
-                SET revoked_at = NOW(), revoke_reason = %s, updated_at = NOW()
-                WHERE user_id = %s AND revoked_at IS NULL
-                RETURNING session_id
-                """,
-                (revoke_reason, user_id),
-            )
-            rows = cursor.fetchall() or []
-            return [str(row["session_id"]) for row in rows]
-    except Exception as e:
-        logger.error(f"Failed to revoke all auth sessions for user: {e}")
-        return []
-
-
-def change_password_and_create_session(
-    user_id: int,
-    password_hash: str,
-    session_id: str,
-    refresh_token_hash: str,
-    expires_at: datetime,
-    created_ip: Optional[str] = None,
-    created_user_agent: Optional[str] = None,
-    revoke_reason: str = "password_changed",
-) -> Optional[dict]:
-    """Update password, invalidate all existing sessions, and create a new session."""
-    try:
-        with get_dict_cursor(commit=True) as cursor:
-            cursor.execute(
-                """
-                UPDATE users
-                SET password_hash = %s,
-                    auth_version = auth_version + 1,
-                    updated_at = NOW()
-                WHERE id = %s
-                RETURNING id, username, auth_version, created_at, updated_at
-                """,
-                (password_hash, user_id),
-            )
-            user_row = cursor.fetchone()
-            if not user_row:
-                return None
-
-            cursor.execute(
-                """
-                UPDATE auth_sessions
-                SET revoked_at = NOW(), revoke_reason = %s, updated_at = NOW()
-                WHERE user_id = %s AND revoked_at IS NULL
-                RETURNING session_id
-                """,
-                (revoke_reason, user_id),
-            )
-            revoked_rows = cursor.fetchall() or []
-
-            cursor.execute(
-                """
-                INSERT INTO auth_sessions (
-                    session_id,
-                    user_id,
-                    refresh_token_hash,
-                    auth_version,
-                    expires_at,
-                    created_ip,
-                    created_user_agent
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING session_id, user_id, refresh_token_hash, auth_version,
-                          created_at, last_used_at, expires_at, revoked_at,
-                          revoke_reason, created_ip, created_user_agent, updated_at
-                """,
-                (
-                    session_id,
-                    user_id,
-                    refresh_token_hash,
-                    int(user_row["auth_version"]),
-                    expires_at,
-                    created_ip,
-                    created_user_agent,
-                ),
-            )
-            session_row = cursor.fetchone()
-            if not session_row:
-                return None
-
-            result = dict(session_row)
-            result["auth_version"] = int(user_row["auth_version"])
-            result["revoked_session_ids"] = [
-                str(row["session_id"]) for row in revoked_rows
-            ]
-            return result
-    except Exception as e:
-        logger.error(f"Failed to change password and create auth session: {e}")
-        return None
-
-
-def create_user_settings(user_id: int) -> bool:
-    """Create empty settings for a new user."""
-    try:
-        with get_db_cursor(commit=True) as cursor:
-            cursor.execute(
-                "INSERT INTO user_settings (user_id, settings) VALUES (%s, '{}'::jsonb) ON CONFLICT DO NOTHING",
-                (user_id,),
-            )
-            return True
-    except Exception as e:
-        logger.error(f"Failed to create user settings: {e}")
-        return False
-
-
-def get_user_settings(user_id: int) -> Optional[dict]:
-    """Get user settings."""
-    try:
-        with get_dict_cursor(commit=False) as cursor:
-            cursor.execute(
-                "SELECT id, user_id, settings, created_at, updated_at FROM user_settings WHERE user_id = %s",
-                (user_id,),
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-    except Exception as e:
-        logger.error(f"Failed to get user settings: {e}")
-        return None
-
-
-def update_user_settings(user_id: int, settings: dict) -> bool:
-    """Update user settings."""
-    try:
-        with get_db_cursor(commit=True) as cursor:
-            cursor.execute(
-                "UPDATE user_settings SET settings = %s, updated_at = NOW() WHERE user_id = %s",
-                (json.dumps(settings), user_id),
-            )
-            return cursor.rowcount > 0
-    except Exception as e:
-        logger.error(f"Failed to update user settings: {e}")
-        return False
 
 
 # ========================================

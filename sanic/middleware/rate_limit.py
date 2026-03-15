@@ -47,36 +47,18 @@ return {count, ttl}
 """
 
 
-def _increment_and_check_limit(rate_limit_key: str, limit: int, window: int):
-    """
-    Atomically increment the rate limit counter and determine if the request is allowed.
-    Returns a tuple (allowed: bool, retry_after: int | None), where retry_after is
-    the remaining TTL in seconds for this rate limit window.
-    """
-    try:
-        with redis_client.get_redis_client() as client:
-            result = client.eval(_RATE_LIMIT_LUA, 1, rate_limit_key, window)
-            current_count = int(result[0])
-            ttl = int(result[1])
-            if current_count > limit:
-                return False, ttl
-            return True, ttl
-    except RuntimeError:
-        # Redis not initialized — fail open
-        return True, None
-
-
 async def _async_increment_and_check_limit(
     rate_limit_key: str, limit: int, window: int
 ):
     """
     Async version: atomically increment the rate limit counter via Lua script.
+    Uses EVALSHA with automatic EVAL fallback for efficiency.
     Returns a tuple (allowed: bool, retry_after: int | None).
     """
-    client = None
     try:
         client = await redis_client.get_async_redis_client()
-        result = await client.eval(_RATE_LIMIT_LUA, 1, rate_limit_key, window)
+        script = client.register_script(_RATE_LIMIT_LUA)
+        result = await script(keys=[rate_limit_key], args=[window])
         current_count = int(result[0])
         ttl = int(result[1])
         if current_count > limit:
@@ -84,12 +66,6 @@ async def _async_increment_and_check_limit(
         return True, ttl
     except RuntimeError:
         return True, None
-    finally:
-        if client:
-            try:
-                await client.aclose()
-            except Exception:
-                pass
 
 
 async def rate_limit_middleware(request: Request):
