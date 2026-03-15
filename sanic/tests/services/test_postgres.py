@@ -90,9 +90,7 @@ def test_get_connection_sets_timeout_and_tracks_stats():
         assert returned is conn
 
     assert conn.autocommit is False
-    cursor.execute.assert_called_once_with(
-        f"SET statement_timeout = '{postgres_service.POSTGRES_COMMAND_TIMEOUT}s'"
-    )
+    cursor.execute.assert_not_called()
     pool_instance.putconn.assert_called_once_with(conn)
     assert manager._connection_stats["total_connections_requested"] == 1
     assert manager._connection_stats["total_connections_returned"] == 1

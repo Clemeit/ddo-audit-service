@@ -767,7 +767,7 @@ def test_get_user_by_id_returns_none_on_failure(monkeypatch, run_async):
         auth_service.postgres_client, "async_get_user_by_id", _amock(_raise_error)
     )
 
-    assert auth_service.get_user_by_id(1) is None
+    assert run_async(auth_service.async_get_user_by_id(1)) is None
 
 
 def test_serialize_datetime_handles_naive_and_none_values():
@@ -852,102 +852,139 @@ def test_get_refresh_token_expiry_uses_configured_ttl(monkeypatch):
     assert before + timedelta(seconds=119) <= expiry <= after + timedelta(seconds=121)
 
 
-def test_get_user_auth_version_returns_cached_value_without_db_lookup(monkeypatch):
+def test_get_user_auth_version_returns_cached_value_without_db_lookup(
+    monkeypatch, run_async
+):
     monkeypatch.setattr(
-        auth_service.redis_client, "get_cached_user_auth_version", lambda user_id: 11
+        auth_service.redis_client,
+        "async_get_cached_user_auth_version",
+        _amock(lambda user_id: 11),
     )
 
     def _raise_if_called(user_id):
         raise AssertionError("DB lookup should not run when cache has value")
 
     monkeypatch.setattr(
-        auth_service.postgres_client, "get_user_auth_version", _raise_if_called
+        auth_service.postgres_client,
+        "async_get_user_auth_version",
+        _amock(_raise_if_called),
     )
 
-    assert auth_service._get_user_auth_version(5) == 11
+    assert run_async(auth_service._async_get_user_auth_version(5)) == 11
 
 
-def test_get_user_auth_version_falls_back_to_db_and_caches(monkeypatch):
+def test_get_user_auth_version_falls_back_to_db_and_caches(monkeypatch, run_async):
     cached_versions = []
 
     monkeypatch.setattr(
-        auth_service.redis_client, "get_cached_user_auth_version", lambda user_id: None
+        auth_service.redis_client,
+        "async_get_cached_user_auth_version",
+        _amock(lambda user_id: None),
     )
     monkeypatch.setattr(
-        auth_service.postgres_client, "get_user_auth_version", lambda user_id: 7
+        auth_service.postgres_client,
+        "async_get_user_auth_version",
+        _amock(lambda user_id: 7),
     )
     monkeypatch.setattr(
         auth_service.redis_client,
-        "cache_user_auth_version",
-        lambda user_id, auth_version: cached_versions.append((user_id, auth_version)),
+        "async_cache_user_auth_version",
+        _amock(
+            lambda user_id, auth_version: cached_versions.append(
+                (user_id, auth_version)
+            )
+        ),
     )
 
-    assert auth_service._get_user_auth_version(15) == 7
+    assert run_async(auth_service._async_get_user_auth_version(15)) == 7
     assert cached_versions == [(15, 7)]
 
 
-def test_get_user_auth_version_returns_none_when_cache_and_db_are_empty(monkeypatch):
+def test_get_user_auth_version_returns_none_when_cache_and_db_are_empty(
+    monkeypatch, run_async
+):
     cached_versions = []
 
     monkeypatch.setattr(
-        auth_service.redis_client, "get_cached_user_auth_version", lambda user_id: None
+        auth_service.redis_client,
+        "async_get_cached_user_auth_version",
+        _amock(lambda user_id: None),
     )
     monkeypatch.setattr(
-        auth_service.postgres_client, "get_user_auth_version", lambda user_id: None
+        auth_service.postgres_client,
+        "async_get_user_auth_version",
+        _amock(lambda user_id: None),
     )
     monkeypatch.setattr(
         auth_service.redis_client,
-        "cache_user_auth_version",
-        lambda user_id, auth_version: cached_versions.append((user_id, auth_version)),
+        "async_cache_user_auth_version",
+        _amock(
+            lambda user_id, auth_version: cached_versions.append(
+                (user_id, auth_version)
+            )
+        ),
     )
 
-    assert auth_service._get_user_auth_version(16) is None
+    assert run_async(auth_service._async_get_user_auth_version(16)) is None
     assert cached_versions == []
 
 
-def test_get_auth_session_returns_cached_session_without_db_lookup(monkeypatch):
+def test_get_auth_session_returns_cached_session_without_db_lookup(
+    monkeypatch, run_async
+):
     cached_session = _active_session(
         session_id="cached-session", user_id=77, auth_version=2
     )
     monkeypatch.setattr(
         auth_service.redis_client,
-        "get_cached_auth_session",
-        lambda session_id: cached_session,
+        "async_get_cached_auth_session",
+        _amock(lambda session_id: cached_session),
     )
 
     def _raise_if_called(session_id):
         raise AssertionError("DB lookup should not run when session cache has value")
 
     monkeypatch.setattr(
-        auth_service.postgres_client, "get_auth_session", _raise_if_called
+        auth_service.postgres_client,
+        "async_get_auth_session",
+        _amock(_raise_if_called),
     )
 
-    assert auth_service._get_auth_session("cached-session") == cached_session
+    assert (
+        run_async(auth_service._async_get_auth_session("cached-session"))
+        == cached_session
+    )
 
 
-def test_get_auth_session_caches_active_db_session(monkeypatch):
+def test_get_auth_session_caches_active_db_session(monkeypatch, run_async):
     cached_sessions = []
     db_session = _active_session(session_id="db-session", user_id=88, auth_version=3)
 
     monkeypatch.setattr(
-        auth_service.redis_client, "get_cached_auth_session", lambda session_id: None
+        auth_service.redis_client,
+        "async_get_cached_auth_session",
+        _amock(lambda session_id: None),
     )
     monkeypatch.setattr(
-        auth_service.postgres_client, "get_auth_session", lambda session_id: db_session
+        auth_service.postgres_client,
+        "async_get_auth_session",
+        _amock(lambda session_id: db_session),
     )
     monkeypatch.setattr(
         auth_service.redis_client,
-        "cache_auth_session",
-        lambda session_id, session_data: cached_sessions.append(
-            (session_id, session_data)
+        "async_cache_auth_session",
+        _amock(
+            lambda session_id, session_data: cached_sessions.append(
+                (session_id, session_data)
+            )
         ),
     )
 
-    assert auth_service._get_auth_session("db-session") == db_session
+    assert run_async(auth_service._async_get_auth_session("db-session")) == db_session
     assert cached_sessions == [("db-session", db_session)]
 
 
-def test_get_auth_session_clears_inactive_db_session(monkeypatch):
+def test_get_auth_session_clears_inactive_db_session(monkeypatch, run_async):
     cleared_sessions = []
     inactive_session = {
         **_active_session(session_id="expired-session", user_id=89, auth_version=3),
@@ -955,24 +992,31 @@ def test_get_auth_session_clears_inactive_db_session(monkeypatch):
     }
 
     monkeypatch.setattr(
-        auth_service.redis_client, "get_cached_auth_session", lambda session_id: None
+        auth_service.redis_client,
+        "async_get_cached_auth_session",
+        _amock(lambda session_id: None),
     )
     monkeypatch.setattr(
         auth_service.postgres_client,
-        "get_auth_session",
-        lambda session_id: inactive_session,
+        "async_get_auth_session",
+        _amock(lambda session_id: inactive_session),
     )
     monkeypatch.setattr(
         auth_service.redis_client,
-        "clear_cached_auth_session",
-        lambda session_id: cleared_sessions.append(session_id),
+        "async_clear_cached_auth_session",
+        _amock(lambda session_id: cleared_sessions.append(session_id)),
     )
 
-    assert auth_service._get_auth_session("expired-session") == inactive_session
+    assert (
+        run_async(auth_service._async_get_auth_session("expired-session"))
+        == inactive_session
+    )
     assert cleared_sessions == ["expired-session"]
 
 
-def test_validate_access_token_rejects_invalid_user_or_auth_version(monkeypatch):
+def test_validate_access_token_rejects_invalid_user_or_auth_version(
+    monkeypatch, run_async
+):
     monkeypatch.setattr(
         auth_service,
         "verify_jwt_token",
@@ -983,10 +1027,10 @@ def test_validate_access_token_rejects_invalid_user_or_auth_version(monkeypatch)
         },
     )
 
-    assert auth_service.validate_access_token("access-token") is None
+    assert run_async(auth_service.async_validate_access_token("access-token")) is None
 
 
-def test_validate_access_token_rejects_missing_session_id(monkeypatch):
+def test_validate_access_token_rejects_missing_session_id(monkeypatch, run_async):
     monkeypatch.setattr(
         auth_service,
         "verify_jwt_token",
@@ -999,12 +1043,16 @@ def test_validate_access_token_rejects_missing_session_id(monkeypatch):
     def _raise_if_called(user_id):
         raise AssertionError("Should return before auth-version lookup")
 
-    monkeypatch.setattr(auth_service, "_get_user_auth_version", _raise_if_called)
+    monkeypatch.setattr(
+        auth_service,
+        "_async_get_user_auth_version",
+        _amock(_raise_if_called),
+    )
 
-    assert auth_service.validate_access_token("access-token") is None
+    assert run_async(auth_service.async_validate_access_token("access-token")) is None
 
 
-def test_validate_access_token_rejects_session_identity_mismatch(monkeypatch):
+def test_validate_access_token_rejects_session_identity_mismatch(monkeypatch, run_async):
     payload = {
         "user_id": 10,
         "username": "user10",
@@ -1013,19 +1061,27 @@ def test_validate_access_token_rejects_session_identity_mismatch(monkeypatch):
     }
 
     monkeypatch.setattr(auth_service, "verify_jwt_token", lambda token: payload)
-    monkeypatch.setattr(auth_service, "_get_user_auth_version", lambda user_id: 3)
     monkeypatch.setattr(
         auth_service,
-        "_get_auth_session",
-        lambda session_id: _active_session(
-            session_id="session-10", user_id=999, auth_version=3
+        "_async_get_user_auth_version",
+        _amock(lambda user_id: 3),
+    )
+    monkeypatch.setattr(
+        auth_service,
+        "_async_get_auth_session",
+        _amock(
+            lambda session_id: _active_session(
+                session_id="session-10", user_id=999, auth_version=3
+            )
         ),
     )
 
-    assert auth_service.validate_access_token("access-token") is None
+    assert run_async(auth_service.async_validate_access_token("access-token")) is None
 
 
-def test_create_session_returns_internal_error_when_create_fails(monkeypatch):
+def test_create_session_returns_internal_error_when_create_fails(
+    monkeypatch, run_async
+):
     monkeypatch.setattr(
         auth_service.uuid, "uuid4", lambda: SimpleNamespace(hex="session-create-fail")
     )
@@ -1036,14 +1092,18 @@ def test_create_session_returns_internal_error_when_create_fails(monkeypatch):
         auth_service, "get_refresh_token_expiry", lambda: _future_datetime(3600)
     )
     monkeypatch.setattr(
-        auth_service.postgres_client, "create_auth_session", lambda **kwargs: None
+        auth_service.postgres_client,
+        "async_create_auth_session",
+        _amock(lambda **kwargs: None),
     )
 
-    success, data, error = auth_service._create_session(
-        user_id=101,
-        auth_version=4,
-        created_ip="127.0.0.1",
-        created_user_agent="pytest",
+    success, data, error = run_async(
+        auth_service._async_create_session(
+            user_id=101,
+            auth_version=4,
+            created_ip="127.0.0.1",
+            created_user_agent="pytest",
+        )
     )
 
     assert success is False
@@ -1051,7 +1111,9 @@ def test_create_session_returns_internal_error_when_create_fails(monkeypatch):
     assert error == auth_service.AUTH_ERROR_INTERNAL
 
 
-def test_create_session_success_caches_session_and_auth_version(monkeypatch):
+def test_create_session_success_caches_session_and_auth_version(
+    monkeypatch, run_async
+):
     cached_versions = []
     cached_sessions = []
     session_payload = _active_session(
@@ -1071,27 +1133,35 @@ def test_create_session_success_caches_session_and_auth_version(monkeypatch):
     )
     monkeypatch.setattr(
         auth_service.postgres_client,
-        "create_auth_session",
-        lambda **kwargs: session_payload,
+        "async_create_auth_session",
+        _amock(lambda **kwargs: session_payload),
     )
     monkeypatch.setattr(
         auth_service.redis_client,
-        "cache_user_auth_version",
-        lambda user_id, auth_version: cached_versions.append((user_id, auth_version)),
+        "async_cache_user_auth_version",
+        _amock(
+            lambda user_id, auth_version: cached_versions.append(
+                (user_id, auth_version)
+            )
+        ),
     )
     monkeypatch.setattr(
         auth_service.redis_client,
-        "cache_auth_session",
-        lambda session_id, session_data: cached_sessions.append(
-            (session_id, session_data)
+        "async_cache_auth_session",
+        _amock(
+            lambda session_id, session_data: cached_sessions.append(
+                (session_id, session_data)
+            )
         ),
     )
 
-    success, data, error = auth_service._create_session(
-        user_id=102,
-        auth_version=5,
-        created_ip="127.0.0.1",
-        created_user_agent="pytest",
+    success, data, error = run_async(
+        auth_service._async_create_session(
+            user_id=102,
+            auth_version=5,
+            created_ip="127.0.0.1",
+            created_user_agent="pytest",
+        )
     )
 
     assert success is True
@@ -1106,10 +1176,12 @@ def test_create_session_success_caches_session_and_auth_version(monkeypatch):
 
 
 def test_register_user_returns_internal_error_when_transaction_returns_no_data(
-    monkeypatch,
+    monkeypatch, run_async
 ):
     monkeypatch.setattr(
-        auth_service.postgres_client, "get_user_by_username", lambda username: None
+        auth_service.postgres_client,
+        "async_get_user_by_username",
+        _amock(lambda username: None),
     )
     monkeypatch.setattr(auth_service, "hash_password", lambda password: "hashed")
     monkeypatch.setattr(
@@ -1123,37 +1195,47 @@ def test_register_user_returns_internal_error_when_transaction_returns_no_data(
     )
     monkeypatch.setattr(
         auth_service.postgres_client,
-        "create_user_with_settings_and_auth_session",
-        lambda **kwargs: None,
+        "async_create_user_with_settings_and_auth_session",
+        _amock(lambda **kwargs: None),
     )
 
-    success, data, error = auth_service.register_user("new-user", "Password123!")
+    success, data, error = run_async(
+        auth_service.async_register_user("new-user", "Password123!")
+    )
 
     assert success is False
     assert data is None
     assert error == auth_service.AUTH_ERROR_INTERNAL
 
 
-def test_login_user_returns_internal_error_when_session_creation_fails(monkeypatch):
+def test_login_user_returns_internal_error_when_session_creation_fails(
+    monkeypatch, run_async
+):
     monkeypatch.setattr(
         auth_service.postgres_client,
-        "get_user_by_username",
-        lambda username: {
-            "id": 404,
-            "username": username,
-            "password_hash": "hashed",
-            "auth_version": 3,
-            "created_at": _future_datetime(),
-        },
+        "async_get_user_by_username",
+        _amock(
+            lambda username: {
+                "id": 404,
+                "username": username,
+                "password_hash": "hashed",
+                "auth_version": 3,
+                "created_at": _future_datetime(),
+            }
+        ),
     )
     monkeypatch.setattr(
         auth_service, "verify_password", lambda password, password_hash: True
     )
     monkeypatch.setattr(
-        auth_service, "_create_session", lambda **kwargs: (False, None, "session_error")
+        auth_service,
+        "_async_create_session",
+        _amock(lambda **kwargs: (False, None, "session_error")),
     )
 
-    success, data, error = auth_service.login_user("edge-user", "Password123!")
+    success, data, error = run_async(
+        auth_service.async_login_user("edge-user", "Password123!")
+    )
 
     assert success is False
     assert data is None
@@ -1161,7 +1243,7 @@ def test_login_user_returns_internal_error_when_session_creation_fails(monkeypat
 
 
 def test_refresh_session_returns_internal_error_when_session_user_is_missing(
-    monkeypatch,
+    monkeypatch, run_async
 ):
     session = _active_session(
         session_id="missing-user-session", user_id=303, auth_version=2
@@ -1169,14 +1251,16 @@ def test_refresh_session_returns_internal_error_when_session_user_is_missing(
 
     monkeypatch.setattr(
         auth_service.postgres_client,
-        "get_auth_session_by_refresh_token_hash",
-        lambda refresh_token_hash: session,
+        "async_get_auth_session_by_refresh_token_hash",
+        _amock(lambda refresh_token_hash: session),
     )
     monkeypatch.setattr(
-        auth_service.postgres_client, "get_user_by_id", lambda user_id: None
+        auth_service.postgres_client,
+        "async_get_user_by_id",
+        _amock(lambda user_id: None),
     )
 
-    success, data, error = auth_service.refresh_session("refresh-token")
+    success, data, error = run_async(auth_service.async_refresh_session("refresh-token"))
 
     assert success is False
     assert data is None
@@ -1184,7 +1268,7 @@ def test_refresh_session_returns_internal_error_when_session_user_is_missing(
 
 
 def test_refresh_session_returns_internal_error_when_auth_version_unavailable(
-    monkeypatch,
+    monkeypatch, run_async
 ):
     session = _active_session(
         session_id="missing-auth-version", user_id=304, auth_version=2
@@ -1192,28 +1276,34 @@ def test_refresh_session_returns_internal_error_when_auth_version_unavailable(
 
     monkeypatch.setattr(
         auth_service.postgres_client,
-        "get_auth_session_by_refresh_token_hash",
-        lambda refresh_token_hash: session,
+        "async_get_auth_session_by_refresh_token_hash",
+        _amock(lambda refresh_token_hash: session),
     )
     monkeypatch.setattr(
         auth_service.postgres_client,
-        "get_user_by_id",
-        lambda user_id: {
-            "id": 304,
-            "username": "user304",
-            "auth_version": 2,
-        },
+        "async_get_user_by_id",
+        _amock(
+            lambda user_id: {
+                "id": 304,
+                "username": "user304",
+                "auth_version": 2,
+            }
+        ),
     )
-    monkeypatch.setattr(auth_service, "_get_user_auth_version", lambda user_id: None)
+    monkeypatch.setattr(
+        auth_service,
+        "_async_get_user_auth_version",
+        _amock(lambda user_id: None),
+    )
 
-    success, data, error = auth_service.refresh_session("refresh-token")
+    success, data, error = run_async(auth_service.async_refresh_session("refresh-token"))
 
     assert success is False
     assert data is None
     assert error == auth_service.AUTH_ERROR_INTERNAL
 
 
-def test_refresh_session_rejects_when_refresh_rotation_fails(monkeypatch):
+def test_refresh_session_rejects_when_refresh_rotation_fails(monkeypatch, run_async):
     cleared_sessions = []
     session = _active_session(
         session_id="rotate-fail-session", user_id=305, auth_version=4
@@ -1221,19 +1311,25 @@ def test_refresh_session_rejects_when_refresh_rotation_fails(monkeypatch):
 
     monkeypatch.setattr(
         auth_service.postgres_client,
-        "get_auth_session_by_refresh_token_hash",
-        lambda refresh_token_hash: session,
+        "async_get_auth_session_by_refresh_token_hash",
+        _amock(lambda refresh_token_hash: session),
     )
     monkeypatch.setattr(
         auth_service.postgres_client,
-        "get_user_by_id",
-        lambda user_id: {
-            "id": 305,
-            "username": "user305",
-            "auth_version": 4,
-        },
+        "async_get_user_by_id",
+        _amock(
+            lambda user_id: {
+                "id": 305,
+                "username": "user305",
+                "auth_version": 4,
+            }
+        ),
     )
-    monkeypatch.setattr(auth_service, "_get_user_auth_version", lambda user_id: 4)
+    monkeypatch.setattr(
+        auth_service,
+        "_async_get_user_auth_version",
+        _amock(lambda user_id: 4),
+    )
     monkeypatch.setattr(
         auth_service, "generate_refresh_token", lambda: "new-refresh-token"
     )
@@ -1242,16 +1338,16 @@ def test_refresh_session_rejects_when_refresh_rotation_fails(monkeypatch):
     )
     monkeypatch.setattr(
         auth_service.postgres_client,
-        "rotate_auth_session_refresh_token",
-        lambda **kwargs: None,
+        "async_rotate_auth_session_refresh_token",
+        _amock(lambda **kwargs: None),
     )
     monkeypatch.setattr(
         auth_service.redis_client,
-        "clear_cached_auth_session",
-        lambda session_id: cleared_sessions.append(session_id),
+        "async_clear_cached_auth_session",
+        _amock(lambda session_id: cleared_sessions.append(session_id)),
     )
 
-    success, data, error = auth_service.refresh_session("refresh-token")
+    success, data, error = run_async(auth_service.async_refresh_session("refresh-token"))
 
     assert success is False
     assert data is None
@@ -1259,16 +1355,22 @@ def test_refresh_session_rejects_when_refresh_rotation_fails(monkeypatch):
     assert cleared_sessions == ["rotate-fail-session"]
 
 
-def test_change_password_returns_user_not_found_when_user_missing(monkeypatch):
+def test_change_password_returns_user_not_found_when_user_missing(
+    monkeypatch, run_async
+):
     monkeypatch.setattr(
-        auth_service.postgres_client, "get_user_by_id", lambda user_id: None
+        auth_service.postgres_client,
+        "async_get_user_by_id",
+        _amock(lambda user_id: None),
     )
 
-    success, data, error = auth_service.change_password(
-        999,
-        "old-password",
-        "NewPassword1!",
-        "user999",
+    success, data, error = run_async(
+        auth_service.async_change_password(
+            999,
+            "old-password",
+            "NewPassword1!",
+            "user999",
+        )
     )
 
     assert success is False
@@ -1277,18 +1379,20 @@ def test_change_password_returns_user_not_found_when_user_missing(monkeypatch):
 
 
 def test_change_password_returns_error_when_password_update_transaction_fails(
-    monkeypatch,
+    monkeypatch, run_async
 ):
     calls = iter([True, False])
 
     monkeypatch.setattr(
         auth_service.postgres_client,
-        "get_user_by_id",
-        lambda user_id: {
-            "id": user_id,
-            "username": "user330",
-            "password_hash": "hash330",
-        },
+        "async_get_user_by_id",
+        _amock(
+            lambda user_id: {
+                "id": user_id,
+                "username": "user330",
+                "password_hash": "hash330",
+            }
+        ),
     )
     monkeypatch.setattr(
         auth_service,
@@ -1305,15 +1409,17 @@ def test_change_password_returns_error_when_password_update_transaction_fails(
     )
     monkeypatch.setattr(
         auth_service.postgres_client,
-        "change_password_and_create_session",
-        lambda **kwargs: None,
+        "async_change_password_and_create_session",
+        _amock(lambda **kwargs: None),
     )
 
-    success, data, error = auth_service.change_password(
-        330,
-        "old-password",
-        "NewPassword1!",
-        "user330",
+    success, data, error = run_async(
+        auth_service.async_change_password(
+            330,
+            "old-password",
+            "NewPassword1!",
+            "user330",
+        )
     )
 
     assert success is False
@@ -1321,9 +1427,11 @@ def test_change_password_returns_error_when_password_update_transaction_fails(
     assert error == "Failed to update password"
 
 
-def test_get_user_by_id_returns_none_when_user_not_found(monkeypatch):
+def test_get_user_by_id_returns_none_when_user_not_found(monkeypatch, run_async):
     monkeypatch.setattr(
-        auth_service.postgres_client, "get_user_by_id", lambda user_id: None
+        auth_service.postgres_client,
+        "async_get_user_by_id",
+        _amock(lambda user_id: None),
     )
 
-    assert auth_service.get_user_by_id(404) is None
+    assert run_async(auth_service.async_get_user_by_id(404)) is None
