@@ -4956,6 +4956,9 @@ async def async_get_character_ids_by_server_and_guild(
     sort_by: str = "last_save",
 ) -> list[int]:
     """Get paginated character IDs by server and guild (async)."""
+    page = max(page, 1)
+    page_size = max(1, min(page_size, 100))
+
     try:
         async with get_async_dict_cursor(commit=False) as cursor:
             offset = (page - 1) * page_size
@@ -5024,29 +5027,48 @@ async def async_add_or_update_characters(characters: list[dict]):
                     groups[fields].append(character)
 
                 for character_fields, chars in groups.items():
-                    update_list: list[str] = [
-                        f"{field} = EXCLUDED.{field}"
-                        for field in character_fields
-                        if field not in ["name", "gender"]
-                    ]
-
-                    update_list.extend(
-                        [
-                            f"{field} = CASE WHEN EXCLUDED.is_anonymous IS TRUE THEN characters.{field} ELSE EXCLUDED.{field} END"
-                            for field in ["name", "gender"]
-                            if field in character_fields
-                        ]
+                    allowed_columns = {
+                        "id",
+                        "name",
+                        "gender",
+                        "race",
+                        "total_level",
+                        "classes",
+                        "location_id",
+                        "guild_name",
+                        "server_name",
+                        "home_server_name",
+                        "is_anonymous",
+                        "last_update",
+                        "last_save",
+                        "auditing_flags",
+                    }
+                    safe_fields = tuple(
+                        f for f in character_fields if f in allowed_columns
                     )
+
+                    update_parts = []
+                    for field in safe_fields:
+                        if field in ("name", "gender"):
+                            update_parts.append(
+                                psycopg.sql.SQL(
+                                    "{col} = CASE WHEN EXCLUDED.is_anonymous IS TRUE THEN characters.{col} ELSE EXCLUDED.{col} END"
+                                ).format(col=psycopg.sql.Identifier(field))
+                            )
+                        elif field != "id":
+                            update_parts.append(
+                                psycopg.sql.SQL("{col} = EXCLUDED.{col}").format(
+                                    col=psycopg.sql.Identifier(field)
+                                )
+                            )
 
                     columns = psycopg.sql.SQL(", ").join(
-                        psycopg.sql.Identifier(field) for field in character_fields
+                        psycopg.sql.Identifier(field) for field in safe_fields
                     )
                     placeholders = psycopg.sql.SQL(", ").join(
-                        psycopg.sql.Placeholder() for _ in character_fields
+                        psycopg.sql.Placeholder() for _ in safe_fields
                     )
-                    updates = psycopg.sql.SQL(", ").join(
-                        psycopg.sql.SQL(update) for update in update_list
-                    )
+                    updates = psycopg.sql.SQL(", ").join(update_parts)
 
                     query = psycopg.sql.SQL(
                         """
@@ -5101,10 +5123,12 @@ async def async_add_character_activity(activities: list[dict]):
         async with get_async_dict_cursor(commit=True) as cursor:
             batch = []
             for activity in activities:
+                at = activity.get("activity_type")
+                activity_type = at.value if hasattr(at, "value") else at
                 batch.append(
                     (
                         activity.get("character_id"),
-                        activity.get("activity_type").value,
+                        activity_type,
                         json.dumps(activity.get("data")),
                     )
                 )
