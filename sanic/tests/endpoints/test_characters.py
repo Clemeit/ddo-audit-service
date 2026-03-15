@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import endpoints.characters as character_endpoints
+from tests.conftest import _amock
 
 
 def _db_character(character_id=1, name="Character", is_anonymous=False):
@@ -78,8 +79,8 @@ def test_get_character_by_id_falls_back_to_database(
     )
     monkeypatch.setattr(
         character_endpoints.postgres_client,
-        "get_character_by_id",
-        lambda _character_id: _db_character(character_id=11, name="Persisted"),
+        "async_get_character_by_id",
+        _amock(lambda _character_id: _db_character(character_id=11, name="Persisted")),
     )
 
     request = make_request(path="/v1/characters/11")
@@ -101,8 +102,8 @@ def test_get_character_by_id_returns_404_when_missing(
     )
     monkeypatch.setattr(
         character_endpoints.postgres_client,
-        "get_character_by_id",
-        lambda _character_id: None,
+        "async_get_character_by_id",
+        _amock(lambda _character_id: None),
     )
 
     request = make_request(path="/v1/characters/999")
@@ -132,8 +133,8 @@ def test_get_characters_by_ids_merges_cache_and_database(
     )
     monkeypatch.setattr(
         character_endpoints.postgres_client,
-        "get_characters_by_ids",
-        lambda _ids: [_db_character(character_id=2, name="Persisted Two")],
+        "async_get_characters_by_ids",
+        _amock(lambda _ids: [_db_character(character_id=2, name="Persisted Two")]),
     )
 
     request = make_request(path="/v1/characters/ids/1,2")
@@ -158,9 +159,11 @@ def test_get_character_by_server_and_name_returns_403_for_anonymous(
     )
     monkeypatch.setattr(
         character_endpoints.postgres_client,
-        "get_character_by_name_and_server",
-        lambda _name, _server_name: _db_character(
-            character_id=8, name="Anonymous", is_anonymous=True
+        "async_get_character_by_name_and_server",
+        _amock(
+            lambda _name, _server_name: _db_character(
+                character_id=8, name="Anonymous", is_anonymous=True
+            )
         ),
     )
 
@@ -241,7 +244,9 @@ def test_set_characters_success_calls_handler_with_set_type(
         captured["request_body"] = request_body
         captured["request_type"] = request_type
 
-    monkeypatch.setattr(character_endpoints, "handle_incoming_characters", _handle)
+    monkeypatch.setattr(
+        character_endpoints, "handle_incoming_characters", _amock(_handle)
+    )
     monkeypatch.setattr(
         character_endpoints,
         "character_collections_heartbeat",
@@ -264,12 +269,14 @@ def test_update_characters_returns_500_when_business_layer_fails(
         "CharacterRequestApiModel",
         lambda **kwargs: SimpleNamespace(model_dump=lambda: kwargs),
     )
+
+    def _raise(_request_body, _request_type):
+        raise RuntimeError("processing failed")
+
     monkeypatch.setattr(
         character_endpoints,
         "handle_incoming_characters",
-        lambda _request_body, _request_type: (_ for _ in ()).throw(
-            RuntimeError("processing failed")
-        ),
+        _amock(_raise),
     )
 
     request = make_request(

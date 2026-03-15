@@ -1046,7 +1046,7 @@ def add_or_update_characters(characters: list[dict]):
                     # character is not anonymous.
                     update_list.extend(
                         [
-                            f"{field} = CASE WHEN EXCLUDED.is_anonymous = 'true' THEN characters.{field} ELSE EXCLUDED.{field} END"
+                            f"{field} = CASE WHEN EXCLUDED.is_anonymous IS TRUE THEN characters.{field} ELSE EXCLUDED.{field} END"
                             for field in ["name", "gender"]
                             if field in character_fields
                         ]
@@ -4850,6 +4850,296 @@ def truncate_quest_sessions() -> None:
                     "Failed to reset statement_timeout after truncate_quest_sessions",
                     exc_info=True,
                 )
+
+
+# ========================================
+# Async character Postgres functions (psycopg3)
+# ========================================
+
+
+def _build_character_from_dict_row(row: dict) -> Character:
+    """Build a Character model from a psycopg3 dict row."""
+    return Character(
+        id=int(row["id"]),
+        name=row.get("name"),
+        gender=row.get("gender"),
+        race=row.get("race"),
+        total_level=row.get("total_level"),
+        classes=row.get("classes"),
+        location_id=row.get("location_id"),
+        guild_name=row.get("guild_name"),
+        server_name=row.get("server_name"),
+        home_server_name=row.get("home_server_name"),
+        is_anonymous=row.get("is_anonymous"),
+        last_update=(
+            datetime_to_datetime_string(row["last_update"])
+            if isinstance(row.get("last_update"), datetime)
+            else ""
+        ),
+        last_save=(
+            datetime_to_datetime_string(row["last_save"])
+            if isinstance(row.get("last_save"), datetime)
+            else ""
+        ),
+    )
+
+
+async def async_get_character_by_id(character_id: int) -> Character | None:
+    """Get a character by ID (async)."""
+    try:
+        async with get_async_dict_cursor(commit=False) as cursor:
+            await cursor.execute(
+                "SELECT * FROM public.characters WHERE id = %s", (character_id,)
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            return _build_character_from_dict_row(row)
+    except Exception as e:
+        logger.error(f"Error getting character by ID {character_id}: {e}")
+        return None
+
+
+async def async_get_characters_by_ids(character_ids: list[int]) -> list[Character]:
+    """Get multiple characters by IDs (async)."""
+    if not character_ids:
+        return []
+
+    try:
+        async with get_async_dict_cursor(commit=False) as cursor:
+            await cursor.execute(
+                "SELECT * FROM public.characters WHERE id = ANY(%s)",
+                (character_ids,),
+            )
+            rows = await cursor.fetchall()
+            if not rows:
+                return []
+            return [_build_character_from_dict_row(row) for row in rows]
+    except Exception as e:
+        logger.error(f"Error getting characters by IDs: {e}")
+        return []
+
+
+async def async_get_character_by_name_and_server(
+    character_name: str, server_name: str
+) -> Character | None:
+    """Get a character by name and server (async)."""
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            "SELECT * FROM public.characters WHERE LOWER(name) = %s AND LOWER(server_name) = %s",
+            (character_name.lower(), server_name.lower()),
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        return _build_character_from_dict_row(row)
+
+
+async def async_get_characters_by_name(character_name: str) -> list[Character]:
+    """Get all characters matching the given name, most recent first (async)."""
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            "SELECT * FROM public.characters WHERE LOWER(name) = %s ORDER BY last_save DESC LIMIT 10",
+            (character_name.lower(),),
+        )
+        rows = await cursor.fetchall()
+        if not rows:
+            return []
+        return [_build_character_from_dict_row(row) for row in rows]
+
+
+async def async_get_character_ids_by_server_and_guild(
+    server_name: str,
+    guild_name: str,
+    page: int = 1,
+    page_size: int = 20,
+    sort_by: str = "last_save",
+) -> list[int]:
+    """Get paginated character IDs by server and guild (async)."""
+    page = max(page, 1)
+    page_size = max(1, min(page_size, 100))
+
+    try:
+        async with get_async_dict_cursor(commit=False) as cursor:
+            offset = (page - 1) * page_size
+
+            allowed_sort_cols = {"last_save", "id", "name", "total_level"}
+            if sort_by not in allowed_sort_cols:
+                sort_by = "last_save"
+
+            query = psycopg.sql.SQL(
+                """
+                SELECT id FROM public.characters
+                WHERE LOWER(server_name) = %s AND LOWER(guild_name) = %s
+                ORDER BY {col} DESC
+                LIMIT %s OFFSET %s
+                """
+            ).format(col=psycopg.sql.Identifier(sort_by))
+
+            await cursor.execute(
+                query,
+                (server_name.lower(), guild_name.lower(), page_size, offset),
+            )
+            rows = await cursor.fetchall()
+            if not rows:
+                return []
+            return [row["id"] for row in rows]
+    except Exception as e:
+        logger.error(
+            f"Error getting character IDs by server and guild {server_name}/{guild_name}: {e}"
+        )
+        return []
+
+
+async def async_add_or_update_characters(characters: list[dict]):
+    """Add or update characters with optimized bulk operations (async)."""
+    if not characters:
+        return
+
+    (valid_area_ids, _, _) = get_valid_area_ids()
+
+    try:
+        async with get_async_dict_cursor(commit=True) as cursor:
+            processed_characters = []
+            for character in characters:
+                if character.get("location_id") not in valid_area_ids:
+                    character["location_id"] = 0
+                processed_characters.append(character)
+
+            exclude_fields = [
+                "public_comment",
+                "group_id",
+                "is_in_party",
+                "is_recruiting",
+                "is_online",
+                "last_save",
+            ]
+
+            batch_size = 1000
+            for i in range(0, len(processed_characters), batch_size):
+                batch = processed_characters[i : i + batch_size]
+
+                groups = defaultdict(list)
+                for character in batch:
+                    fields = tuple(
+                        sorted(f for f in character.keys() if f not in exclude_fields)
+                    )
+                    groups[fields].append(character)
+
+                for character_fields, chars in groups.items():
+                    allowed_columns = {
+                        "id",
+                        "name",
+                        "gender",
+                        "race",
+                        "total_level",
+                        "classes",
+                        "location_id",
+                        "guild_name",
+                        "server_name",
+                        "home_server_name",
+                        "is_anonymous",
+                        "last_update",
+                        "last_save",
+                        "auditing_flags",
+                    }
+                    safe_fields = tuple(
+                        f for f in character_fields if f in allowed_columns
+                    )
+
+                    update_parts = []
+                    for field in safe_fields:
+                        if field in ("name", "gender"):
+                            update_parts.append(
+                                psycopg.sql.SQL(
+                                    "{col} = CASE WHEN EXCLUDED.is_anonymous IS TRUE THEN characters.{col} ELSE EXCLUDED.{col} END"
+                                ).format(col=psycopg.sql.Identifier(field))
+                            )
+                        elif field != "id":
+                            update_parts.append(
+                                psycopg.sql.SQL("{col} = EXCLUDED.{col}").format(
+                                    col=psycopg.sql.Identifier(field)
+                                )
+                            )
+
+                    columns = psycopg.sql.SQL(", ").join(
+                        psycopg.sql.Identifier(field) for field in safe_fields
+                    )
+                    placeholders = psycopg.sql.SQL(", ").join(
+                        psycopg.sql.Placeholder() for _ in safe_fields
+                    )
+                    updates = psycopg.sql.SQL(", ").join(update_parts)
+
+                    query = psycopg.sql.SQL(
+                        """
+                        INSERT INTO characters ({columns})
+                        VALUES ({placeholders})
+                        ON CONFLICT (id) DO UPDATE SET
+                        {updates}, last_save = NOW()
+                    """
+                    ).format(
+                        columns=columns,
+                        placeholders=placeholders,
+                        updates=updates,
+                    )
+
+                    values_list = [
+                        tuple(
+                            (
+                                json.dumps(char[f])
+                                if isinstance(char[f], (dict, list))
+                                else char[f]
+                            )
+                            for f in character_fields
+                        )
+                        for char in chars
+                    ]
+
+                    await cursor.executemany(query, values_list)
+
+                logger.debug(
+                    f"Processed batch {i//batch_size + 1} of characters "
+                    f"({len(batch)} characters)"
+                )
+
+        logger.info(f"Successfully added/updated {len(characters)} characters")
+
+    except Exception as e:
+        logger.error(f"Failed to add/update characters: {e}")
+        raise
+
+
+async def async_add_character_activity(activities: list[dict]):
+    """Add character activity entries (async)."""
+    if not activities:
+        return
+
+    insert_query = """
+        INSERT INTO character_activity (timestamp, character_id, activity_type, data)
+        VALUES (NOW(), %s, %s, %s)
+    """
+    batch_size = 500
+    try:
+        async with get_async_dict_cursor(commit=True) as cursor:
+            batch = []
+            for activity in activities:
+                at = activity.get("activity_type")
+                activity_type = at.value if hasattr(at, "value") else at
+                batch.append(
+                    (
+                        activity.get("character_id"),
+                        activity_type,
+                        json.dumps(activity.get("data")),
+                    )
+                )
+                if len(batch) >= batch_size:
+                    await cursor.executemany(insert_query, batch)
+                    batch.clear()
+            if batch:
+                await cursor.executemany(insert_query, batch)
+    except Exception as e:
+        logger.error(f"Failed to add character activity to the database: {e}")
+        raise
 
 
 # ========================================

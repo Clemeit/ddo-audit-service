@@ -1,6 +1,7 @@
 import business.characters as characters_business
 from constants.activity import CharacterActivityType
 from models.api import CharacterRequestApiModel, CharacterRequestType
+from tests.conftest import _amock
 from models.character import Character, CharacterClass
 
 
@@ -32,35 +33,37 @@ def _activity_type_value(activity_event: dict) -> str:
     return activity_type.value if hasattr(activity_type, "value") else activity_type
 
 
-def test_persist_deleted_characters_to_db_noop_for_empty_input(monkeypatch):
+def test_persist_deleted_characters_to_db_noop_for_empty_input(monkeypatch, run_async):
     calls = []
     monkeypatch.setattr(
         characters_business.postgres_client,
-        "add_or_update_characters",
-        lambda characters: calls.append(characters),
+        "async_add_or_update_characters",
+        _amock(lambda characters: calls.append(characters)),
     )
 
-    characters_business.persist_deleted_characters_to_db([])
+    run_async(characters_business.persist_deleted_characters_to_db([]))
 
     assert calls == []
 
 
-def test_persist_deleted_characters_to_db_delegates_to_postgres(monkeypatch):
+def test_persist_deleted_characters_to_db_delegates_to_postgres(monkeypatch, run_async):
     captured = {}
     payload = [{"id": 1, "name": "Persisted"}]
 
     monkeypatch.setattr(
         characters_business.postgres_client,
-        "add_or_update_characters",
-        lambda characters: captured.setdefault("characters", characters),
+        "async_add_or_update_characters",
+        _amock(lambda characters: captured.setdefault("characters", characters)),
     )
 
-    characters_business.persist_deleted_characters_to_db(payload)
+    run_async(characters_business.persist_deleted_characters_to_db(payload))
 
     assert captured["characters"] == payload
 
 
-def test_persist_deleted_characters_to_db_swallows_database_errors(monkeypatch):
+def test_persist_deleted_characters_to_db_swallows_database_errors(
+    monkeypatch, run_async
+):
     printed = []
 
     def _raise_error(_characters):
@@ -68,28 +71,28 @@ def test_persist_deleted_characters_to_db_swallows_database_errors(monkeypatch):
 
     monkeypatch.setattr(
         characters_business.postgres_client,
-        "add_or_update_characters",
-        _raise_error,
+        "async_add_or_update_characters",
+        _amock(_raise_error),
     )
     monkeypatch.setattr("builtins.print", lambda message: printed.append(message))
 
-    characters_business.persist_deleted_characters_to_db([{"id": 1}])
+    run_async(characters_business.persist_deleted_characters_to_db([{"id": 1}]))
 
     assert len(printed) == 1
     assert "Error persisting characters to database" in printed[0]
 
 
-def test_persist_character_activity_to_db_delegates_to_postgres(monkeypatch):
+def test_persist_character_activity_to_db_delegates_to_postgres(monkeypatch, run_async):
     captured = {}
     activity_payload = [{"character_id": 1, "activity_type": "status", "data": {}}]
 
     monkeypatch.setattr(
         characters_business.postgres_client,
-        "add_character_activity",
-        lambda activities: captured.setdefault("activities", activities),
+        "async_add_character_activity",
+        _amock(lambda activities: captured.setdefault("activities", activities)),
     )
 
-    characters_business.persist_character_activity_to_db(activity_payload)
+    run_async(characters_business.persist_character_activity_to_db(activity_payload))
 
     assert captured["activities"] == activity_payload
 
@@ -181,7 +184,9 @@ def test_aggregate_character_activity_for_server_logs_failed_character_processin
     assert any("failed activity check" in line for line in printed)
 
 
-def test_handle_incoming_characters_set_filters_server_and_sets_cache(monkeypatch):
+def test_handle_incoming_characters_set_filters_server_and_sets_cache(
+    monkeypatch, run_async
+):
     now = "2026-03-15T12:00:00Z"
     set_calls = []
     update_calls = []
@@ -238,12 +243,14 @@ def test_handle_incoming_characters_set_filters_server_and_sets_cache(monkeypatc
     monkeypatch.setattr(
         characters_business,
         "persist_deleted_characters_to_db",
-        lambda characters: persisted_deleted_calls.append(characters),
+        _amock(lambda characters: persisted_deleted_calls.append(characters)),
     )
     monkeypatch.setattr(
         characters_business,
         "persist_character_activity_to_db",
-        lambda activity_events: persisted_activity_calls.append(activity_events),
+        _amock(
+            lambda activity_events: persisted_activity_calls.append(activity_events)
+        ),
     )
 
     alpha_character = _character(1, server_name="Alpha", name="Alpha One")
@@ -253,9 +260,11 @@ def test_handle_incoming_characters_set_filters_server_and_sets_cache(monkeypatc
         deleted_ids=[1000],
     )
 
-    characters_business.handle_incoming_characters(
-        request_body,
-        CharacterRequestType.set,
+    run_async(
+        characters_business.handle_incoming_characters(
+            request_body,
+            CharacterRequestType.set,
+        )
     )
 
     payload_by_server = {server_name: payload for payload, server_name in set_calls}
@@ -274,7 +283,9 @@ def test_handle_incoming_characters_set_filters_server_and_sets_cache(monkeypatc
     assert persisted_activity_calls == [[]]
 
 
-def test_handle_incoming_characters_update_persists_deleted_and_activity(monkeypatch):
+def test_handle_incoming_characters_update_persists_deleted_and_activity(
+    monkeypatch, run_async
+):
     now = "2026-03-15T13:00:00Z"
     update_calls = []
     delete_calls = []
@@ -334,12 +345,14 @@ def test_handle_incoming_characters_update_persists_deleted_and_activity(monkeyp
     monkeypatch.setattr(
         characters_business,
         "persist_deleted_characters_to_db",
-        lambda characters: persisted_deleted_calls.append(characters),
+        _amock(lambda characters: persisted_deleted_calls.append(characters)),
     )
     monkeypatch.setattr(
         characters_business,
         "persist_character_activity_to_db",
-        lambda activity_events: persisted_activity_calls.append(activity_events),
+        _amock(
+            lambda activity_events: persisted_activity_calls.append(activity_events)
+        ),
     )
 
     request_body = CharacterRequestApiModel(
@@ -356,9 +369,11 @@ def test_handle_incoming_characters_update_persists_deleted_and_activity(monkeyp
         deleted_ids=[1, 999],
     )
 
-    characters_business.handle_incoming_characters(
-        request_body,
-        CharacterRequestType.update,
+    run_async(
+        characters_business.handle_incoming_characters(
+            request_body,
+            CharacterRequestType.update,
+        )
     )
 
     assert len(update_calls) == 1
@@ -374,7 +389,7 @@ def test_handle_incoming_characters_update_persists_deleted_and_activity(monkeyp
 
 
 def test_handle_incoming_characters_update_combines_multiple_server_changes(
-    monkeypatch,
+    monkeypatch, run_async
 ):
     update_calls = []
     delete_calls = []
@@ -442,12 +457,14 @@ def test_handle_incoming_characters_update_combines_multiple_server_changes(
     monkeypatch.setattr(
         characters_business,
         "persist_deleted_characters_to_db",
-        lambda characters: persisted_deleted_calls.append(characters),
+        _amock(lambda characters: persisted_deleted_calls.append(characters)),
     )
     monkeypatch.setattr(
         characters_business,
         "persist_character_activity_to_db",
-        lambda activity_events: persisted_activity_calls.append(activity_events),
+        _amock(
+            lambda activity_events: persisted_activity_calls.append(activity_events)
+        ),
     )
 
     request_body = CharacterRequestApiModel(
@@ -458,9 +475,11 @@ def test_handle_incoming_characters_update_combines_multiple_server_changes(
         deleted_ids=[1, 3],
     )
 
-    characters_business.handle_incoming_characters(
-        request_body,
-        CharacterRequestType.update,
+    run_async(
+        characters_business.handle_incoming_characters(
+            request_body,
+            CharacterRequestType.update,
+        )
     )
 
     assert len(update_calls) == 2

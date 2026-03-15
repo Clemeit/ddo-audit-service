@@ -10,7 +10,7 @@ from utils.time import get_current_datetime_string
 from utils.log import logMessage
 
 
-def handle_incoming_characters(
+async def handle_incoming_characters(
     request_body: CharacterRequestApiModel,
     type: CharacterRequestType,
 ):
@@ -89,12 +89,12 @@ def handle_incoming_characters(
             )
 
     # persist on characters that logged off to the database
-    persist_deleted_characters_to_db(characters_to_persist_to_db)
+    await persist_deleted_characters_to_db(characters_to_persist_to_db)
     # persist character activity
-    persist_character_activity_to_db(all_character_activity)
+    await persist_character_activity_to_db(all_character_activity)
 
 
-def persist_deleted_characters_to_db(characters: list[dict]):
+async def persist_deleted_characters_to_db(characters: list[dict]):
     """
     Characters that have just logged off are about to be deleted
     from the cache. Persist them to the database for long-term storage.
@@ -102,7 +102,7 @@ def persist_deleted_characters_to_db(characters: list[dict]):
     if not characters:
         return
     try:
-        postgres_client.add_or_update_characters(characters)
+        await postgres_client.async_add_or_update_characters(characters)
     except Exception as e:
         print(f"Error persisting characters to database: {e}")
 
@@ -226,10 +226,12 @@ def aggregate_character_activity_for_server(
     return [data.model_dump() for data in character_activity]
 
 
-def persist_character_activity_to_db(
+async def persist_character_activity_to_db(
     activity_events: list[dict],
 ):
     """
     Persist character activity events from all servers to the database.
     """
-    postgres_client.add_character_activity(activity_events)
+    if not activity_events:
+        return
+    await postgres_client.async_add_character_activity(activity_events)
