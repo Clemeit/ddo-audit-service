@@ -28,43 +28,28 @@ USER_ENDPOINT_PATTERN = re.compile(
     r"^/v?\d*/(user/(settings/persistent|profile/password)|auth/logout)$"
 )
 
-# Lua script to atomically increment a rate-limit counter and set its TTL on
-# the first touch.  Returns [current_count, ttl].  This replaces 2-3
-# sequential INCR / TTL / EXPIRE round-trips with a single evalsha call.
-_RATE_LIMIT_LUA = """
-local key = KEYS[1]
-local limit_window = tonumber(ARGV[1])
-local count = redis.call('INCR', key)
-if count == 1 then
-    redis.call('EXPIRE', key, limit_window)
-end
-local ttl = redis.call('TTL', key)
-if ttl < 0 then
-    redis.call('EXPIRE', key, limit_window)
-    ttl = limit_window
-end
-return {count, ttl}
-"""
 
-
-async def _async_increment_and_check_limit(
-    rate_limit_key: str, limit: int, window: int
-):
+def _increment_and_check_limit(rate_limit_key: str, limit: int, window: int):
     """
-    Async version: atomically increment the rate limit counter via Lua script.
-    Uses EVALSHA with automatic EVAL fallback for efficiency.
-    Returns a tuple (allowed: bool, retry_after: int | None).
+    Atomically increment the rate limit counter and determine if the request is allowed.
+    Returns a tuple (allowed: bool, retry_after: int | None), where retry_after is
+    the remaining TTL in seconds for this rate limit window.
     """
     try:
-        client = await redis_client.get_async_redis_client()
-        script = client.register_script(_RATE_LIMIT_LUA)
-        result = await script(keys=[rate_limit_key], args=[window])
-        current_count = int(result[0])
-        ttl = int(result[1])
-        if current_count > limit:
-            return False, ttl
-        return True, ttl
+        with redis_client.get_redis_client() as client:
+            # INCR is atomic in Redis and will create the key with value 1 if it does not exist.
+            current_count = client.incr(rate_limit_key)
+            # Ensure the key has a TTL corresponding to the rate limit window.
+            ttl = client.ttl(rate_limit_key)
+            if current_count == 1 or ttl is None or ttl < 0:
+                client.expire(rate_limit_key, window)
+                ttl = window
+            # If the incremented count exceeds the allowed limit, the request is not allowed.
+            if current_count > limit:
+                return False, ttl
+            return True, ttl
     except RuntimeError:
+        # Redis not initialized — fail open
         return True, None
 
 
@@ -86,7 +71,7 @@ async def rate_limit_middleware(request: Request):
         rate_limit_key = f"rate_limit:auth:{ip}:{path}"
 
         try:
-            allowed, retry_after = await _async_increment_and_check_limit(
+            allowed, retry_after = _increment_and_check_limit(
                 rate_limit_key,
                 AUTH_RATE_LIMIT["requests"],
                 AUTH_RATE_LIMIT["window"],
@@ -128,7 +113,7 @@ async def rate_limit_middleware(request: Request):
             rate_limit_key = f"rate_limit:user:{user_id}:{endpoint_identifier}"
 
             try:
-                allowed, retry_after = await _async_increment_and_check_limit(
+                allowed, retry_after = _increment_and_check_limit(
                     rate_limit_key,
                     USER_RATE_LIMIT["requests"],
                     USER_RATE_LIMIT["window"],

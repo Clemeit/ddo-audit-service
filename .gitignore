@@ -5,10 +5,6 @@
 # VSCode
 .vscode
 
-# Tests
-__pycache__/
-*.pyc
-
 # Prerender
 node_modules/
 npm-debug.log
