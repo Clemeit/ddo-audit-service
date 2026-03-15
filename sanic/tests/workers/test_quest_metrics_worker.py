@@ -12,17 +12,25 @@ def test_clamp_to_smallint_handles_bounds_and_rounding():
 
 def test_extract_and_batch_quest_lengths_handles_mixed_data():
     metrics_data = {
-        1: {"analytics_data": {"total_sessions": 150, "average_duration_seconds": 120.4}},
+        1: {
+            "analytics_data": {"total_sessions": 150, "average_duration_seconds": 120.4}
+        },
         2: {"analytics_data": {"total_sessions": 10, "average_duration_seconds": 90}},
-        3: {"analytics_data": {"total_sessions": 200, "average_duration_seconds": None}},
-        4: {"analytics_data": {"total_sessions": 500, "average_duration_seconds": 50000}},
+        3: {
+            "analytics_data": {"total_sessions": 200, "average_duration_seconds": None}
+        },
+        4: {
+            "analytics_data": {"total_sessions": 500, "average_duration_seconds": 50000}
+        },
         5: {"analytics_data": "invalid-shape"},
     }
 
-    updates_with_value, updates_to_null = metrics_worker.extract_and_batch_quest_lengths(
-        metrics_data=metrics_data,
-        all_quest_ids=[1, 2, 3, 4, 5, 6],
-        min_sessions=100,
+    updates_with_value, updates_to_null = (
+        metrics_worker.extract_and_batch_quest_lengths(
+            metrics_data=metrics_data,
+            all_quest_ids=[1, 2, 3, 4, 5, 6],
+            min_sessions=100,
+        )
     )
 
     updates_map = {quest_id: length for quest_id, length in updates_with_value}
@@ -31,10 +39,12 @@ def test_extract_and_batch_quest_lengths_handles_mixed_data():
 
 
 def test_extract_and_batch_quest_lengths_empty_metrics_sets_all_to_null():
-    updates_with_value, updates_to_null = metrics_worker.extract_and_batch_quest_lengths(
-        metrics_data={},
-        all_quest_ids=[10, 11],
-        min_sessions=100,
+    updates_with_value, updates_to_null = (
+        metrics_worker.extract_and_batch_quest_lengths(
+            metrics_data={},
+            all_quest_ids=[10, 11],
+            min_sessions=100,
+        )
     )
 
     assert updates_with_value == []
@@ -42,17 +52,19 @@ def test_extract_and_batch_quest_lengths_empty_metrics_sets_all_to_null():
 
 
 def test_extract_and_batch_quest_lengths_single_session_below_threshold():
-    updates_with_value, updates_to_null = metrics_worker.extract_and_batch_quest_lengths(
-        metrics_data={
-            7: {
-                "analytics_data": {
-                    "total_sessions": 1,
-                    "average_duration_seconds": 180,
+    updates_with_value, updates_to_null = (
+        metrics_worker.extract_and_batch_quest_lengths(
+            metrics_data={
+                7: {
+                    "analytics_data": {
+                        "total_sessions": 1,
+                        "average_duration_seconds": 180,
+                    }
                 }
-            }
-        },
-        all_quest_ids=[7],
-        min_sessions=2,
+            },
+            all_quest_ids=[7],
+            min_sessions=2,
+        )
     )
 
     assert updates_with_value == []

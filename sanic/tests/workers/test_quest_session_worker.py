@@ -189,10 +189,12 @@ def test_process_batch_filters_excluded_sessions_and_updates_redis(monkeypatch):
     )
     monkeypatch.setattr(quest_worker, "bulk_insert_quest_sessions", _capture_insert)
 
-    new_ts, new_char_id, activities_processed, sessions_created = quest_worker.process_batch(
-        last_timestamp=_ts(0),
-        max_character_id_at_timestamp=0,
-        batch_size=100,
+    new_ts, new_char_id, activities_processed, sessions_created = (
+        quest_worker.process_batch(
+            last_timestamp=_ts(0),
+            max_character_id_at_timestamp=0,
+            batch_size=100,
+        )
     )
 
     assert activities_processed == 4
@@ -255,10 +257,12 @@ def test_process_batch_continues_when_saved_session_state_is_invalid(monkeypatch
     )
     monkeypatch.setattr(quest_worker, "bulk_insert_quest_sessions", lambda _rows: None)
 
-    new_ts, new_char_id, activities_processed, sessions_created = quest_worker.process_batch(
-        last_timestamp=_ts(0),
-        max_character_id_at_timestamp=0,
-        batch_size=100,
+    new_ts, new_char_id, activities_processed, sessions_created = (
+        quest_worker.process_batch(
+            last_timestamp=_ts(0),
+            max_character_id_at_timestamp=0,
+            batch_size=100,
+        )
     )
 
     assert activities_processed == 2
