@@ -1046,7 +1046,7 @@ def add_or_update_characters(characters: list[dict]):
                     # character is not anonymous.
                     update_list.extend(
                         [
-                            f"{field} = CASE WHEN EXCLUDED.is_anonymous = 'true' THEN characters.{field} ELSE EXCLUDED.{field} END"
+                            f"{field} = CASE WHEN EXCLUDED.is_anonymous IS TRUE THEN characters.{field} ELSE EXCLUDED.{field} END"
                             for field in ["name", "gender"]
                             if field in character_fields
                         ]
@@ -5042,7 +5042,7 @@ async def async_add_or_update_characters(characters: list[dict]):
 
                     update_list.extend(
                         [
-                            f"{field} = CASE WHEN EXCLUDED.is_anonymous = 'true' THEN characters.{field} ELSE EXCLUDED.{field} END"
+                            f"{field} = CASE WHEN EXCLUDED.is_anonymous IS TRUE THEN characters.{field} ELSE EXCLUDED.{field} END"
                             for field in ["name", "gender"]
                             if field in character_fields
                         ]
@@ -5097,8 +5097,11 @@ async def async_add_or_update_characters(characters: list[dict]):
         raise
 
 
-async def async_add_character_activity(activites: list[dict]):
+async def async_add_character_activity(activities: list[dict]):
     """Add character activity entries (async)."""
+    if not activities:
+        return
+
     insert_query = """
         INSERT INTO character_activity (timestamp, character_id, activity_type, data)
         VALUES (NOW(), %s, %s, %s)
@@ -5107,7 +5110,7 @@ async def async_add_character_activity(activites: list[dict]):
     try:
         async with get_async_dict_cursor(commit=True) as cursor:
             batch = []
-            for activity in activites:
+            for activity in activities:
                 batch.append(
                     (
                         activity.get("character_id"),

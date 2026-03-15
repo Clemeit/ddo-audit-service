@@ -474,3 +474,166 @@ def test_on_conflict_rejects_invalid_action():
 def test_on_conflict_update_requires_columns_or_expressions():
     with pytest.raises(ValueError, match="requires at least one"):
         OnConflict(conflict_columns=["id"], action="update")
+
+
+# ============================
+# Async character query tests (Phase 2a)
+# ============================
+
+
+def _character_row(
+    id=1,
+    name="TestChar",
+    gender="Male",
+    race="Human",
+    total_level=20,
+    classes=None,
+    location_id=100,
+    guild_name="TestGuild",
+    server_name="Argonnessen",
+    home_server_name="Argonnessen",
+    is_anonymous=False,
+    last_update=datetime(2026, 3, 15, 12, 0, 0),
+    last_save=datetime(2026, 3, 15, 12, 0, 0),
+):
+    """Create a dict row simulating a psycopg3 dict_row result."""
+    return {
+        "id": id,
+        "name": name,
+        "gender": gender,
+        "race": race,
+        "total_level": total_level,
+        "classes": classes,
+        "location_id": location_id,
+        "guild_name": guild_name,
+        "server_name": server_name,
+        "home_server_name": home_server_name,
+        "is_anonymous": is_anonymous,
+        "last_update": last_update,
+        "last_save": last_save,
+    }
+
+
+def test_build_character_from_dict_row_maps_all_fields():
+    row = _character_row(id=42, name="Hero", server_name="Thelanis")
+    char = postgres_service._build_character_from_dict_row(row)
+
+    assert char.id == 42
+    assert char.name == "Hero"
+    assert char.server_name == "Thelanis"
+    assert char.last_update == "2026-03-15T12:00:00Z"
+    assert char.last_save == "2026-03-15T12:00:00Z"
+
+
+def test_build_character_from_dict_row_handles_none_datetimes():
+    row = _character_row(last_update=None, last_save=None)
+    char = postgres_service._build_character_from_dict_row(row)
+
+    assert char.last_update == ""
+    assert char.last_save == ""
+
+
+def test_async_get_character_by_id_returns_character(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchone.return_value = _character_row(id=7, name="Finder")
+
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(postgres_service.async_get_character_by_id(7))
+
+    assert result is not None
+    assert result.id == 7
+    assert result.name == "Finder"
+    cursor.execute.assert_awaited_once()
+
+
+def test_async_get_character_by_id_returns_none_when_missing(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchone.return_value = None
+
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(postgres_service.async_get_character_by_id(999))
+
+    assert result is None
+
+
+def test_async_get_characters_by_ids_returns_list(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchall.return_value = [
+        _character_row(id=1, name="One"),
+        _character_row(id=2, name="Two"),
+    ]
+
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(postgres_service.async_get_characters_by_ids([1, 2]))
+
+    assert len(result) == 2
+    assert result[0].id == 1
+    assert result[1].name == "Two"
+
+
+def test_async_get_characters_by_ids_returns_empty_for_empty_input(run_async):
+    result = run_async(postgres_service.async_get_characters_by_ids([]))
+    assert result == []
+
+
+def test_async_get_character_by_name_and_server_returns_character(
+    monkeypatch, run_async
+):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchone.return_value = _character_row(
+        id=5, name="Namefind", server_name="Ghallanda"
+    )
+
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(
+        postgres_service.async_get_character_by_name_and_server("Namefind", "Ghallanda")
+    )
+
+    assert result is not None
+    assert result.id == 5
+    assert result.server_name == "Ghallanda"
+
+
+def test_async_get_characters_by_name_returns_list(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchall.return_value = [
+        _character_row(id=10, name="Common", server_name="Argonnessen"),
+        _character_row(id=11, name="Common", server_name="Thelanis"),
+    ]
+
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(postgres_service.async_get_characters_by_name("Common"))
+
+    assert len(result) == 2
+    assert all(c.name == "Common" for c in result)
+
+
+def test_async_get_character_ids_by_server_and_guild_returns_ids(
+    monkeypatch, run_async
+):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchall.return_value = [{"id": 1}, {"id": 2}, {"id": 3}]
+
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(
+        postgres_service.async_get_character_ids_by_server_and_guild(
+            "Argonnessen", "TestGuild"
+        )
+    )
+
+    assert result == [1, 2, 3]
+
+
+def test_async_add_character_activity_skips_empty_list(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    run_async(postgres_service.async_add_character_activity([]))
+
+    cursor.executemany.assert_not_awaited()

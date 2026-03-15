@@ -232,4 +232,6 @@ async def persist_character_activity_to_db(
     """
     Persist character activity events from all servers to the database.
     """
+    if not activity_events:
+        return
     await postgres_client.async_add_character_activity(activity_events)
