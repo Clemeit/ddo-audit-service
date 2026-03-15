@@ -64,30 +64,6 @@ class UsernameAlreadyExistsError(Exception):
     """Raised when attempting to create a user with a duplicate username."""
 
 
-AUTH_SCHEMA_STATEMENTS = [
-    "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS auth_version integer NOT NULL DEFAULT 1",
-    """
-    CREATE TABLE IF NOT EXISTS public.auth_sessions (
-        session_id text PRIMARY KEY,
-        user_id integer NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-        refresh_token_hash text NOT NULL UNIQUE,
-        auth_version integer NOT NULL,
-        created_at timestamp with time zone NOT NULL DEFAULT NOW(),
-        last_used_at timestamp with time zone NOT NULL DEFAULT NOW(),
-        expires_at timestamp with time zone NOT NULL,
-        revoked_at timestamp with time zone,
-        revoke_reason text,
-        created_ip text,
-        created_user_agent text,
-        updated_at timestamp with time zone NOT NULL DEFAULT NOW()
-    )
-    """,
-    "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON public.auth_sessions (user_id)",
-    "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id_revoked_at ON public.auth_sessions (user_id, revoked_at)",
-    "CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON public.auth_sessions (expires_at)",
-]
-
-
 class PostgresConnectionManager:
     """Manages PostgreSQL connections using connection pooling for optimal performance."""
 
@@ -415,23 +391,11 @@ def get_postgres_client() -> PostgresConnectionManager:
 def initialize_postgres():
     """Initialize PostgreSQL connection pool."""
     _postgres_manager.initialize()
-    ensure_auth_schema()
 
 
 def close_postgres_client():
     """Close all PostgreSQL connections."""
     _postgres_manager.close()
-
-
-def ensure_auth_schema():
-    """Ensure the authentication tables and columns exist for local development."""
-    try:
-        with get_db_cursor(commit=True) as cursor:
-            for statement in AUTH_SCHEMA_STATEMENTS:
-                cursor.execute(statement)
-    except Exception as e:
-        logger.error(f"Failed to ensure auth schema: {e}")
-        raise
 
 
 def postgres_health_check() -> bool:

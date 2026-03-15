@@ -21,6 +21,12 @@ import services.redis as redis_client
 logger = logging.getLogger(__name__)
 
 
+AUTH_ERROR_INVALID_CREDENTIALS = "invalid_credentials"
+AUTH_ERROR_INVALID_REFRESH_TOKEN = "invalid_refresh_token"
+AUTH_ERROR_USERNAME_EXISTS = "username_exists"
+AUTH_ERROR_INTERNAL = "internal_error"
+
+
 # JWT Configuration
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
 JWT_ALGORITHM = "HS256"
@@ -314,7 +320,7 @@ def _create_session(
         created_user_agent=created_user_agent,
     )
     if not session:
-        return False, None, "Failed to create session"
+        return False, None, AUTH_ERROR_INTERNAL
 
     redis_client.cache_user_auth_version(user_id, auth_version)
     redis_client.cache_auth_session(session_id, session)
@@ -350,7 +356,7 @@ def register_user(
         # Check if username already exists
         existing_user = postgres_client.get_user_by_username(username)
         if existing_user:
-            return False, None, "Username already exists"
+            return False, None, AUTH_ERROR_USERNAME_EXISTS
 
         password_hash = hash_password(password)
         session_id = uuid.uuid4().hex
@@ -368,7 +374,10 @@ def register_user(
             created_user_agent=created_user_agent,
         )
         if not registration_data:
-            return False, None, "Registration failed"
+            logger.error(
+                "Registration failed: user/session transaction returned no data"
+            )
+            return False, None, AUTH_ERROR_INTERNAL
 
         user = registration_data["user"]
         session = registration_data["session"]
@@ -392,10 +401,10 @@ def register_user(
     except postgres_client.UsernameAlreadyExistsError:
         # Handle check-then-insert race where another request created the same
         # username (case-insensitive) between existence check and insert.
-        return False, None, "Username already exists"
+        return False, None, AUTH_ERROR_USERNAME_EXISTS
     except Exception:
         logger.exception("Registration failed")
-        return False, None, "Registration failed"
+        return False, None, AUTH_ERROR_INTERNAL
 
 
 def login_user(
@@ -419,11 +428,11 @@ def login_user(
         user = postgres_client.get_user_by_username(username)
 
         if not user:
-            return False, None, "Invalid username or password"
+            return False, None, AUTH_ERROR_INVALID_CREDENTIALS
 
         # Verify password
         if not verify_password(password, user["password_hash"]):
-            return False, None, "Invalid username or password"
+            return False, None, AUTH_ERROR_INVALID_CREDENTIALS
 
         session_created, session_data, session_error = _create_session(
             user_id=user["id"],
@@ -432,7 +441,10 @@ def login_user(
             created_user_agent=created_user_agent,
         )
         if not session_created:
-            return False, None, session_error
+            logger.error(
+                "Login failed: unable to create auth session (%s)", session_error
+            )
+            return False, None, AUTH_ERROR_INTERNAL
 
         return (
             True,
@@ -449,7 +461,7 @@ def login_user(
 
     except Exception:
         logger.exception("Login failed")
-        return False, None, "Authentication failed"
+        return False, None, AUTH_ERROR_INTERNAL
 
 
 def refresh_session(refresh_token: str) -> Tuple[bool, Optional[dict], str]:
@@ -462,19 +474,21 @@ def refresh_session(refresh_token: str) -> Tuple[bool, Optional[dict], str]:
         if not is_auth_session_active(session):
             if session:
                 redis_client.clear_cached_auth_session(str(session["session_id"]))
-            return False, None, "Invalid refresh token"
+            return False, None, AUTH_ERROR_INVALID_REFRESH_TOKEN
 
         user = postgres_client.get_user_by_id(int(session["user_id"]))
         if not user:
-            return False, None, "Invalid refresh token"
+            logger.error("Refresh failed: session references a missing user")
+            return False, None, AUTH_ERROR_INTERNAL
 
         current_auth_version = _get_user_auth_version(int(user["id"]))
         if current_auth_version is None:
-            return False, None, "Invalid refresh token"
+            logger.error("Refresh failed: could not resolve current auth version")
+            return False, None, AUTH_ERROR_INTERNAL
 
         if int(current_auth_version) != int(session["auth_version"]):
             redis_client.clear_cached_auth_session(str(session["session_id"]))
-            return False, None, "Invalid refresh token"
+            return False, None, AUTH_ERROR_INVALID_REFRESH_TOKEN
 
         new_refresh_token = generate_refresh_token()
         rotated_session = postgres_client.rotate_auth_session_refresh_token(
@@ -485,7 +499,7 @@ def refresh_session(refresh_token: str) -> Tuple[bool, Optional[dict], str]:
         )
         if not rotated_session:
             redis_client.clear_cached_auth_session(str(session["session_id"]))
-            return False, None, "Invalid refresh token"
+            return False, None, AUTH_ERROR_INVALID_REFRESH_TOKEN
 
         redis_client.cache_user_auth_version(int(user["id"]), int(current_auth_version))
         redis_client.cache_auth_session(str(session["session_id"]), rotated_session)
@@ -504,7 +518,7 @@ def refresh_session(refresh_token: str) -> Tuple[bool, Optional[dict], str]:
 
     except Exception:
         logger.exception("Refresh session failed")
-        return False, None, "Invalid refresh token"
+        return False, None, AUTH_ERROR_INTERNAL
 
 
 def logout_session(session_id: str) -> bool:

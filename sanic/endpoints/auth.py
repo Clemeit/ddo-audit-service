@@ -68,9 +68,15 @@ async def register(request: Request):
         )
 
         if not success:
-            logger.warning("Registration request failed: %s", error_msg)
             # Do not leak account enumeration details (e.g., existing usernames).
-            return json({"error": "Unable to register account"}, status=400)
+            if error_msg == auth_service.AUTH_ERROR_USERNAME_EXISTS:
+                logger.warning("Registration request failed: %s", error_msg)
+                return json({"error": "Unable to register account"}, status=400)
+
+            logger.error(
+                "Registration request failed due to internal error: %s", error_msg
+            )
+            return json({"error": "Unable to register account"}, status=500)
 
         return json(
             {"data": user_data},
@@ -135,10 +141,12 @@ async def login(request: Request):
         )
 
         if not success:
-            # Only expose a generic auth error to avoid information leakage.
-            if error_msg != "Invalid username or password":
-                logger.warning("Login request failed: %s", error_msg)
-            return json({"error": "Invalid username or password"}, status=401)
+            if error_msg == auth_service.AUTH_ERROR_INVALID_CREDENTIALS:
+                # Only expose a generic auth error to avoid information leakage.
+                return json({"error": "Invalid username or password"}, status=401)
+
+            logger.error("Login request failed due to internal error: %s", error_msg)
+            return json({"error": "Unable to complete login"}, status=500)
 
         return json(
             {"data": user_data},
@@ -169,9 +177,11 @@ async def refresh(request: Request):
             refresh_request.refresh_token
         )
         if not success:
-            if error_msg != "Invalid refresh token":
-                logger.warning("Refresh request failed: %s", error_msg)
-            return json({"error": "Invalid refresh token"}, status=401)
+            if error_msg == auth_service.AUTH_ERROR_INVALID_REFRESH_TOKEN:
+                return json({"error": "Invalid refresh token"}, status=401)
+
+            logger.error("Refresh request failed due to internal error: %s", error_msg)
+            return json({"error": "Unable to refresh session"}, status=500)
 
         return json({"data": token_data}, status=200)
 
