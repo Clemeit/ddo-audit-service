@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 # JWT Configuration
-JWT_SECRET_KEY = "super-secret"  # os.getenv("JWT_SECRET_KEY", "")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRATION_SECONDS = int(
     os.getenv("ACCESS_TOKEN_EXPIRATION_SECONDS", "900")
