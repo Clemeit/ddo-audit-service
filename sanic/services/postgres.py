@@ -1,7 +1,8 @@
 import json
 import os
 import logging
-from contextlib import contextmanager
+from collections import defaultdict
+from contextlib import contextmanager, asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from time import time
 from typing import Optional, Generator, Tuple
@@ -56,7 +57,9 @@ DB_CONFIG = {
     "password": POSTGRES_PASSWORD,
     "connect_timeout": POSTGRES_CONNECT_TIMEOUT,
     "application_name": POSTGRES_APPLICATION_NAME,
-    # Removed cursor_factory to use default tuple cursors for compatibility
+    # Set statement_timeout at connection level so every connection inherits it
+    # without an extra round-trip per checkout.
+    "options": f"-c statement_timeout={POSTGRES_COMMAND_TIMEOUT * 1000}",
 }
 
 
@@ -146,10 +149,6 @@ class PostgresConnectionManager:
 
             # Set autocommit to False for transaction control
             conn.autocommit = False
-
-            # Set a statement timeout for long-running queries
-            with conn.cursor() as cursor:
-                cursor.execute(f"SET statement_timeout = '{POSTGRES_COMMAND_TIMEOUT}s'")
 
             yield conn
 
@@ -413,6 +412,77 @@ def reset_postgres_connection_stats():
     return _postgres_manager.reset_connection_stats()
 
 
+# ========================================
+# psycopg3 async connection pool (for non-blocking auth paths)
+# ========================================
+
+import psycopg
+import psycopg.conninfo
+import psycopg.rows
+from psycopg_pool import AsyncConnectionPool
+
+_async_pool: Optional[AsyncConnectionPool] = None
+
+POSTGRES_ASYNC_MIN_CONN = int(os.getenv("POSTGRES_ASYNC_MIN_SIZE", "2"))
+POSTGRES_ASYNC_MAX_CONN = int(os.getenv("POSTGRES_ASYNC_MAX_SIZE", "10"))
+
+_ASYNC_CONNINFO = psycopg.conninfo.make_conninfo(
+    host=POSTGRES_HOST,
+    port=POSTGRES_PORT,
+    dbname=POSTGRES_DB,
+    user=POSTGRES_USER,
+    password=POSTGRES_PASSWORD,
+    connect_timeout=POSTGRES_CONNECT_TIMEOUT,
+    application_name=POSTGRES_APPLICATION_NAME,
+    options=f"-c statement_timeout={POSTGRES_COMMAND_TIMEOUT * 1000}",
+)
+
+
+async def initialize_async_postgres():
+    """Create the psycopg3 async connection pool."""
+    global _async_pool
+    if _async_pool is not None:
+        return
+    _async_pool = AsyncConnectionPool(
+        conninfo=_ASYNC_CONNINFO,
+        min_size=POSTGRES_ASYNC_MIN_CONN,
+        max_size=POSTGRES_ASYNC_MAX_CONN,
+        open=False,
+    )
+    await _async_pool.open()
+    logger.info(
+        "psycopg3 async pool initialized (min=%d, max=%d)",
+        POSTGRES_ASYNC_MIN_CONN,
+        POSTGRES_ASYNC_MAX_CONN,
+    )
+
+
+async def close_async_postgres():
+    """Shut down the psycopg3 async connection pool."""
+    global _async_pool
+    if _async_pool is not None:
+        await _async_pool.close()
+        _async_pool = None
+        logger.info("psycopg3 async pool closed")
+
+
+@asynccontextmanager
+async def get_async_dict_cursor(commit: bool = True):
+    """Async dict cursor backed by the psycopg3 pool.
+
+    On normal exit the transaction is committed (when *commit* is True).
+    If the caller raises, psycopg3's pool context manager automatically
+    rolls back the uncommitted transaction so no partial writes persist.
+    """
+    if _async_pool is None:
+        raise RuntimeError("Async Postgres pool not initialized")
+    async with _async_pool.connection() as conn:
+        async with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+            yield cur
+            if commit:
+                await conn.commit()
+
+
 @contextmanager
 def get_db_connection():
     """Get a database connection context manager for backward compatibility."""
@@ -588,15 +658,124 @@ def get_active_queries_info():
 
 
 def health_check():
-    """Add database performance monitoring information."""
+    """Collect database performance monitoring information in a single connection."""
     try:
         stats = get_postgres_pool_stats()
         health_status = postgres_health_check()
-        connection_info = get_detailed_connection_info()
-        active_queries = get_active_queries_info()
 
-        # Add basic performance metrics
+        # Use a single cursor for all diagnostic queries to avoid
+        # checking out multiple connections from the limited pool.
         with get_db_cursor(commit=False) as cursor:
+            # --- detailed connection info ---
+            cursor.execute(
+                """
+                SELECT
+                    count(*) AS total_connections,
+                    count(*) FILTER (WHERE state = 'active') AS active,
+                    count(*) FILTER (WHERE state = 'idle') AS idle,
+                    count(*) FILTER (WHERE state = 'idle in transaction') AS idle_in_transaction,
+                    count(*) FILTER (WHERE application_name = %s) AS our_app_connections,
+                    count(*) FILTER (WHERE application_name = %s AND state = 'active') AS our_active_connections,
+                    count(*) FILTER (WHERE application_name = %s AND state = 'idle') AS our_idle_connections
+                FROM pg_stat_activity
+                WHERE pid != pg_backend_pid()
+                """,
+                (
+                    POSTGRES_APPLICATION_NAME,
+                    POSTGRES_APPLICATION_NAME,
+                    POSTGRES_APPLICATION_NAME,
+                ),
+            )
+            conn_row = cursor.fetchone()
+
+            cursor.execute(
+                """
+                SELECT
+                    numbackends,
+                    xact_commit,
+                    xact_rollback,
+                    blks_read,
+                    blks_hit,
+                    tup_returned,
+                    tup_fetched,
+                    tup_inserted,
+                    tup_updated,
+                    tup_deleted
+                FROM pg_stat_database
+                WHERE datname = current_database()
+                """
+            )
+            db_stats = cursor.fetchone()
+
+            blocks_hit = db_stats[4] if db_stats and db_stats[4] else 0
+            blocks_read = db_stats[3] if db_stats and db_stats[3] else 0
+            total_blocks = blocks_hit + blocks_read
+            cache_hit_ratio = (
+                (blocks_hit / total_blocks * 100) if total_blocks > 0 else 0
+            )
+
+            connection_info = {
+                "total_connections": conn_row[0],
+                "active_connections": conn_row[1],
+                "idle_connections": conn_row[2],
+                "idle_in_transaction_connections": conn_row[3],
+                "our_app_connections": conn_row[4],
+                "our_active_connections": conn_row[5],
+                "our_idle_connections": conn_row[6],
+                "database_backends": db_stats[0] if db_stats else 0,
+                "transactions_committed": db_stats[1] if db_stats else 0,
+                "transactions_rolled_back": db_stats[2] if db_stats else 0,
+                "cache_hit_ratio_percent": round(cache_hit_ratio, 2),
+                "blocks_read": blocks_read,
+                "blocks_hit": blocks_hit,
+                "tuples_returned": db_stats[5] if db_stats else 0,
+                "tuples_fetched": db_stats[6] if db_stats else 0,
+                "tuples_inserted": db_stats[7] if db_stats else 0,
+                "tuples_updated": db_stats[8] if db_stats else 0,
+                "tuples_deleted": db_stats[9] if db_stats else 0,
+            }
+
+            # --- active queries ---
+            cursor.execute(
+                """
+                SELECT
+                    pid,
+                    application_name,
+                    client_addr,
+                    state,
+                    query_start,
+                    state_change,
+                    wait_event_type,
+                    wait_event,
+                    EXTRACT(EPOCH FROM (now() - query_start)) AS query_duration_seconds,
+                    LEFT(query, 100) AS query_preview
+                FROM pg_stat_activity
+                WHERE state = 'active'
+                    AND pid != pg_backend_pid()
+                    AND application_name = %s
+                ORDER BY query_start
+                LIMIT 10
+                """,
+                (POSTGRES_APPLICATION_NAME,),
+            )
+            active_query_rows = cursor.fetchall()
+            active_queries = [
+                {
+                    "pid": q[0],
+                    "application_name": q[1],
+                    "client_addr": str(q[2]) if q[2] else None,
+                    "state": q[3],
+                    "query_start": q[4].isoformat() if q[4] else None,
+                    "state_change": q[5].isoformat() if q[5] else None,
+                    "wait_event_type": q[6],
+                    "wait_event": q[7],
+                    "query_duration_seconds": round(q[8], 2) if q[8] else 0,
+                    "query_preview": q[9],
+                }
+                for q in active_query_rows
+            ]
+
+            # --- basic performance metrics ---
             cursor.execute(
                 "SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"
             )
@@ -608,17 +787,16 @@ def health_check():
             cursor.execute("SHOW max_connections")
             pg_max_connections = cursor.fetchone()[0]
 
-            # Get current connection info for this specific connection
             cursor.execute(
                 """
-                SELECT 
+                SELECT
                     application_name,
                     client_addr,
                     state,
                     query_start,
                     state_change,
                     backend_start
-                FROM pg_stat_activity 
+                FROM pg_stat_activity
                 WHERE pid = pg_backend_pid()
                 """
             )
@@ -703,26 +881,30 @@ def add_or_update_characters(characters: list[dict]):
             for i in range(0, len(processed_characters), batch_size):
                 batch = processed_characters[i : i + batch_size]
 
+                # Group characters by their field set so we can reuse
+                # the same query for all characters with the same shape
+                groups = defaultdict(list)
                 for character in batch:
-                    character_fields = [
-                        field
-                        for field in character.keys()
-                        if field not in exclude_fields
-                    ]
+                    fields = tuple(
+                        sorted(f for f in character.keys() if f not in exclude_fields)
+                    )
+                    groups[fields].append(character)
 
+                for character_fields, chars in groups.items():
                     update_list: list[str] = [
                         f"{field} = EXCLUDED.{field}"
                         for field in character_fields
                         if field not in ["name", "gender"]
                     ]
 
-                    # Note: name and gender are different because anonymous characters will
-                    # have no name or gender. So these are only updated if the character
-                    # is not anonymous.
+                    # Note: name and gender are different because anonymous characters
+                    # will have no name or gender. So these are only updated if the
+                    # character is not anonymous.
                     update_list.extend(
                         [
                             f"{field} = CASE WHEN EXCLUDED.is_anonymous = 'true' THEN characters.{field} ELSE EXCLUDED.{field} END"
                             for field in ["name", "gender"]
+                            if field in character_fields
                         ]
                     )
 
@@ -745,17 +927,27 @@ def add_or_update_characters(characters: list[dict]):
                         {updates}, last_save = NOW()
                     """
                     ).format(
-                        columns=columns, placeholders=placeholders, updates=updates
+                        columns=columns,
+                        placeholders=placeholders,
+                        updates=updates,
                     )
 
-                    # Get the values of the Character model
-                    values = [
-                        json.dumps(value) if isinstance(value, (dict, list)) else value
-                        for key, value in character.items()
-                        if key in character_fields
+                    # Build values list for all characters in this field group
+                    values_list = [
+                        tuple(
+                            (
+                                json.dumps(char[f])
+                                if isinstance(char[f], (dict, list))
+                                else char[f]
+                            )
+                            for f in character_fields
+                        )
+                        for char in chars
                     ]
 
-                    cursor.execute(query, values)
+                    psycopg2.extras.execute_batch(
+                        cursor, query, values_list, page_size=100
+                    )
 
                 logger.debug(
                     f"Processed batch {i//batch_size + 1} of characters "
@@ -4516,79 +4708,224 @@ def truncate_quest_sessions() -> None:
                 )
 
 
-# User management functions
-def get_user_by_username(username: str) -> Optional[dict]:
-    """Get user by username."""
+# ========================================
+# Async auth Postgres functions (psycopg3)
+# ========================================
+
+
+async def async_get_user_by_username(username: str) -> Optional[dict]:
+    """Get user by username (async)."""
     try:
-        with get_dict_cursor(commit=False) as cursor:
-            cursor.execute(
+        async with get_async_dict_cursor(commit=False) as cursor:
+            await cursor.execute(
                 "SELECT id, username, password_hash, auth_version, created_at, updated_at FROM users WHERE LOWER(username) = LOWER(%s)",
                 (username,),
             )
-            row = cursor.fetchone()
+            row = await cursor.fetchone()
             return dict(row) if row else None
     except Exception as e:
-        logger.error(f"Failed to get user by username: {e}")
+        logger.error(f"async_get_user_by_username failed: {e}")
         return None
 
 
-def get_user_by_id(user_id: int) -> Optional[dict]:
-    """Get user by ID."""
+async def async_get_user_by_id(user_id: int) -> Optional[dict]:
+    """Get user by ID (async)."""
     try:
-        with get_dict_cursor(commit=False) as cursor:
-            cursor.execute(
+        async with get_async_dict_cursor(commit=False) as cursor:
+            await cursor.execute(
                 "SELECT id, username, password_hash, auth_version, created_at, updated_at FROM users WHERE id = %s",
                 (user_id,),
             )
-            row = cursor.fetchone()
+            row = await cursor.fetchone()
             return dict(row) if row else None
     except Exception as e:
-        logger.error(f"Failed to get user by ID: {e}")
+        logger.error(f"async_get_user_by_id failed: {e}")
         return None
 
 
-def create_user(username: str, password_hash: str) -> Optional[dict]:
-    """Create a new user."""
+async def async_get_user_auth_version(user_id: int) -> Optional[int]:
+    """Get the current auth version for a user (async)."""
     try:
-        with get_dict_cursor(commit=True) as cursor:
-            cursor.execute(
-                "INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id, username, auth_version, created_at, updated_at",
-                (username, password_hash),
+        async with get_async_dict_cursor(commit=False) as cursor:
+            await cursor.execute(
+                "SELECT auth_version FROM users WHERE id = %s",
+                (user_id,),
             )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-    except psycopg2.errors.UniqueViolation as e:
-        raise UsernameAlreadyExistsError("Username already exists") from e
+            row = await cursor.fetchone()
+            return int(row["auth_version"]) if row else None
     except Exception as e:
-        logger.error(f"Failed to create user: {e}")
+        logger.error(f"async_get_user_auth_version failed: {e}")
         return None
 
 
-def create_user_with_settings(username: str, password_hash: str) -> Optional[dict]:
-    """Create a new user and their settings row in a single transaction."""
+async def async_create_auth_session(
+    session_id: str,
+    user_id: int,
+    refresh_token_hash: str,
+    auth_version: int,
+    expires_at: datetime,
+    created_ip: Optional[str] = None,
+    created_user_agent: Optional[str] = None,
+) -> Optional[dict]:
+    """Create a persistent auth session for a user (async)."""
     try:
-        with get_dict_cursor(commit=True) as cursor:
-            cursor.execute(
-                "INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id, username, auth_version, created_at, updated_at",
-                (username, password_hash),
+        async with get_async_dict_cursor(commit=True) as cursor:
+            await cursor.execute(
+                """
+                INSERT INTO auth_sessions (
+                    session_id,
+                    user_id,
+                    refresh_token_hash,
+                    auth_version,
+                    expires_at,
+                    created_ip,
+                    created_user_agent
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING session_id, user_id, refresh_token_hash, auth_version,
+                          created_at, last_used_at, expires_at, revoked_at,
+                          revoke_reason, created_ip, created_user_agent, updated_at
+                """,
+                (
+                    session_id,
+                    user_id,
+                    refresh_token_hash,
+                    auth_version,
+                    expires_at,
+                    created_ip,
+                    created_user_agent,
+                ),
             )
-            row = cursor.fetchone()
-            if not row:
-                raise RuntimeError("User INSERT returned no row")
-            user = dict(row)
-            cursor.execute(
-                "INSERT INTO user_settings (user_id, settings) VALUES (%s, '{}'::jsonb)",
-                (user["id"],),
-            )
-            return user
-    except psycopg2.errors.UniqueViolation as e:
-        raise UsernameAlreadyExistsError("Username already exists") from e
+            row = await cursor.fetchone()
+            return dict(row) if row else None
     except Exception as e:
-        logger.error(f"Failed to create user with settings: {e}")
-        raise
+        logger.error(f"async_create_auth_session failed: {e}")
+        return None
 
 
-def create_user_with_settings_and_auth_session(
+async def async_get_auth_session(session_id: str) -> Optional[dict]:
+    """Get an auth session by its session id (async)."""
+    try:
+        async with get_async_dict_cursor(commit=False) as cursor:
+            await cursor.execute(
+                """
+                SELECT session_id, user_id, refresh_token_hash, auth_version,
+                       created_at, last_used_at, expires_at, revoked_at,
+                       revoke_reason, created_ip, created_user_agent, updated_at
+                FROM auth_sessions
+                WHERE session_id = %s
+                """,
+                (session_id,),
+            )
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"async_get_auth_session failed: {e}")
+        return None
+
+
+async def async_get_auth_session_by_refresh_token_hash(
+    refresh_token_hash: str,
+) -> Optional[dict]:
+    """Get an auth session by the stored refresh token hash (async)."""
+    try:
+        async with get_async_dict_cursor(commit=False) as cursor:
+            await cursor.execute(
+                """
+                SELECT session_id, user_id, refresh_token_hash, auth_version,
+                       created_at, last_used_at, expires_at, revoked_at,
+                       revoke_reason, created_ip, created_user_agent, updated_at
+                FROM auth_sessions
+                WHERE refresh_token_hash = %s
+                """,
+                (refresh_token_hash,),
+            )
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"async_get_auth_session_by_refresh_token_hash failed: {e}")
+        return None
+
+
+async def async_rotate_auth_session_refresh_token(
+    session_id: str,
+    current_refresh_token_hash: str,
+    refresh_token_hash: str,
+    expires_at: datetime,
+) -> Optional[dict]:
+    """Rotate the refresh token for an existing session using compare-and-set (async)."""
+    try:
+        async with get_async_dict_cursor(commit=True) as cursor:
+            await cursor.execute(
+                """
+                UPDATE auth_sessions
+                SET refresh_token_hash = %s,
+                    expires_at = %s,
+                    last_used_at = NOW(),
+                    updated_at = NOW()
+                WHERE session_id = %s
+                  AND refresh_token_hash = %s
+                  AND revoked_at IS NULL
+                  AND expires_at > NOW()
+                RETURNING session_id, user_id, refresh_token_hash, auth_version,
+                          created_at, last_used_at, expires_at, revoked_at,
+                          revoke_reason, created_ip, created_user_agent, updated_at
+                """,
+                (
+                    refresh_token_hash,
+                    expires_at,
+                    session_id,
+                    current_refresh_token_hash,
+                ),
+            )
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"async_rotate_auth_session_refresh_token failed: {e}")
+        return None
+
+
+async def async_revoke_auth_session(session_id: str, revoke_reason: str) -> bool:
+    """Idempotently revoke a single auth session (async)."""
+    try:
+        async with get_async_dict_cursor(commit=True) as cursor:
+            await cursor.execute(
+                """
+                UPDATE auth_sessions
+                SET revoked_at = NOW(), revoke_reason = %s, updated_at = NOW()
+                WHERE session_id = %s AND revoked_at IS NULL
+                """,
+                (revoke_reason, session_id),
+            )
+            return True
+    except Exception as e:
+        logger.error(f"async_revoke_auth_session failed: {e}")
+        return False
+
+
+async def async_revoke_all_auth_sessions_for_user(
+    user_id: int, revoke_reason: str
+) -> list:
+    """Revoke all active auth sessions for a user and return affected session ids (async)."""
+    try:
+        async with get_async_dict_cursor(commit=True) as cursor:
+            await cursor.execute(
+                """
+                UPDATE auth_sessions
+                SET revoked_at = NOW(), revoke_reason = %s, updated_at = NOW()
+                WHERE user_id = %s AND revoked_at IS NULL
+                RETURNING session_id
+                """,
+                (revoke_reason, user_id),
+            )
+            rows = await cursor.fetchall() or []
+            return [str(row["session_id"]) for row in rows]
+    except Exception as e:
+        logger.error(f"async_revoke_all_auth_sessions_for_user failed: {e}")
+        return []
+
+
+async def async_create_user_with_settings_and_auth_session(
     username: str,
     password_hash: str,
     session_id: str,
@@ -4597,24 +4934,24 @@ def create_user_with_settings_and_auth_session(
     created_ip: Optional[str] = None,
     created_user_agent: Optional[str] = None,
 ) -> Optional[dict]:
-    """Create user/settings/session atomically in one transaction."""
+    """Create user/settings/session atomically in one transaction (async)."""
     try:
-        with get_dict_cursor(commit=True) as cursor:
-            cursor.execute(
+        async with get_async_dict_cursor(commit=True) as cursor:
+            await cursor.execute(
                 "INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id, username, auth_version, created_at, updated_at",
                 (username, password_hash),
             )
-            user_row = cursor.fetchone()
+            user_row = await cursor.fetchone()
             if not user_row:
                 raise RuntimeError("User INSERT returned no row")
             user = dict(user_row)
 
-            cursor.execute(
+            await cursor.execute(
                 "INSERT INTO user_settings (user_id, settings) VALUES (%s, '{}'::jsonb)",
                 (user["id"],),
             )
 
-            cursor.execute(
+            await cursor.execute(
                 """
                 INSERT INTO auth_sessions (
                     session_id,
@@ -4640,7 +4977,7 @@ def create_user_with_settings_and_auth_session(
                     created_user_agent,
                 ),
             )
-            session_row = cursor.fetchone()
+            session_row = await cursor.fetchone()
             if not session_row:
                 raise RuntimeError("Auth session INSERT returned no row")
 
@@ -4648,7 +4985,7 @@ def create_user_with_settings_and_auth_session(
                 "user": user,
                 "session": dict(session_row),
             }
-    except psycopg2.errors.UniqueViolation as e:
+    except psycopg.errors.UniqueViolation as e:
         if e.diag.constraint_name in (
             "users_username_key",
             "idx_users_username_lower_unique",
@@ -4657,201 +4994,11 @@ def create_user_with_settings_and_auth_session(
         logger.error(f"Unexpected unique violation: {e.diag.constraint_name}")
         return None
     except Exception as e:
-        logger.error(f"Failed to create user/settings/session atomically: {e}")
+        logger.error(f"async_create_user_with_settings_and_auth_session failed: {e}")
         return None
 
 
-def update_user_password(user_id: int, password_hash: str) -> bool:
-    """Update user's password."""
-    try:
-        with get_db_cursor(commit=True) as cursor:
-            cursor.execute(
-                "UPDATE users SET password_hash = %s, updated_at = NOW() WHERE id = %s",
-                (password_hash, user_id),
-            )
-            return cursor.rowcount > 0
-    except Exception as e:
-        logger.error(f"Failed to update user password: {e}")
-        return False
-
-
-def get_user_auth_version(user_id: int) -> Optional[int]:
-    """Get the current auth version for a user."""
-    try:
-        with get_db_cursor(commit=False) as cursor:
-            cursor.execute("SELECT auth_version FROM users WHERE id = %s", (user_id,))
-            row = cursor.fetchone()
-            return int(row[0]) if row else None
-    except Exception as e:
-        logger.error(f"Failed to get user auth version: {e}")
-        return None
-
-
-def create_auth_session(
-    session_id: str,
-    user_id: int,
-    refresh_token_hash: str,
-    auth_version: int,
-    expires_at: datetime,
-    created_ip: Optional[str] = None,
-    created_user_agent: Optional[str] = None,
-) -> Optional[dict]:
-    """Create a persistent auth session for a user."""
-    try:
-        with get_dict_cursor(commit=True) as cursor:
-            cursor.execute(
-                """
-                INSERT INTO auth_sessions (
-                    session_id,
-                    user_id,
-                    refresh_token_hash,
-                    auth_version,
-                    expires_at,
-                    created_ip,
-                    created_user_agent
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING session_id, user_id, refresh_token_hash, auth_version,
-                          created_at, last_used_at, expires_at, revoked_at,
-                          revoke_reason, created_ip, created_user_agent, updated_at
-                """,
-                (
-                    session_id,
-                    user_id,
-                    refresh_token_hash,
-                    auth_version,
-                    expires_at,
-                    created_ip,
-                    created_user_agent,
-                ),
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-    except Exception as e:
-        logger.error(f"Failed to create auth session: {e}")
-        return None
-
-
-def get_auth_session(session_id: str) -> Optional[dict]:
-    """Get an auth session by its session id."""
-    try:
-        with get_dict_cursor(commit=False) as cursor:
-            cursor.execute(
-                """
-                SELECT session_id, user_id, refresh_token_hash, auth_version,
-                       created_at, last_used_at, expires_at, revoked_at,
-                       revoke_reason, created_ip, created_user_agent, updated_at
-                FROM auth_sessions
-                WHERE session_id = %s
-                """,
-                (session_id,),
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-    except Exception as e:
-        logger.error(f"Failed to get auth session: {e}")
-        return None
-
-
-def get_auth_session_by_refresh_token_hash(refresh_token_hash: str) -> Optional[dict]:
-    """Get an auth session by the stored refresh token hash."""
-    try:
-        with get_dict_cursor(commit=False) as cursor:
-            cursor.execute(
-                """
-                SELECT session_id, user_id, refresh_token_hash, auth_version,
-                       created_at, last_used_at, expires_at, revoked_at,
-                       revoke_reason, created_ip, created_user_agent, updated_at
-                FROM auth_sessions
-                WHERE refresh_token_hash = %s
-                """,
-                (refresh_token_hash,),
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-    except Exception as e:
-        logger.error(f"Failed to get auth session by refresh token hash: {e}")
-        return None
-
-
-def rotate_auth_session_refresh_token(
-    session_id: str,
-    current_refresh_token_hash: str,
-    refresh_token_hash: str,
-    expires_at: datetime,
-) -> Optional[dict]:
-    """Rotate the refresh token for an existing session using compare-and-set."""
-    try:
-        with get_dict_cursor(commit=True) as cursor:
-            cursor.execute(
-                """
-                UPDATE auth_sessions
-                SET refresh_token_hash = %s,
-                    expires_at = %s,
-                    last_used_at = NOW(),
-                    updated_at = NOW()
-                WHERE session_id = %s
-                  AND refresh_token_hash = %s
-                  AND revoked_at IS NULL
-                  AND expires_at > NOW()
-                RETURNING session_id, user_id, refresh_token_hash, auth_version,
-                          created_at, last_used_at, expires_at, revoked_at,
-                          revoke_reason, created_ip, created_user_agent, updated_at
-                """,
-                (
-                    refresh_token_hash,
-                    expires_at,
-                    session_id,
-                    current_refresh_token_hash,
-                ),
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-    except Exception as e:
-        logger.error(f"Failed to rotate auth session refresh token: {e}")
-        return None
-
-
-def revoke_auth_session(session_id: str, revoke_reason: str) -> bool:
-    """Idempotently revoke a single auth session."""
-    try:
-        with get_db_cursor(commit=True) as cursor:
-            cursor.execute(
-                """
-                UPDATE auth_sessions
-                SET revoked_at = NOW(), revoke_reason = %s, updated_at = NOW()
-                WHERE session_id = %s AND revoked_at IS NULL
-                """,
-                (revoke_reason, session_id),
-            )
-            # Idempotent behavior: missing or already-revoked sessions are success.
-            return True
-    except Exception as e:
-        logger.error(f"Failed to revoke auth session: {e}")
-        return False
-
-
-def revoke_all_auth_sessions_for_user(user_id: int, revoke_reason: str) -> list[str]:
-    """Revoke all active auth sessions for a user and return the affected session ids."""
-    try:
-        with get_dict_cursor(commit=True) as cursor:
-            cursor.execute(
-                """
-                UPDATE auth_sessions
-                SET revoked_at = NOW(), revoke_reason = %s, updated_at = NOW()
-                WHERE user_id = %s AND revoked_at IS NULL
-                RETURNING session_id
-                """,
-                (revoke_reason, user_id),
-            )
-            rows = cursor.fetchall() or []
-            return [str(row["session_id"]) for row in rows]
-    except Exception as e:
-        logger.error(f"Failed to revoke all auth sessions for user: {e}")
-        return []
-
-
-def change_password_and_create_session(
+async def async_change_password_and_create_session(
     user_id: int,
     password_hash: str,
     session_id: str,
@@ -4861,10 +5008,10 @@ def change_password_and_create_session(
     created_user_agent: Optional[str] = None,
     revoke_reason: str = "password_changed",
 ) -> Optional[dict]:
-    """Update password, invalidate all existing sessions, and create a new session."""
+    """Update password, invalidate all existing sessions, and create a new session (async)."""
     try:
-        with get_dict_cursor(commit=True) as cursor:
-            cursor.execute(
+        async with get_async_dict_cursor(commit=True) as cursor:
+            await cursor.execute(
                 """
                 UPDATE users
                 SET password_hash = %s,
@@ -4875,11 +5022,11 @@ def change_password_and_create_session(
                 """,
                 (password_hash, user_id),
             )
-            user_row = cursor.fetchone()
+            user_row = await cursor.fetchone()
             if not user_row:
                 return None
 
-            cursor.execute(
+            await cursor.execute(
                 """
                 UPDATE auth_sessions
                 SET revoked_at = NOW(), revoke_reason = %s, updated_at = NOW()
@@ -4888,9 +5035,9 @@ def change_password_and_create_session(
                 """,
                 (revoke_reason, user_id),
             )
-            revoked_rows = cursor.fetchall() or []
+            revoked_rows = await cursor.fetchall() or []
 
-            cursor.execute(
+            await cursor.execute(
                 """
                 INSERT INTO auth_sessions (
                     session_id,
@@ -4916,7 +5063,7 @@ def change_password_and_create_session(
                     created_user_agent,
                 ),
             )
-            session_row = cursor.fetchone()
+            session_row = await cursor.fetchone()
             if not session_row:
                 return None
 
@@ -4927,48 +5074,34 @@ def change_password_and_create_session(
             ]
             return result
     except Exception as e:
-        logger.error(f"Failed to change password and create auth session: {e}")
+        logger.error(f"async_change_password_and_create_session failed: {e}")
         return None
 
 
-def create_user_settings(user_id: int) -> bool:
-    """Create empty settings for a new user."""
+async def async_get_user_settings(user_id: int) -> Optional[dict]:
+    """Get user settings (async)."""
     try:
-        with get_db_cursor(commit=True) as cursor:
-            cursor.execute(
-                "INSERT INTO user_settings (user_id, settings) VALUES (%s, '{}'::jsonb) ON CONFLICT DO NOTHING",
-                (user_id,),
-            )
-            return True
-    except Exception as e:
-        logger.error(f"Failed to create user settings: {e}")
-        return False
-
-
-def get_user_settings(user_id: int) -> Optional[dict]:
-    """Get user settings."""
-    try:
-        with get_dict_cursor(commit=False) as cursor:
-            cursor.execute(
+        async with get_async_dict_cursor(commit=False) as cursor:
+            await cursor.execute(
                 "SELECT id, user_id, settings, created_at, updated_at FROM user_settings WHERE user_id = %s",
                 (user_id,),
             )
-            row = cursor.fetchone()
+            row = await cursor.fetchone()
             return dict(row) if row else None
     except Exception as e:
-        logger.error(f"Failed to get user settings: {e}")
+        logger.error(f"async_get_user_settings failed: {e}")
         return None
 
 
-def update_user_settings(user_id: int, settings: dict) -> bool:
-    """Update user settings."""
+async def async_update_user_settings(user_id: int, settings: dict) -> bool:
+    """Update user settings (async)."""
     try:
-        with get_db_cursor(commit=True) as cursor:
-            cursor.execute(
+        async with get_async_dict_cursor(commit=True) as cursor:
+            await cursor.execute(
                 "UPDATE user_settings SET settings = %s, updated_at = NOW() WHERE user_id = %s",
                 (json.dumps(settings), user_id),
             )
             return cursor.rowcount > 0
     except Exception as e:
-        logger.error(f"Failed to update user settings: {e}")
+        logger.error(f"async_update_user_settings failed: {e}")
         return False

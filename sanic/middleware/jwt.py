@@ -42,7 +42,7 @@ async def jwt_middleware(request: Request):
     token = auth_header[7:]  # Remove "Bearer " prefix
 
     # Verify token against signature, auth version, and persisted session state.
-    payload = auth_service.validate_access_token(token)
+    payload = await auth_service.async_validate_access_token(token)
 
     if not payload:
         return _unauthorized_response()
