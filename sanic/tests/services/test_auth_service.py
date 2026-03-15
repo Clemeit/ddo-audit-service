@@ -1052,7 +1052,9 @@ def test_validate_access_token_rejects_missing_session_id(monkeypatch, run_async
     assert run_async(auth_service.async_validate_access_token("access-token")) is None
 
 
-def test_validate_access_token_rejects_session_identity_mismatch(monkeypatch, run_async):
+def test_validate_access_token_rejects_session_identity_mismatch(
+    monkeypatch, run_async
+):
     payload = {
         "user_id": 10,
         "username": "user10",
@@ -1111,9 +1113,7 @@ def test_create_session_returns_internal_error_when_create_fails(
     assert error == auth_service.AUTH_ERROR_INTERNAL
 
 
-def test_create_session_success_caches_session_and_auth_version(
-    monkeypatch, run_async
-):
+def test_create_session_success_caches_session_and_auth_version(monkeypatch, run_async):
     cached_versions = []
     cached_sessions = []
     session_payload = _active_session(
@@ -1260,7 +1260,9 @@ def test_refresh_session_returns_internal_error_when_session_user_is_missing(
         _amock(lambda user_id: None),
     )
 
-    success, data, error = run_async(auth_service.async_refresh_session("refresh-token"))
+    success, data, error = run_async(
+        auth_service.async_refresh_session("refresh-token")
+    )
 
     assert success is False
     assert data is None
@@ -1296,7 +1298,9 @@ def test_refresh_session_returns_internal_error_when_auth_version_unavailable(
         _amock(lambda user_id: None),
     )
 
-    success, data, error = run_async(auth_service.async_refresh_session("refresh-token"))
+    success, data, error = run_async(
+        auth_service.async_refresh_session("refresh-token")
+    )
 
     assert success is False
     assert data is None
@@ -1347,7 +1351,9 @@ def test_refresh_session_rejects_when_refresh_rotation_fails(monkeypatch, run_as
         _amock(lambda session_id: cleared_sessions.append(session_id)),
     )
 
-    success, data, error = run_async(auth_service.async_refresh_session("refresh-token"))
+    success, data, error = run_async(
+        auth_service.async_refresh_session("refresh-token")
+    )
 
     assert success is False
     assert data is None

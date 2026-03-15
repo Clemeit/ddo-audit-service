@@ -14,17 +14,23 @@ def test_async_increment_and_check_limit_initial_request_sets_ttl(
     async def _get_async_client():
         return mock_client
 
-    monkeypatch.setattr(rate_limit_module.redis_client, "get_async_redis_client", _get_async_client)
+    monkeypatch.setattr(
+        rate_limit_module.redis_client, "get_async_redis_client", _get_async_client
+    )
 
-    allowed, retry_after = run_async(rate_limit_module._async_increment_and_check_limit(
-        "rate_limit:auth:127.0.0.1:/v1/auth/login",
-        limit=5,
-        window=900,
-    ))
+    allowed, retry_after = run_async(
+        rate_limit_module._async_increment_and_check_limit(
+            "rate_limit:auth:127.0.0.1:/v1/auth/login",
+            limit=5,
+            window=900,
+        )
+    )
 
     assert allowed is True
     assert retry_after == 900
-    mock_client.register_script.assert_called_once_with(rate_limit_module._RATE_LIMIT_LUA)
+    mock_client.register_script.assert_called_once_with(
+        rate_limit_module._RATE_LIMIT_LUA
+    )
     mock_script.assert_awaited_once_with(
         keys=["rate_limit:auth:127.0.0.1:/v1/auth/login"],
         args=[900],
@@ -39,13 +45,17 @@ def test_async_increment_and_check_limit_keeps_existing_ttl(monkeypatch, run_asy
     async def _get_async_client():
         return mock_client
 
-    monkeypatch.setattr(rate_limit_module.redis_client, "get_async_redis_client", _get_async_client)
+    monkeypatch.setattr(
+        rate_limit_module.redis_client, "get_async_redis_client", _get_async_client
+    )
 
-    allowed, retry_after = run_async(rate_limit_module._async_increment_and_check_limit(
-        "rate_limit:auth:127.0.0.1:/v1/auth/login",
-        limit=5,
-        window=900,
-    ))
+    allowed, retry_after = run_async(
+        rate_limit_module._async_increment_and_check_limit(
+            "rate_limit:auth:127.0.0.1:/v1/auth/login",
+            limit=5,
+            window=900,
+        )
+    )
 
     assert allowed is True
     assert retry_after == 240
@@ -61,13 +71,17 @@ def test_async_increment_and_check_limit_allows_when_count_equals_limit(
     async def _get_async_client():
         return mock_client
 
-    monkeypatch.setattr(rate_limit_module.redis_client, "get_async_redis_client", _get_async_client)
+    monkeypatch.setattr(
+        rate_limit_module.redis_client, "get_async_redis_client", _get_async_client
+    )
 
-    allowed, retry_after = run_async(rate_limit_module._async_increment_and_check_limit(
-        "rate_limit:user:99:user:profile:password",
-        limit=5,
-        window=900,
-    ))
+    allowed, retry_after = run_async(
+        rate_limit_module._async_increment_and_check_limit(
+            "rate_limit:user:99:user:profile:password",
+            limit=5,
+            window=900,
+        )
+    )
 
     assert allowed is True
     assert retry_after == 180
@@ -83,13 +97,17 @@ def test_async_increment_and_check_limit_blocks_when_count_exceeds_limit(
     async def _get_async_client():
         return mock_client
 
-    monkeypatch.setattr(rate_limit_module.redis_client, "get_async_redis_client", _get_async_client)
+    monkeypatch.setattr(
+        rate_limit_module.redis_client, "get_async_redis_client", _get_async_client
+    )
 
-    allowed, retry_after = run_async(rate_limit_module._async_increment_and_check_limit(
-        "rate_limit:user:99:user:profile:password",
-        limit=5,
-        window=900,
-    ))
+    allowed, retry_after = run_async(
+        rate_limit_module._async_increment_and_check_limit(
+            "rate_limit:user:99:user:profile:password",
+            limit=5,
+            window=900,
+        )
+    )
 
     assert allowed is False
     assert retry_after == 179
@@ -105,13 +123,17 @@ def test_async_increment_and_check_limit_resets_ttl_when_missing(
     async def _get_async_client():
         return mock_client
 
-    monkeypatch.setattr(rate_limit_module.redis_client, "get_async_redis_client", _get_async_client)
+    monkeypatch.setattr(
+        rate_limit_module.redis_client, "get_async_redis_client", _get_async_client
+    )
 
-    allowed, retry_after = run_async(rate_limit_module._async_increment_and_check_limit(
-        "rate_limit:auth:127.0.0.1:/v1/auth/refresh",
-        limit=5,
-        window=900,
-    ))
+    allowed, retry_after = run_async(
+        rate_limit_module._async_increment_and_check_limit(
+            "rate_limit:auth:127.0.0.1:/v1/auth/refresh",
+            limit=5,
+            window=900,
+        )
+    )
 
     assert allowed is True
     assert retry_after == 900
@@ -129,11 +151,13 @@ def test_async_increment_and_check_limit_runtime_error_fails_open(
         _raise_runtime_error,
     )
 
-    allowed, retry_after = run_async(rate_limit_module._async_increment_and_check_limit(
-        "rate_limit:auth:127.0.0.1:/v1/auth/register",
-        limit=5,
-        window=900,
-    ))
+    allowed, retry_after = run_async(
+        rate_limit_module._async_increment_and_check_limit(
+            "rate_limit:auth:127.0.0.1:/v1/auth/register",
+            limit=5,
+            window=900,
+        )
+    )
 
     assert allowed is True
     assert retry_after is None
