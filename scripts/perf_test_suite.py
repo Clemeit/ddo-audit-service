@@ -284,16 +284,12 @@ def main():
     parser.add_argument(
         "--refresh-token", help="Refresh token for auth/refresh scenario"
     )
-    parser.add_argument(
-        "--character-name", help="Character name for by-name scenario"
-    )
+    parser.add_argument("--character-name", help="Character name for by-name scenario")
     parser.add_argument(
         "--tag", default="run", help="Label for this run (e.g. 'before', 'after')"
     )
     parser.add_argument("--output", help="Save results to this JSON file")
-    parser.add_argument(
-        "--compare-with", help="Baseline JSON file to compare against"
-    )
+    parser.add_argument("--compare-with", help="Baseline JSON file to compare against")
     parser.add_argument(
         "--scenarios",
         help="Comma-separated scenario names to run (default: all)",

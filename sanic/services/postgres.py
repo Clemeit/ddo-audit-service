@@ -878,9 +878,7 @@ def add_or_update_characters(characters: list[dict]):
                 groups = defaultdict(list)
                 for character in batch:
                     fields = tuple(
-                        sorted(
-                            f for f in character.keys() if f not in exclude_fields
-                        )
+                        sorted(f for f in character.keys() if f not in exclude_fields)
                     )
                     groups[fields].append(character)
 
@@ -904,8 +902,7 @@ def add_or_update_characters(characters: list[dict]):
 
                     # Construct the query dynamically using SQL composition for safety
                     columns = psycopg2.sql.SQL(", ").join(
-                        psycopg2.sql.Identifier(field)
-                        for field in character_fields
+                        psycopg2.sql.Identifier(field) for field in character_fields
                     )
                     placeholders = psycopg2.sql.SQL(", ").join(
                         psycopg2.sql.Placeholder() for _ in character_fields
@@ -930,9 +927,11 @@ def add_or_update_characters(characters: list[dict]):
                     # Build values list for all characters in this field group
                     values_list = [
                         tuple(
-                            json.dumps(char[f])
-                            if isinstance(char[f], (dict, list))
-                            else char[f]
+                            (
+                                json.dumps(char[f])
+                                if isinstance(char[f], (dict, list))
+                                else char[f]
+                            )
                             for f in character_fields
                         )
                         for char in chars

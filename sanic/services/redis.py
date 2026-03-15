@@ -733,9 +733,7 @@ def get_characters_by_name_as_dict(character_name: str) -> dict[int, dict]:
         with get_redis_client() as client:
             pipe = client.pipeline(transaction=False)
             for server_name in SERVER_NAMES_LOWERCASE:
-                pipe.json().get(
-                    RedisKeys.CHARACTERS.value.format(server=server_name)
-                )
+                pipe.json().get(RedisKeys.CHARACTERS.value.format(server=server_name))
             results = pipe.execute(raise_on_error=False)
         for server_data in results:
             if not server_data or isinstance(server_data, Exception):
@@ -788,9 +786,7 @@ def get_characters_by_group_id_as_dict(group_id: int) -> dict[int, dict]:
         with get_redis_client() as client:
             pipe = client.pipeline(transaction=False)
             for server_name in SERVER_NAMES_LOWERCASE:
-                pipe.json().get(
-                    RedisKeys.CHARACTERS.value.format(server=server_name)
-                )
+                pipe.json().get(RedisKeys.CHARACTERS.value.format(server=server_name))
             results = pipe.execute(raise_on_error=False)
         for server_data in results:
             if not server_data or isinstance(server_data, Exception):
