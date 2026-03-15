@@ -44,6 +44,12 @@ class UserLogin(BaseModel):
     password: str
 
 
+class RefreshTokenRequest(BaseModel):
+    """Request model for refresh token rotation."""
+
+    refresh_token: str = Field(..., min_length=1)
+
+
 class UserProfile(BaseModel):
     """Response model for user profile."""
 
@@ -77,6 +83,24 @@ class UserAuthResponse(BaseModel):
     """Response model for authentication endpoints."""
 
     access_token: str
+    refresh_token: str
     token_type: str = "Bearer"
-    expires_in: int = 604800  # 7 days in seconds
+    expires_in: int = 900
+    refresh_expires_in: int = 2592000
     user: UserProfile
+
+
+class RefreshTokenResponse(BaseModel):
+    """Response model for refresh token rotation."""
+
+    access_token: str
+    refresh_token: str
+    token_type: str = "Bearer"
+    expires_in: int = 900
+    refresh_expires_in: int = 2592000
+
+
+class ChangePasswordResponse(RefreshTokenResponse):
+    """Response model for password rotation."""
+
+    message: str

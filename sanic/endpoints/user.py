@@ -15,6 +15,7 @@ import secrets
 import string
 import json as json_lib
 from models.user import ChangePassword
+from utils.access_log import get_client_ip
 
 user_blueprint = Blueprint("user", url_prefix="/user", version=1)
 
@@ -135,7 +136,12 @@ async def change_user_password(request: Request):
     Returns:
         {
             "data": {
-                "message": "Password changed successfully"
+                "message": "Password changed successfully",
+                "access_token": "string",
+                "refresh_token": "string",
+                "token_type": "Bearer",
+                "expires_in": 900,
+                "refresh_expires_in": 2592000
             }
         }
     """
@@ -150,17 +156,19 @@ async def change_user_password(request: Request):
         change_password_req = ChangePassword(**(request.json or {}))
 
         # Change password
-        success, error_msg = auth_service.change_password(
+        success, response_data, error_msg = auth_service.change_password(
             user_id,
             change_password_req.old_password,
             change_password_req.new_password,
             username,
+            created_ip=get_client_ip(request),
+            created_user_agent=request.headers.get("User-Agent", ""),
         )
 
         if not success:
             return json({"error": error_msg}, status=400)
 
-        return json({"data": {"message": "Password changed successfully"}}, status=200)
+        return json({"data": response_data}, status=200)
 
     except ValidationError as e:
         errors = e.errors()

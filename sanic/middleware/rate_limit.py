@@ -23,6 +23,11 @@ USER_RATE_LIMIT = {
     "window": 3600,  # 1 hour
 }
 
+AUTH_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/auth/(register|login|refresh)$")
+USER_ENDPOINT_PATTERN = re.compile(
+    r"^/v?\d*/(user/(settings/persistent|profile/password)|auth/logout)$"
+)
+
 
 def _increment_and_check_limit(rate_limit_key: str, limit: int, window: int):
     """
@@ -59,7 +64,7 @@ async def rate_limit_middleware(request: Request):
     path = request.path
 
     # Check if this is an auth endpoint (should be rate limited by IP)
-    if re.match(r"^/v?\d*/auth/", path):
+    if AUTH_ENDPOINT_PATTERN.match(path):
         ip = get_client_ip(request)
 
         # Create a rate limit key for this IP and specific auth endpoint path
@@ -93,14 +98,12 @@ async def rate_limit_middleware(request: Request):
             pass
 
     # Check if this is a protected user endpoint (should be rate limited by user)
-    elif re.match(r"^/v?\d*/user/(settings/persistent|profile/password)", path):
+    elif USER_ENDPOINT_PATTERN.match(path):
         user_id = getattr(request.ctx, "user_id", None)
 
         if user_id:
             # Normalize endpoint path to be version-independent for rate limiting
-            endpoint_match = re.match(
-                r"^/v?\d*/user/(settings/persistent|profile/password)", path
-            )
+            endpoint_match = USER_ENDPOINT_PATTERN.match(path)
             endpoint_identifier = (
                 endpoint_match.group(1).replace("/", ":")
                 if endpoint_match

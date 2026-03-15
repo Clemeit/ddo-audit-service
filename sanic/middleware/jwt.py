@@ -41,8 +41,8 @@ async def jwt_middleware(request: Request):
 
     token = auth_header[7:]  # Remove "Bearer " prefix
 
-    # Verify token
-    payload = auth_service.verify_jwt_token(token)
+    # Verify token against signature, auth version, and persisted session state.
+    payload = auth_service.validate_access_token(token)
 
     if not payload:
         return _unauthorized_response()
@@ -50,6 +50,8 @@ async def jwt_middleware(request: Request):
     # Attach user info to request context
     request.ctx.user_id = payload.get("user_id")
     request.ctx.username = payload.get("username")
+    request.ctx.session_id = payload.get("session_id")
+    request.ctx.auth_version = payload.get("auth_version")
 
-    if not request.ctx.user_id:
+    if not request.ctx.user_id or not request.ctx.session_id:
         return _unauthorized_response()
