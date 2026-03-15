@@ -165,7 +165,9 @@ async def get_character_by_id(request: Request, character_id: int):
         character["is_online"] = True
     else:
         source = "database"
-        character_from_db = postgres_client.get_character_by_id(character_id)
+        character_from_db = await postgres_client.async_get_character_by_id(
+            character_id
+        )
         if character_from_db:
             character_from_db.is_online = False
             character = character_from_db.model_dump()
@@ -212,7 +214,7 @@ async def get_characters_by_ids(request: Request, character_ids: str):
 
         if len(discovered_characters) < len(character_ids_list):
             remaining_ids = set(character_ids_list) - cached_character_ids
-            persisted_characters = postgres_client.get_characters_by_ids(
+            persisted_characters = await postgres_client.async_get_characters_by_ids(
                 list(remaining_ids)
             )
             for character in persisted_characters:
@@ -253,8 +255,10 @@ async def get_character_by_server_name_and_character_name(
         found_character["is_online"] = True
     else:
         source = "database"
-        database_character = postgres_client.get_character_by_name_and_server(
-            character_name, server_name
+        database_character = (
+            await postgres_client.async_get_character_by_name_and_server(
+                character_name, server_name
+            )
         )
         if database_character:
             database_character.is_online = False
@@ -283,7 +287,7 @@ async def get_character_playstyle_score(request: Request, character_id: int):
     try:
         character = redis_client.get_character_by_id_as_dict(character_id)
         if not character:
-            character = postgres_client.get_character_by_id(character_id)
+            character = await postgres_client.async_get_character_by_id(character_id)
             if character:
                 character = character.model_dump()
 
@@ -318,7 +322,9 @@ async def get_characters_by_character_name(character_name: str):
 
     found_characters: dict[int, dict] = {}
 
-    database_characters = postgres_client.get_characters_by_name(character_name)
+    database_characters = await postgres_client.async_get_characters_by_name(
+        character_name
+    )
     if database_characters:
         for character in database_characters:
             character.is_online = False
@@ -358,7 +364,7 @@ async def set_characters(request: Request):
 
     # update in redis cache
     try:
-        handle_incoming_characters(request_body, CharacterRequestType.set)
+        await handle_incoming_characters(request_body, CharacterRequestType.set)
     except Exception as e:
         logMessage(
             message="Error handling incoming characters",
@@ -395,7 +401,7 @@ async def update_characters(request: Request):
         return json({"message": "Invalid request body"}, status=400)
 
     try:
-        handle_incoming_characters(request_body, CharacterRequestType.update)
+        await handle_incoming_characters(request_body, CharacterRequestType.update)
     except Exception as e:
         logMessage(
             message="Error handling incoming characters",
