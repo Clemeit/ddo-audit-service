@@ -1,0 +1,373 @@
+from contextlib import contextmanager
+from datetime import datetime, timedelta
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import pytest
+
+import services.postgres as postgres_service
+
+
+def _mock_connection_and_cursor():
+    conn = MagicMock()
+    cursor = MagicMock()
+    conn.cursor.return_value.__enter__.return_value = cursor
+    conn.cursor.return_value.__exit__.return_value = None
+    return conn, cursor
+
+
+def test_initialize_creates_connection_pool_and_runs_health_check(monkeypatch):
+    manager = postgres_service.PostgresConnectionManager()
+    pool_instance = MagicMock()
+    captured = {}
+
+    def _fake_pool_factory(minconn, maxconn, **kwargs):
+        captured["minconn"] = minconn
+        captured["maxconn"] = maxconn
+        captured["kwargs"] = kwargs
+        return pool_instance
+
+    monkeypatch.setattr(
+        postgres_service.pool, "SimpleConnectionPool", _fake_pool_factory
+    )
+    monkeypatch.setattr(manager, "health_check", lambda: True)
+
+    manager.initialize()
+
+    assert manager._is_initialized is True
+    assert manager._connection_pool is pool_instance
+    assert captured["minconn"] == postgres_service.POSTGRES_MIN_CONN
+    assert captured["maxconn"] == postgres_service.POSTGRES_MAX_CONN
+    assert captured["kwargs"] == postgres_service.DB_CONFIG
+
+
+def test_initialize_is_noop_when_already_initialized(monkeypatch):
+    manager = postgres_service.PostgresConnectionManager()
+    manager._is_initialized = True
+
+    def _should_not_run(*args, **kwargs):
+        raise AssertionError("Pool creation should not run when already initialized")
+
+    monkeypatch.setattr(postgres_service.pool, "SimpleConnectionPool", _should_not_run)
+
+    manager.initialize()
+
+
+def test_initialize_resets_state_and_raises_on_pool_error(monkeypatch):
+    manager = postgres_service.PostgresConnectionManager()
+
+    def _raise_pool_error(*args, **kwargs):
+        raise RuntimeError("pool unavailable")
+
+    monkeypatch.setattr(
+        postgres_service.pool, "SimpleConnectionPool", _raise_pool_error
+    )
+
+    with pytest.raises(RuntimeError, match="pool unavailable"):
+        manager.initialize()
+
+    assert manager._is_initialized is False
+    assert manager._connection_pool is None
+
+
+def test_get_connection_raises_when_not_initialized():
+    manager = postgres_service.PostgresConnectionManager()
+
+    with pytest.raises(RuntimeError, match="not initialized"):
+        with manager.get_connection():
+            pass
+
+
+def test_get_connection_sets_timeout_and_tracks_stats():
+    manager = postgres_service.PostgresConnectionManager()
+    pool_instance = MagicMock()
+    conn, cursor = _mock_connection_and_cursor()
+    manager._is_initialized = True
+    manager._connection_pool = pool_instance
+    pool_instance.getconn.return_value = conn
+
+    with manager.get_connection() as returned:
+        assert returned is conn
+
+    assert conn.autocommit is False
+    cursor.execute.assert_called_once_with(
+        f"SET statement_timeout = '{postgres_service.POSTGRES_COMMAND_TIMEOUT}s'"
+    )
+    pool_instance.putconn.assert_called_once_with(conn)
+    assert manager._connection_stats["total_connections_requested"] == 1
+    assert manager._connection_stats["total_connections_returned"] == 1
+    assert manager._connection_stats["current_connections_in_use"] == 0
+    assert manager._connection_stats["peak_connections_in_use"] == 1
+    assert manager._connection_stats["connection_errors"] == 0
+
+
+def test_get_connection_handles_none_connection_as_error():
+    manager = postgres_service.PostgresConnectionManager()
+    pool_instance = MagicMock()
+    manager._is_initialized = True
+    manager._connection_pool = pool_instance
+    pool_instance.getconn.return_value = None
+
+    with pytest.raises(ConnectionError, match="Failed to get connection"):
+        with manager.get_connection():
+            pass
+
+    # One increment before raising, then another in the except block.
+    assert manager._connection_stats["connection_errors"] == 2
+    assert manager._connection_stats["total_connections_returned"] == 0
+
+
+def test_get_connection_rolls_back_when_exception_raised_inside_context():
+    manager = postgres_service.PostgresConnectionManager()
+    pool_instance = MagicMock()
+    conn, _ = _mock_connection_and_cursor()
+    manager._is_initialized = True
+    manager._connection_pool = pool_instance
+    pool_instance.getconn.return_value = conn
+
+    with pytest.raises(ValueError, match="boom"):
+        with manager.get_connection():
+            raise ValueError("boom")
+
+    conn.rollback.assert_called_once()
+    pool_instance.putconn.assert_called_once_with(conn)
+    assert manager._connection_stats["connection_errors"] == 1
+
+
+def test_get_connection_counts_putconn_error_without_raising():
+    manager = postgres_service.PostgresConnectionManager()
+    pool_instance = MagicMock()
+    conn, _ = _mock_connection_and_cursor()
+    manager._is_initialized = True
+    manager._connection_pool = pool_instance
+    pool_instance.getconn.return_value = conn
+    pool_instance.putconn.side_effect = RuntimeError("return failed")
+
+    with manager.get_connection() as returned:
+        assert returned is conn
+
+    assert manager._connection_stats["connection_errors"] == 1
+    assert manager._connection_stats["total_connections_returned"] == 0
+
+
+def test_get_cursor_commits_when_commit_true(monkeypatch):
+    manager = postgres_service.PostgresConnectionManager()
+    conn, cursor = _mock_connection_and_cursor()
+
+    @contextmanager
+    def _connection_context():
+        yield conn
+
+    monkeypatch.setattr(manager, "get_connection", _connection_context)
+
+    with manager.get_cursor(commit=True) as returned_cursor:
+        assert returned_cursor is cursor
+
+    conn.commit.assert_called_once()
+    conn.rollback.assert_not_called()
+
+
+def test_get_cursor_rolls_back_and_reraises_on_cursor_error(monkeypatch):
+    manager = postgres_service.PostgresConnectionManager()
+    conn, _ = _mock_connection_and_cursor()
+
+    @contextmanager
+    def _connection_context():
+        yield conn
+
+    monkeypatch.setattr(manager, "get_connection", _connection_context)
+
+    with pytest.raises(RuntimeError, match="cursor failed"):
+        with manager.get_cursor(commit=True):
+            raise RuntimeError("cursor failed")
+
+    conn.rollback.assert_called_once()
+    conn.commit.assert_not_called()
+
+
+def test_execute_query_returns_fetch_one_result(monkeypatch):
+    manager = postgres_service.PostgresConnectionManager()
+    cursor = MagicMock()
+    cursor.fetchone.return_value = ("row",)
+
+    @contextmanager
+    def _cursor_context(commit=True):
+        assert commit is False
+        yield cursor
+
+    monkeypatch.setattr(manager, "get_cursor", _cursor_context)
+
+    result = manager.execute_query(
+        "SELECT * FROM table WHERE id = %s",
+        params=(1,),
+        fetch_one=True,
+        commit=False,
+    )
+
+    cursor.execute.assert_called_once_with("SELECT * FROM table WHERE id = %s", (1,))
+    assert result == ("row",)
+
+
+def test_execute_query_returns_fetch_all_and_rowcount(monkeypatch):
+    manager = postgres_service.PostgresConnectionManager()
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [(1,), (2,)]
+    cursor.rowcount = 3
+
+    @contextmanager
+    def _cursor_context(commit=True):
+        yield cursor
+
+    monkeypatch.setattr(manager, "get_cursor", _cursor_context)
+
+    rows = manager.execute_query("SELECT * FROM table", fetch_all=True)
+    count = manager.execute_query("DELETE FROM table")
+
+    assert rows == [(1,), (2,)]
+    assert count == 3
+
+
+def test_bulk_insert_returns_zero_for_empty_data():
+    manager = postgres_service.PostgresConnectionManager()
+
+    assert manager.bulk_insert("characters", ["id"], []) == 0
+
+
+def test_bulk_insert_executes_many_and_returns_rowcount(monkeypatch):
+    manager = postgres_service.PostgresConnectionManager()
+    cursor = MagicMock()
+    cursor.rowcount = 2
+
+    @contextmanager
+    def _cursor_context(commit=True):
+        yield cursor
+
+    monkeypatch.setattr(manager, "get_cursor", _cursor_context)
+
+    data = [(1, "Alice"), (2, "Bob")]
+    result = manager.bulk_insert(
+        table="characters",
+        columns=["id", "name"],
+        data=data,
+        on_conflict="ON CONFLICT (id) DO NOTHING",
+    )
+
+    assert result == 2
+    assert cursor.executemany.call_count == 1
+    assert cursor.executemany.call_args[0][1] == data
+
+
+def test_bulk_insert_reraises_on_executemany_error(monkeypatch):
+    manager = postgres_service.PostgresConnectionManager()
+    cursor = MagicMock()
+    cursor.executemany.side_effect = RuntimeError("insert failed")
+
+    @contextmanager
+    def _cursor_context(commit=True):
+        yield cursor
+
+    monkeypatch.setattr(manager, "get_cursor", _cursor_context)
+
+    with pytest.raises(RuntimeError, match="insert failed"):
+        manager.bulk_insert(
+            table="characters",
+            columns=["id"],
+            data=[(1,)],
+        )
+
+
+def test_execute_transaction_handles_fetch_modes_and_rowcount(monkeypatch):
+    manager = postgres_service.PostgresConnectionManager()
+    cursor = MagicMock()
+    cursor.fetchone.return_value = ("one",)
+    cursor.fetchall.return_value = [("a",), ("b",)]
+
+    def _execute(query, params):
+        if query.startswith("UPDATE"):
+            cursor.rowcount = 3
+
+    cursor.execute.side_effect = _execute
+
+    @contextmanager
+    def _cursor_context(commit=True):
+        yield cursor
+
+    monkeypatch.setattr(manager, "get_cursor", _cursor_context)
+
+    results = manager.execute_transaction(
+        [
+            {"query": "SELECT 1", "params": (), "fetch": "one"},
+            {"query": "SELECT 2", "params": (), "fetch": "all"},
+            {"query": "UPDATE x SET y = %s", "params": (1,)},
+        ]
+    )
+
+    assert results == [
+        ("one",),
+        [("a",), ("b",)],
+        3,
+    ]
+
+
+def test_health_check_returns_true_on_select_one(monkeypatch):
+    manager = postgres_service.PostgresConnectionManager()
+    conn, cursor = _mock_connection_and_cursor()
+    cursor.fetchone.return_value = (1,)
+
+    @contextmanager
+    def _connection_context():
+        yield conn
+
+    monkeypatch.setattr(manager, "get_connection", _connection_context)
+
+    assert manager.health_check() is True
+    cursor.execute.assert_called_once_with("SELECT 1")
+
+
+def test_health_check_returns_false_on_exception(monkeypatch):
+    manager = postgres_service.PostgresConnectionManager()
+
+    @contextmanager
+    def _connection_context():
+        raise RuntimeError("db down")
+        yield
+
+    monkeypatch.setattr(manager, "get_connection", _connection_context)
+
+    assert manager.health_check() is False
+
+
+def test_get_pool_stats_returns_error_when_pool_not_initialized():
+    manager = postgres_service.PostgresConnectionManager()
+
+    assert manager.get_pool_stats() == {"error": "Pool not initialized"}
+
+
+def test_get_pool_stats_returns_runtime_and_pool_metrics():
+    manager = postgres_service.PostgresConnectionManager()
+    manager._is_initialized = True
+    manager._connection_pool = SimpleNamespace(
+        _pool=[object(), object(), object()],
+        _used={1: object()},
+    )
+    manager._connection_stats.update(
+        {
+            "total_connections_requested": 20,
+            "total_connections_returned": 19,
+            "current_connections_in_use": 1,
+            "peak_connections_in_use": 4,
+            "connection_errors": 2,
+            "last_reset_time": datetime.now() - timedelta(seconds=10),
+        }
+    )
+
+    stats = manager.get_pool_stats()
+
+    assert stats["initialized"] is True
+    assert stats["pool_total_connections"] == 3
+    assert stats["pool_available_connections"] == 3
+    assert stats["pool_used_connections"] == 1
+    assert stats["runtime_stats"]["total_connections_requested"] == 20
+    assert stats["runtime_stats"]["connection_errors"] == 2
+    assert stats["runtime_stats"]["uptime_seconds"] >= 0
+    assert stats["runtime_stats"]["requests_per_second"] >= 0
