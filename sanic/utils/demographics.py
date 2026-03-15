@@ -181,7 +181,7 @@ def get_cached_data_with_fallback(key: str, fallback_func, cache_ttl: int) -> di
     """Get cached data, regenerate if expired."""
     cached_data = redis_client.get_by_key(key)
 
-    if not cached_data:
+    if cached_data is None:
         fresh_data = fallback_func()
         redis_client.set_by_key(key, fresh_data, ttl=cache_ttl)
         return fresh_data
@@ -199,7 +199,7 @@ async def async_get_cached_data_with_fallback(
     """
     cached_data = await redis_client.async_get_by_key(key)
 
-    if not cached_data:
+    if cached_data is None:
         fresh_data = await fallback_func()
         await redis_client.async_set_by_key(key, fresh_data, ttl=cache_ttl)
         return fresh_data

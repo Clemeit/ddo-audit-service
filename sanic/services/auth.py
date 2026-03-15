@@ -28,7 +28,7 @@ AUTH_ERROR_INTERNAL = "internal_error"
 
 
 # JWT Configuration
-JWT_SECRET_KEY = "123"  # os.getenv("JWT_SECRET_KEY", "")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRATION_SECONDS = int(
     os.getenv("ACCESS_TOKEN_EXPIRATION_SECONDS", "900")

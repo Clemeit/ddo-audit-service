@@ -50,7 +50,7 @@ class TestGetCachedDataWithFallback:
         assert result == fresh
         assert set_calls == [("gender_distribution", fresh, 3600)]
 
-    def test_empty_cached_dict_is_treated_as_cache_miss(self, monkeypatch):
+    def test_empty_cached_dict_is_treated_as_cached_value(self, monkeypatch):
         set_calls = []
 
         monkeypatch.setattr(demographics.redis_client, "get_by_key", lambda key: {})
@@ -60,12 +60,20 @@ class TestGetCachedDataWithFallback:
             lambda key, value, ttl=None: set_calls.append((key, value, ttl)),
         )
 
+        fallback_called = False
+
+        def fallback_func():
+            nonlocal fallback_called
+            fallback_called = True
+            return {"1": 3}
+
         result = demographics.get_cached_data_with_fallback(
-            "class_count", lambda: {"1": 3}, 120
+            "class_count", fallback_func, 120
         )
 
-        assert result == {"1": 3}
-        assert set_calls == [("class_count", {"1": 3}, 120)]
+        assert result == {}
+        assert fallback_called is False
+        assert set_calls == []
 
 
 @pytest.mark.parametrize(
@@ -207,7 +215,7 @@ class TestAsyncGetCachedDataWithFallback:
         assert result == fresh
         assert set_calls == [("gender_distribution", fresh, 3600)]
 
-    def test_empty_cached_dict_is_treated_as_cache_miss(self, monkeypatch, run_async):
+    def test_empty_cached_dict_is_treated_as_cached_value(self, monkeypatch, run_async):
         set_calls = []
 
         monkeypatch.setattr(
@@ -221,7 +229,10 @@ class TestAsyncGetCachedDataWithFallback:
             _amock(lambda key, value, ttl=None: set_calls.append((key, value, ttl))),
         )
 
+        fallback_calls = {"count": 0}
+
         async def fallback():
+            fallback_calls["count"] += 1
             return {"1": 3}
 
         result = run_async(
@@ -230,5 +241,6 @@ class TestAsyncGetCachedDataWithFallback:
             )
         )
 
-        assert result == {"1": 3}
-        assert set_calls == [("class_count", {"1": 3}, 120)]
+        assert result == {}
+        assert fallback_calls["count"] == 0
+        assert set_calls == []

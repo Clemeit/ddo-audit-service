@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, AsyncMock
 import pytest
 
 import services.postgres as postgres_service
-from tests.conftest import _amock
+from services.postgres import OnConflict
 
 
 def _mock_connection_and_cursor():
@@ -248,7 +248,7 @@ def test_bulk_insert_executes_many_and_returns_rowcount(monkeypatch):
         table="characters",
         columns=["id", "name"],
         data=data,
-        on_conflict="ON CONFLICT (id) DO NOTHING",
+        on_conflict=OnConflict(conflict_columns=["id"], action="nothing"),
     )
 
     assert result == 2
@@ -424,7 +424,7 @@ def test_async_bulk_insert_executes_with_conflict(monkeypatch, run_async):
             table="characters",
             columns=["id", "name"],
             data=data,
-            on_conflict="ON CONFLICT (id) DO NOTHING",
+            on_conflict=OnConflict(conflict_columns=["id"], action="nothing"),
         )
     )
 
@@ -464,3 +464,13 @@ def test_get_async_dict_cursor_raises_when_pool_not_initialized(monkeypatch, run
 
     with pytest.raises(RuntimeError, match="Async Postgres pool not initialized"):
         run_async(postgres_service.async_execute_many("SELECT 1", []))
+
+
+def test_on_conflict_rejects_invalid_action():
+    with pytest.raises(ValueError, match="must be 'nothing' or 'update'"):
+        OnConflict(conflict_columns=["id"], action="drop")
+
+
+def test_on_conflict_update_requires_columns_or_expressions():
+    with pytest.raises(ValueError, match="requires at least one"):
+        OnConflict(conflict_columns=["id"], action="update")
