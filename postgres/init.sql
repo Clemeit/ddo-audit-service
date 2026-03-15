@@ -331,6 +331,7 @@ CREATE TABLE IF NOT EXISTS public."users"
     id serial NOT NULL,
     username text NOT NULL UNIQUE,
     password_hash text NOT NULL,
+    auth_version integer NOT NULL DEFAULT 1,
     created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
     updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
     PRIMARY KEY (id)
@@ -361,3 +362,34 @@ ALTER TABLE IF EXISTS public."user_settings"
     OWNER to pgadmin;
 
 CREATE INDEX idx_user_settings_user_id ON public."user_settings" (user_id);
+
+CREATE TABLE IF NOT EXISTS public."auth_sessions"
+(
+    session_id text NOT NULL,
+    user_id integer NOT NULL REFERENCES public."users"(id) ON DELETE CASCADE,
+    refresh_token_hash text NOT NULL UNIQUE,
+    auth_version integer NOT NULL,
+    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    last_used_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    expires_at timestamp with time zone NOT NULL,
+    revoked_at timestamp with time zone,
+    revoke_reason text,
+    created_ip text,
+    created_user_agent text,
+    updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    PRIMARY KEY (session_id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."auth_sessions"
+    OWNER to pgadmin;
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id
+    ON public."auth_sessions" (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id_revoked_at
+    ON public."auth_sessions" (user_id, revoked_at);
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at
+    ON public."auth_sessions" (expires_at);

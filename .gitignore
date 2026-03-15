@@ -5,8 +5,6 @@
 # VSCode
 .vscode
 
-\tests
-
 # Prerender
 node_modules/
 npm-debug.log

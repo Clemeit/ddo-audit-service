@@ -3,7 +3,7 @@ Service to interface with the Redis server.
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from constants.server import SERVER_NAMES_LOWERCASE
@@ -67,6 +67,9 @@ _async_connection_pool: aioredis.ConnectionPool = None
 
 
 ONE_TIME_USER_SETTINGS_PREFIX = "one_time_user_settings:"
+AUTH_USER_VERSION_PREFIX = "auth:user:version:"
+AUTH_SESSION_PREFIX = "auth:session:"
+AUTH_CACHE_TTL_SECONDS = int(os.getenv("AUTH_CACHE_TTL_SECONDS", "300"))
 
 # Atomic JSON.GET + DEL (ensures true one-time access)
 _ONE_TIME_USER_SETTINGS_GETDEL_LUA = """
@@ -1195,6 +1198,135 @@ def expire_key_immediately(key: str):
     """Expire a Redis key immediately (force removal from cache)."""
     with get_redis_client() as client:
         client.expire(key, 0)
+
+
+def _normalize_datetime_for_cache(value: Any) -> Any:
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.isoformat()
+    return value
+
+
+def _compute_auth_cache_ttl(expires_at: Optional[Any]) -> int:
+    if expires_at is None:
+        return AUTH_CACHE_TTL_SECONDS
+
+    try:
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        if isinstance(expires_at, datetime):
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            remaining_seconds = int(
+                (expires_at - datetime.now(timezone.utc)).total_seconds()
+            )
+            return max(1, min(AUTH_CACHE_TTL_SECONDS, remaining_seconds))
+    except Exception:
+        return AUTH_CACHE_TTL_SECONDS
+
+    return AUTH_CACHE_TTL_SECONDS
+
+
+def get_cached_user_auth_version(user_id: int) -> Optional[int]:
+    """Get a cached auth version for a user."""
+    try:
+        with get_redis_client() as client:
+            raw_value = client.get(f"{AUTH_USER_VERSION_PREFIX}{user_id}")
+            if raw_value is None:
+                return None
+            if isinstance(raw_value, bytes):
+                raw_value = raw_value.decode("utf-8")
+            return int(raw_value)
+    except Exception:
+        return None
+
+
+def cache_user_auth_version(user_id: int, auth_version: int) -> None:
+    """Cache a user's auth version."""
+    try:
+        with get_redis_client() as client:
+            client.setex(
+                f"{AUTH_USER_VERSION_PREFIX}{user_id}",
+                AUTH_CACHE_TTL_SECONDS,
+                int(auth_version),
+            )
+    except Exception:
+        pass
+
+
+def clear_cached_user_auth_version(user_id: int) -> None:
+    """Remove a cached auth version for a user."""
+    try:
+        with get_redis_client() as client:
+            client.delete(f"{AUTH_USER_VERSION_PREFIX}{user_id}")
+    except Exception:
+        pass
+
+
+def get_cached_auth_session(session_id: str) -> Optional[dict]:
+    """Get a cached auth session by session id."""
+    try:
+        with get_redis_client() as client:
+            raw_value = client.get(f"{AUTH_SESSION_PREFIX}{session_id}")
+            if not raw_value:
+                return None
+            if isinstance(raw_value, bytes):
+                raw_value = raw_value.decode("utf-8")
+            payload = json.loads(raw_value)
+            return payload if isinstance(payload, dict) else None
+    except Exception:
+        return None
+
+
+def cache_auth_session(session_id: str, session_data: dict) -> None:
+    """Cache auth session metadata used by JWT middleware."""
+    try:
+        payload = {
+            key: _normalize_datetime_for_cache(value)
+            for key, value in session_data.items()
+            if key
+            in {
+                "session_id",
+                "user_id",
+                "auth_version",
+                "expires_at",
+                "revoked_at",
+                "revoke_reason",
+                "updated_at",
+            }
+        }
+        ttl = _compute_auth_cache_ttl(payload.get("expires_at"))
+        with get_redis_client() as client:
+            client.setex(
+                f"{AUTH_SESSION_PREFIX}{session_id}",
+                ttl,
+                json.dumps(payload),
+            )
+    except Exception:
+        pass
+
+
+def clear_cached_auth_session(session_id: str) -> None:
+    """Remove a cached auth session."""
+    try:
+        with get_redis_client() as client:
+            client.delete(f"{AUTH_SESSION_PREFIX}{session_id}")
+    except Exception:
+        pass
+
+
+def clear_cached_auth_sessions(session_ids: List[str]) -> None:
+    """Remove multiple cached auth sessions in one call."""
+    if not session_ids:
+        return
+
+    try:
+        with get_redis_client() as client:
+            keys = [f"{AUTH_SESSION_PREFIX}{session_id}" for session_id in session_ids]
+            client.delete(*keys)
+    except Exception:
+        pass
 
 
 def store_one_time_user_settings(user_id: str, settings: dict):
