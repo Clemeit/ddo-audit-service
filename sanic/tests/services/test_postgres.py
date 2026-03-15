@@ -637,3 +637,135 @@ def test_async_add_character_activity_skips_empty_list(monkeypatch, run_async):
     run_async(postgres_service.async_add_character_activity([]))
 
     cursor.executemany.assert_not_awaited()
+
+
+def test_async_add_character_activity_serializes_and_batches(monkeypatch, run_async):
+    from constants.activity import CharacterActivityType
+
+    cursor, fake_ctx = _mock_async_cursor()
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    activities = [
+        {
+            "character_id": 1,
+            "activity_type": CharacterActivityType.TOTAL_LEVEL,
+            "data": {"old": 10, "new": 11},
+        },
+        {
+            "character_id": 2,
+            "activity_type": CharacterActivityType.LOCATION,
+            "data": {"area_id": 42},
+        },
+    ]
+
+    run_async(postgres_service.async_add_character_activity(activities))
+
+    cursor.executemany.assert_awaited_once()
+    call_args = cursor.executemany.call_args[0]
+    params = call_args[1]
+    assert len(params) == 2
+    assert params[0][0] == 1
+    assert params[0][1] == "total_level"
+    assert '"old": 10' in params[0][2]
+    assert params[1][0] == 2
+    assert params[1][1] == "location"
+
+
+def test_async_add_or_update_characters_skips_empty_list(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    run_async(postgres_service.async_add_or_update_characters([]))
+
+    cursor.executemany.assert_not_awaited()
+
+
+def test_async_add_or_update_characters_normalizes_invalid_location_id(
+    monkeypatch, run_async
+):
+    cursor, fake_ctx = _mock_async_cursor()
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+    monkeypatch.setattr(
+        postgres_service, "get_valid_area_ids", lambda: ([100, 200], "cache", "now")
+    )
+
+    characters = [
+        {"id": 1, "name": "Valid", "location_id": 100, "is_anonymous": False},
+        {"id": 2, "name": "Invalid", "location_id": 999, "is_anonymous": False},
+    ]
+
+    run_async(postgres_service.async_add_or_update_characters(characters))
+
+    # location_id should have been normalized to 0 for the invalid one
+    assert characters[1]["location_id"] == 0
+    assert characters[0]["location_id"] == 100
+    cursor.executemany.assert_awaited()
+
+
+def test_async_add_or_update_characters_generates_anonymous_safe_update(
+    monkeypatch, run_async
+):
+    cursor, fake_ctx = _mock_async_cursor()
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+    monkeypatch.setattr(
+        postgres_service, "get_valid_area_ids", lambda: ([100], "cache", "now")
+    )
+
+    characters = [
+        {
+            "id": 1,
+            "name": "Hero",
+            "gender": "Male",
+            "location_id": 100,
+            "is_anonymous": False,
+        },
+    ]
+
+    run_async(postgres_service.async_add_or_update_characters(characters))
+
+    cursor.executemany.assert_awaited_once()
+    call_args = cursor.executemany.call_args[0]
+    query_str = call_args[0].as_string(None)
+    # name and gender should use the IS TRUE anonymous-safe CASE expression
+    assert "EXCLUDED.is_anonymous IS TRUE" in query_str
+    assert "CASE WHEN" in query_str
+
+
+def test_async_add_or_update_characters_excludes_transient_fields(
+    monkeypatch, run_async
+):
+    cursor, fake_ctx = _mock_async_cursor()
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+    monkeypatch.setattr(
+        postgres_service, "get_valid_area_ids", lambda: ([100], "cache", "now")
+    )
+
+    characters = [
+        {
+            "id": 1,
+            "name": "Hero",
+            "location_id": 100,
+            "is_anonymous": False,
+            "is_online": True,
+            "public_comment": "hi",
+            "group_id": 5,
+            "is_in_party": True,
+            "is_recruiting": False,
+            "last_save": "2026-01-01",
+        },
+    ]
+
+    run_async(postgres_service.async_add_or_update_characters(characters))
+
+    call_args = cursor.executemany.call_args[0]
+    query_str = call_args[0].as_string(None)
+    # Transient fields should NOT appear in the INSERT columns
+    for excluded in [
+        "is_online",
+        "public_comment",
+        "group_id",
+        "is_in_party",
+        "is_recruiting",
+        "last_save",
+    ]:
+        assert f'"{excluded}"' not in query_str

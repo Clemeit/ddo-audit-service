@@ -4924,38 +4924,28 @@ async def async_get_character_by_name_and_server(
     character_name: str, server_name: str
 ) -> Character | None:
     """Get a character by name and server (async)."""
-    try:
-        async with get_async_dict_cursor(commit=False) as cursor:
-            await cursor.execute(
-                "SELECT * FROM public.characters WHERE LOWER(name) = %s AND LOWER(server_name) = %s",
-                (character_name.lower(), server_name.lower()),
-            )
-            row = await cursor.fetchone()
-            if not row:
-                return None
-            return _build_character_from_dict_row(row)
-    except Exception as e:
-        logger.error(
-            f"Error getting character by name and server {character_name}/{server_name}: {e}"
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            "SELECT * FROM public.characters WHERE LOWER(name) = %s AND LOWER(server_name) = %s",
+            (character_name.lower(), server_name.lower()),
         )
-        return None
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        return _build_character_from_dict_row(row)
 
 
 async def async_get_characters_by_name(character_name: str) -> list[Character]:
     """Get all characters matching the given name, most recent first (async)."""
-    try:
-        async with get_async_dict_cursor(commit=False) as cursor:
-            await cursor.execute(
-                "SELECT * FROM public.characters WHERE LOWER(name) = %s ORDER BY last_save DESC LIMIT 10",
-                (character_name.lower(),),
-            )
-            rows = await cursor.fetchall()
-            if not rows:
-                return []
-            return [_build_character_from_dict_row(row) for row in rows]
-    except Exception as e:
-        logger.error(f"Error getting characters by name {character_name}: {e}")
-        return []
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            "SELECT * FROM public.characters WHERE LOWER(name) = %s ORDER BY last_save DESC LIMIT 10",
+            (character_name.lower(),),
+        )
+        rows = await cursor.fetchall()
+        if not rows:
+            return []
+        return [_build_character_from_dict_row(row) for row in rows]
 
 
 async def async_get_character_ids_by_server_and_guild(
