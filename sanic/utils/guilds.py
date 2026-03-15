@@ -28,6 +28,24 @@ def get_cached_data_with_fallback(key: str, fallback_func, ttl: int = 60 * 60) -
     return cached_data
 
 
+async def async_get_cached_data_with_fallback(
+    key: str, fallback_func, ttl: int = 60 * 60
+) -> Any:
+    """Async version: get cached data, regenerate if expired.
+
+    *fallback_func* must be an async callable (coroutine function).
+    Uses the async Redis client so the event loop is never blocked.
+    """
+    cached_data = await redis_client.async_get_by_key(key)
+
+    if not cached_data:
+        fresh_data = await fallback_func()
+        await redis_client.async_set_by_key(key, fresh_data, ttl=ttl)
+        return fresh_data
+
+    return cached_data
+
+
 def validate_guild_name(guild_name: str) -> bool:
     # Guild name must be alphanumeric, spaces, single quotes, periods, or hyphens.
     if not guild_name or len(guild_name) > GUILD_NAME_MAX_LENGTH:

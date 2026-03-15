@@ -1,6 +1,7 @@
 import pytest
 
 import utils.demographics as demographics
+from tests.conftest import _amock
 
 
 class TestGetCachedDataWithFallback:
@@ -145,3 +146,89 @@ def test_distribution_getters_raise_for_invalid_period(getter_name):
 
     with pytest.raises(ValueError, match="Invalid period"):
         getter("1d", activity_level="all")
+
+
+class TestAsyncGetCachedDataWithFallback:
+    def test_returns_cached_data_when_present(self, monkeypatch, run_async):
+        cached = {"human": 12}
+        set_calls = []
+
+        monkeypatch.setattr(
+            demographics.redis_client,
+            "async_get_by_key",
+            _amock(lambda key: cached),
+        )
+        monkeypatch.setattr(
+            demographics.redis_client,
+            "async_set_by_key",
+            _amock(lambda key, value, ttl=None: set_calls.append((key, value, ttl))),
+        )
+
+        fallback_calls = {"count": 0}
+
+        async def fallback_func():
+            fallback_calls["count"] += 1
+            return {"fresh": 1}
+
+        result = run_async(
+            demographics.async_get_cached_data_with_fallback(
+                "race_distribution", fallback_func, 60
+            )
+        )
+
+        assert result is cached
+        assert fallback_calls["count"] == 0
+        assert set_calls == []
+
+    def test_regenerates_and_caches_when_missing(self, monkeypatch, run_async):
+        set_calls = []
+        fresh = {"elf": 5}
+
+        monkeypatch.setattr(
+            demographics.redis_client,
+            "async_get_by_key",
+            _amock(lambda key: None),
+        )
+        monkeypatch.setattr(
+            demographics.redis_client,
+            "async_set_by_key",
+            _amock(lambda key, value, ttl=None: set_calls.append((key, value, ttl))),
+        )
+
+        async def fallback():
+            return fresh
+
+        result = run_async(
+            demographics.async_get_cached_data_with_fallback(
+                "gender_distribution", fallback, 3600
+            )
+        )
+
+        assert result == fresh
+        assert set_calls == [("gender_distribution", fresh, 3600)]
+
+    def test_empty_cached_dict_is_treated_as_cache_miss(self, monkeypatch, run_async):
+        set_calls = []
+
+        monkeypatch.setattr(
+            demographics.redis_client,
+            "async_get_by_key",
+            _amock(lambda key: {}),
+        )
+        monkeypatch.setattr(
+            demographics.redis_client,
+            "async_set_by_key",
+            _amock(lambda key, value, ttl=None: set_calls.append((key, value, ttl))),
+        )
+
+        async def fallback():
+            return {"1": 3}
+
+        result = run_async(
+            demographics.async_get_cached_data_with_fallback(
+                "class_count", fallback, 120
+            )
+        )
+
+        assert result == {"1": 3}
+        assert set_calls == [("class_count", {"1": 3}, 120)]

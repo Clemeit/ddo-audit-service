@@ -419,12 +419,13 @@ def reset_postgres_connection_stats():
 import psycopg
 import psycopg.conninfo
 import psycopg.rows
+import psycopg.sql
 from psycopg_pool import AsyncConnectionPool
 
 _async_pool: Optional[AsyncConnectionPool] = None
 
 POSTGRES_ASYNC_MIN_CONN = int(os.getenv("POSTGRES_ASYNC_MIN_SIZE", "2"))
-POSTGRES_ASYNC_MAX_CONN = int(os.getenv("POSTGRES_ASYNC_MAX_SIZE", "10"))
+POSTGRES_ASYNC_MAX_CONN = int(os.getenv("POSTGRES_ASYNC_MAX_SIZE", "20"))
 
 _ASYNC_CONNINFO = psycopg.conninfo.make_conninfo(
     host=POSTGRES_HOST,
@@ -481,6 +482,52 @@ async def get_async_dict_cursor(commit: bool = True):
             yield cur
             if commit:
                 await conn.commit()
+
+
+async def async_execute_many(query: str, params_list: list):
+    """Execute a parameterised query for each item in *params_list*.
+
+    Uses psycopg3's ``executemany`` which pipelines the statements for
+    better throughput than looping ``execute`` calls.
+    """
+    async with get_async_dict_cursor(commit=True) as cur:
+        await cur.executemany(query, params_list)
+        return cur.rowcount
+
+
+async def async_bulk_insert(
+    table: str,
+    columns: list[str],
+    data: list[tuple],
+    on_conflict: str | None = None,
+):
+    """Async bulk insert with optional ON CONFLICT clause.
+
+    Mirrors the sync ``PostgresConnectionManager.bulk_insert`` method but
+    uses the psycopg3 async pool.  SQL composition uses ``psycopg.sql``
+    for safe identifier quoting.
+    """
+    if not data:
+        return 0
+
+    table_id = psycopg.sql.Identifier(table)
+    col_ids = psycopg.sql.SQL(", ").join(psycopg.sql.Identifier(c) for c in columns)
+    placeholders = psycopg.sql.SQL(", ").join(
+        psycopg.sql.Placeholder() for _ in columns
+    )
+
+    query = psycopg.sql.SQL(
+        "INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+    ).format(table=table_id, columns=col_ids, placeholders=placeholders)
+
+    if on_conflict:
+        query = psycopg.sql.SQL("{query} {conflict}").format(
+            query=query, conflict=psycopg.sql.SQL(on_conflict)
+        )
+
+    async with get_async_dict_cursor(commit=True) as cur:
+        await cur.executemany(query, data)
+        return cur.rowcount
 
 
 @contextmanager

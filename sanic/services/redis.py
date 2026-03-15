@@ -1216,6 +1216,20 @@ def set_by_key(key: str, data: dict, ttl: int = None):
             client.expire(key, ttl)  # Set TTL if provided
 
 
+async def async_get_by_key(key: str) -> Optional[Any]:
+    """Async version of get_by_key using the async Redis client."""
+    client = await get_async_redis_client()
+    return await client.json().get(key)
+
+
+async def async_set_by_key(key: str, data: dict, ttl: int = None):
+    """Async version of set_by_key using the async Redis client."""
+    client = await get_async_redis_client()
+    await client.json().set(key, path="$", obj=data)
+    if ttl:
+        await client.expire(key, ttl)
+
+
 def expire_key_immediately(key: str):
     """Expire a Redis key immediately (force removal from cache)."""
     with get_redis_client() as client:
