@@ -820,6 +820,8 @@ def test_async_get_all_character_activity_returns_typed_entries(monkeypatch, run
 
 
 def test_async_get_all_character_activity_clamps_date_window(monkeypatch, run_async):
+    from constants.activity import MAX_CHARACTER_ACTIVITY_READ_HISTORY
+
     cursor, fake_ctx = _mock_async_cursor()
     cursor.fetchall.return_value = []
     monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
@@ -833,9 +835,10 @@ def test_async_get_all_character_activity_clamps_date_window(monkeypatch, run_as
     )
 
     call_args = cursor.execute.call_args[0]
-    # start_date should have been clamped (not the original far_past)
-    passed_start = call_args[1][1]
-    assert passed_start != far_past.isoformat()
+    passed_start = datetime.fromisoformat(call_args[1][1])
+    passed_end = datetime.fromisoformat(call_args[1][2])
+    assert (passed_end - passed_start).days <= MAX_CHARACTER_ACTIVITY_READ_HISTORY
+    assert passed_start != far_past
 
 
 def test_async_get_character_activity_by_type_returns_location_entries(
