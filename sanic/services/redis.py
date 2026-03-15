@@ -42,6 +42,7 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 REDIS_MAX_CONNECTIONS = int(os.getenv("REDIS_MAX_CONNECTIONS", "50"))
+REDIS_MAX_CONNECTIONS_ASYNC = int(os.getenv("REDIS_MAX_CONNECTIONS_ASYNC", "50"))
 REDIS_SOCKET_CONNECT_TIMEOUT = int(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "5"))
 REDIS_SOCKET_TIMEOUT = int(os.getenv("REDIS_SOCKET_TIMEOUT", "5"))
 REDIS_RETRY_ON_TIMEOUT = os.getenv("REDIS_RETRY_ON_TIMEOUT", "true").lower() == "true"
@@ -117,7 +118,7 @@ class RedisConnectionManager:
             port=REDIS_PORT,
             db=REDIS_DB,
             password=REDIS_PASSWORD,
-            max_connections=REDIS_MAX_CONNECTIONS,
+            max_connections=REDIS_MAX_CONNECTIONS_ASYNC,
             socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
             socket_timeout=REDIS_SOCKET_TIMEOUT,
             retry_on_timeout=REDIS_RETRY_ON_TIMEOUT,
@@ -177,7 +178,13 @@ class RedisConnectionManager:
             pass
 
     async def get_async_client(self) -> aioredis.Redis:
-        """Get an asynchronous Redis client from the connection pool."""
+        """Get an asynchronous Redis client from the connection pool.
+
+        The returned client is backed by the shared connection pool; callers
+        should NOT call ``aclose()`` — connections are returned to the pool
+        automatically when the client goes out of scope, mirroring the
+        synchronous ``get_sync_client`` behaviour.
+        """
         if not self._is_initialized:
             raise RuntimeError("Redis connection manager not initialized")
 
@@ -198,7 +205,6 @@ class RedisConnectionManager:
         try:
             client = await self.get_async_client()
             response = await client.ping()
-            await client.aclose()
             return response is True
         except Exception as e:
             logger.error(f"Async Redis health check failed: {e}")
@@ -392,9 +398,11 @@ async def _traffic_top_zset(
         await client.zunionstore(tmp_key, keys, aggregate="SUM")
         await client.expire(tmp_key, 60)
 
-        # redis-py returns bytes members when decode_responses=False
-        raw = await client.zrevrange(tmp_key, 0, limit - 1, withscores=True)
-        await client.delete(tmp_key)
+        try:
+            # redis-py returns bytes members when decode_responses=False
+            raw = await client.zrevrange(tmp_key, 0, limit - 1, withscores=True)
+        finally:
+            await client.delete(tmp_key)
 
         out: list[tuple[str, float]] = []
         for member, score in raw:
@@ -455,7 +463,8 @@ def get_redis_pipeline():
         try:
             yield pipeline
         finally:
-            # Pipeline operations are executed when exiting context
+            # Callers are responsible for calling pipeline.execute() before
+            # exiting. The pipeline is NOT auto-executed here.
             pass
 
 
@@ -667,20 +676,20 @@ def get_character_by_name_and_server_name(
 
 def get_character_by_id_as_dict(character_id: int) -> dict | None:
     """Get a character dict by character ID"""
-    for server_name in SERVER_NAMES_LOWERCASE:
-        server_character_ids = get_character_ids_by_server_name(server_name)
-        if character_id in server_character_ids:
-            try:
-                # this get() will throw an error if the key character_id doesn't exist,
-                # which could theoretically happen if the character logged out between
-                # the id lookup and this get()
-                with get_redis_client() as client:
-                    return client.json().get(
-                        RedisKeys.CHARACTERS.value.format(server=server_name),
-                        character_id,
-                    )
-            except Exception:
-                return None
+    try:
+        with get_redis_client() as client:
+            pipe = client.pipeline(transaction=False)
+            for server_name in SERVER_NAMES_LOWERCASE:
+                pipe.json().get(
+                    RedisKeys.CHARACTERS.value.format(server=server_name),
+                    character_id,
+                )
+            results = pipe.execute(raise_on_error=False)
+        for result in results:
+            if result is not None and not isinstance(result, Exception):
+                return result
+    except Exception:
+        pass
     return None
 
 
@@ -715,15 +724,23 @@ def get_characters_by_name_as_dict(character_name: str) -> dict[int, dict]:
     """Get all character dicts matching a character name"""
     character_name_lower = character_name.lower()
     characters: dict[int, dict] = {}
-    for server_name in SERVER_NAMES_LOWERCASE:
-        server_characters = get_characters_by_server_name_as_dict(server_name)
-        matching_characters = [
-            character
-            for character in server_characters.values()
-            if character and character.get("name").lower() == character_name_lower
-        ]
-        for matching_character in matching_characters:
-            characters[matching_character.get("id")] = matching_character
+    try:
+        with get_redis_client() as client:
+            pipe = client.pipeline(transaction=False)
+            for server_name in SERVER_NAMES_LOWERCASE:
+                pipe.json().get(RedisKeys.CHARACTERS.value.format(server=server_name))
+            results = pipe.execute(raise_on_error=False)
+        for server_data in results:
+            if not server_data or isinstance(server_data, Exception):
+                continue
+            for char_id, character in server_data.items():
+                if (
+                    character
+                    and character.get("name", "").lower() == character_name_lower
+                ):
+                    characters[int(char_id)] = character
+    except Exception:
+        pass
     return characters
 
 
@@ -760,15 +777,20 @@ def get_characters_by_group_id_as_dict(group_id: int) -> dict[int, dict]:
     if group_id <= 0:
         return {}
     characters: dict[int, dict] = {}
-    for server_name in SERVER_NAMES_LOWERCASE:
-        server_characters = get_characters_by_server_name_as_dict(server_name)
-        matching_characters = [
-            character
-            for character in server_characters.values()
-            if character and character.get("group_id") == group_id
-        ]
-        for matching_character in matching_characters:
-            characters[matching_character.get("id")] = matching_character
+    try:
+        with get_redis_client() as client:
+            pipe = client.pipeline(transaction=False)
+            for server_name in SERVER_NAMES_LOWERCASE:
+                pipe.json().get(RedisKeys.CHARACTERS.value.format(server=server_name))
+            results = pipe.execute(raise_on_error=False)
+        for server_data in results:
+            if not server_data or isinstance(server_data, Exception):
+                continue
+            for char_id, character in server_data.items():
+                if character and character.get("group_id") == group_id:
+                    characters[int(char_id)] = character
+    except Exception:
+        pass
     return characters
 
 
@@ -1228,59 +1250,55 @@ def _compute_auth_cache_ttl(expires_at: Optional[Any]) -> int:
     return AUTH_CACHE_TTL_SECONDS
 
 
-def get_cached_user_auth_version(user_id: int) -> Optional[int]:
-    """Get a cached auth version for a user."""
+# ========================================
+# Async auth cache operations (non-blocking, for use in Sanic middleware/endpoints)
+# ========================================
+
+
+async def async_get_cached_user_auth_version(user_id: int) -> Optional[int]:
+    """Get a cached auth version for a user (async)."""
     try:
-        with get_redis_client() as client:
-            raw_value = client.get(f"{AUTH_USER_VERSION_PREFIX}{user_id}")
-            if raw_value is None:
-                return None
-            if isinstance(raw_value, bytes):
-                raw_value = raw_value.decode("utf-8")
-            return int(raw_value)
+        client = await get_async_redis_client()
+        raw_value = await client.get(f"{AUTH_USER_VERSION_PREFIX}{user_id}")
+        if raw_value is None:
+            return None
+        if isinstance(raw_value, bytes):
+            raw_value = raw_value.decode("utf-8")
+        return int(raw_value)
     except Exception:
         return None
 
 
-def cache_user_auth_version(user_id: int, auth_version: int) -> None:
-    """Cache a user's auth version."""
+async def async_cache_user_auth_version(user_id: int, auth_version: int) -> None:
+    """Cache a user's auth version (async)."""
     try:
-        with get_redis_client() as client:
-            client.setex(
-                f"{AUTH_USER_VERSION_PREFIX}{user_id}",
-                AUTH_CACHE_TTL_SECONDS,
-                int(auth_version),
-            )
+        client = await get_async_redis_client()
+        await client.setex(
+            f"{AUTH_USER_VERSION_PREFIX}{user_id}",
+            AUTH_CACHE_TTL_SECONDS,
+            int(auth_version),
+        )
     except Exception:
         pass
 
 
-def clear_cached_user_auth_version(user_id: int) -> None:
-    """Remove a cached auth version for a user."""
+async def async_get_cached_auth_session(session_id: str) -> Optional[dict]:
+    """Get a cached auth session by session id (async)."""
     try:
-        with get_redis_client() as client:
-            client.delete(f"{AUTH_USER_VERSION_PREFIX}{user_id}")
-    except Exception:
-        pass
-
-
-def get_cached_auth_session(session_id: str) -> Optional[dict]:
-    """Get a cached auth session by session id."""
-    try:
-        with get_redis_client() as client:
-            raw_value = client.get(f"{AUTH_SESSION_PREFIX}{session_id}")
-            if not raw_value:
-                return None
-            if isinstance(raw_value, bytes):
-                raw_value = raw_value.decode("utf-8")
-            payload = json.loads(raw_value)
-            return payload if isinstance(payload, dict) else None
+        client = await get_async_redis_client()
+        raw_value = await client.get(f"{AUTH_SESSION_PREFIX}{session_id}")
+        if not raw_value:
+            return None
+        if isinstance(raw_value, bytes):
+            raw_value = raw_value.decode("utf-8")
+        payload = json.loads(raw_value)
+        return payload if isinstance(payload, dict) else None
     except Exception:
         return None
 
 
-def cache_auth_session(session_id: str, session_data: dict) -> None:
-    """Cache auth session metadata used by JWT middleware."""
+async def async_cache_auth_session(session_id: str, session_data: dict) -> None:
+    """Cache auth session metadata used by JWT middleware (async)."""
     try:
         payload = {
             key: _normalize_datetime_for_cache(value)
@@ -1297,34 +1315,34 @@ def cache_auth_session(session_id: str, session_data: dict) -> None:
             }
         }
         ttl = _compute_auth_cache_ttl(payload.get("expires_at"))
-        with get_redis_client() as client:
-            client.setex(
-                f"{AUTH_SESSION_PREFIX}{session_id}",
-                ttl,
-                json.dumps(payload),
-            )
+        client = await get_async_redis_client()
+        await client.setex(
+            f"{AUTH_SESSION_PREFIX}{session_id}",
+            ttl,
+            json.dumps(payload),
+        )
     except Exception:
         pass
 
 
-def clear_cached_auth_session(session_id: str) -> None:
-    """Remove a cached auth session."""
+async def async_clear_cached_auth_session(session_id: str) -> None:
+    """Remove a cached auth session (async)."""
     try:
-        with get_redis_client() as client:
-            client.delete(f"{AUTH_SESSION_PREFIX}{session_id}")
+        client = await get_async_redis_client()
+        await client.delete(f"{AUTH_SESSION_PREFIX}{session_id}")
     except Exception:
         pass
 
 
-def clear_cached_auth_sessions(session_ids: List[str]) -> None:
-    """Remove multiple cached auth sessions in one call."""
+async def async_clear_cached_auth_sessions(session_ids: List[str]) -> None:
+    """Remove multiple cached auth sessions in one call (async)."""
     if not session_ids:
         return
 
     try:
-        with get_redis_client() as client:
-            keys = [f"{AUTH_SESSION_PREFIX}{session_id}" for session_id in session_ids]
-            client.delete(*keys)
+        client = await get_async_redis_client()
+        keys = [f"{AUTH_SESSION_PREFIX}{session_id}" for session_id in session_ids]
+        await client.delete(*keys)
     except Exception:
         pass
 
