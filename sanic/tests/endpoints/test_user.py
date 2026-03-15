@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 
 import endpoints.user as user_endpoints
-from conftest import _amock
 
 
 def test_get_user_profile_requires_authenticated_user_id(
@@ -19,9 +18,7 @@ def test_get_user_profile_returns_404_when_user_missing(
     monkeypatch, make_request, run_async, response_json
 ):
     monkeypatch.setattr(
-        user_endpoints.auth_service,
-        "async_get_user_by_id",
-        _amock(lambda user_id: None),
+        user_endpoints.auth_service, "get_user_by_id", lambda user_id: None
     )
     request = make_request(
         method="GET",
@@ -40,14 +37,12 @@ def test_get_user_profile_returns_200_for_authenticated_user(
 ):
     monkeypatch.setattr(
         user_endpoints.auth_service,
-        "async_get_user_by_id",
-        _amock(
-            lambda user_id: {
-                "id": user_id,
-                "username": "profile-user",
-                "created_at": "2026-03-14T00:00:00+00:00",
-            }
-        ),
+        "get_user_by_id",
+        lambda user_id: {
+            "id": user_id,
+            "username": "profile-user",
+            "created_at": "2026-03-14T00:00:00+00:00",
+        },
     )
     request = make_request(
         method="GET",
@@ -97,8 +92,8 @@ def test_change_user_password_returns_400_for_domain_error(
 ):
     monkeypatch.setattr(
         user_endpoints.auth_service,
-        "async_change_password",
-        _amock(lambda *args, **kwargs: (False, None, "Current password is incorrect")),
+        "change_password",
+        lambda *args, **kwargs: (False, None, "Current password is incorrect"),
     )
     request = make_request(
         method="PUT",
@@ -118,20 +113,18 @@ def test_change_user_password_success_returns_new_tokens(
 ):
     monkeypatch.setattr(
         user_endpoints.auth_service,
-        "async_change_password",
-        _amock(
-            lambda *args, **kwargs: (
-                True,
-                {
-                    "message": "Password changed successfully",
-                    "access_token": "new-access",
-                    "refresh_token": "new-refresh",
-                    "token_type": "Bearer",
-                    "expires_in": 900,
-                    "refresh_expires_in": 2592000,
-                },
-                "",
-            )
+        "change_password",
+        lambda *args, **kwargs: (
+            True,
+            {
+                "message": "Password changed successfully",
+                "access_token": "new-access",
+                "refresh_token": "new-refresh",
+                "token_type": "Bearer",
+                "expires_in": 900,
+                "refresh_expires_in": 2592000,
+            },
+            "",
         ),
     )
     request = make_request(
@@ -165,9 +158,7 @@ def test_get_persistent_settings_returns_404_when_missing(
     monkeypatch, make_request, run_async, response_json
 ):
     monkeypatch.setattr(
-        user_endpoints.postgres_client,
-        "async_get_user_settings",
-        _amock(lambda user_id: None),
+        user_endpoints.postgres_client, "get_user_settings", lambda user_id: None
     )
     request = make_request(
         method="GET",
@@ -186,8 +177,8 @@ def test_get_persistent_settings_returns_200(
 ):
     monkeypatch.setattr(
         user_endpoints.postgres_client,
-        "async_get_user_settings",
-        _amock(lambda user_id: {"settings": {"theme": "light", "compact": True}}),
+        "get_user_settings",
+        lambda user_id: {"settings": {"theme": "light", "compact": True}},
     )
     request = make_request(
         method="GET",
@@ -270,8 +261,8 @@ def test_update_persistent_settings_returns_500_when_update_fails(
 ):
     monkeypatch.setattr(
         user_endpoints.postgres_client,
-        "async_update_user_settings",
-        _amock(lambda user_id, settings: False),
+        "update_user_settings",
+        lambda user_id, settings: False,
     )
     request = make_request(
         method="PUT",
@@ -291,8 +282,8 @@ def test_update_persistent_settings_returns_200_when_successful(
 ):
     monkeypatch.setattr(
         user_endpoints.postgres_client,
-        "async_update_user_settings",
-        _amock(lambda user_id, settings: True),
+        "update_user_settings",
+        lambda user_id, settings: True,
     )
     request = make_request(
         method="PUT",

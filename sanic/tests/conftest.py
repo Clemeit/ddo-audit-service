@@ -8,15 +8,6 @@ from types import SimpleNamespace
 import pytest
 
 
-def _amock(fn):
-    """Wrap a sync function to return a coroutine for use in monkeypatched async calls."""
-
-    async def wrapper(*a, **kw):
-        return fn(*a, **kw)
-
-    return wrapper
-
-
 # Ensure auth service can import in test context.
 # Use a 32+ byte key to satisfy HS256 recommended minimum length.
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-32-bytes-minimum")

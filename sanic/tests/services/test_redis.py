@@ -176,10 +176,14 @@ def test_get_character_by_name_and_server_name_returns_none_when_missing(monkeyp
 
 def test_get_character_by_id_returns_character_model(monkeypatch):
     monkeypatch.setattr(redis_service, "SERVER_NAMES_LOWERCASE", ["alpha", "beta"])
+    monkeypatch.setattr(
+        redis_service,
+        "get_character_ids_by_server_name",
+        lambda server_name: [7] if server_name == "beta" else [],
+    )
+
     client = MagicMock()
-    pipeline = MagicMock()
-    pipeline.execute.return_value = [None, _character_payload(7, "Rogue")]
-    client.pipeline.return_value = pipeline
+    client.json.return_value.get.return_value = _character_payload(7, "Rogue")
     _patch_sync_client(monkeypatch, client)
 
     result = redis_service.get_character_by_id(7)
@@ -187,17 +191,19 @@ def test_get_character_by_id_returns_character_model(monkeypatch):
     assert result is not None
     assert result.id == 7
     assert result.name == "Rogue"
-    assert pipeline.json.return_value.get.call_count == 2
-    pipeline.execute.assert_called_once_with(raise_on_error=False)
+    client.json.return_value.get.assert_called_once_with("beta:characters", 7)
 
 
 def test_get_character_by_id_returns_none_when_redis_get_raises(monkeypatch):
     monkeypatch.setattr(redis_service, "SERVER_NAMES_LOWERCASE", ["argonnessen"])
+    monkeypatch.setattr(
+        redis_service,
+        "get_character_ids_by_server_name",
+        lambda server_name: [9],
+    )
 
     client = MagicMock()
-    pipeline = MagicMock()
-    pipeline.execute.side_effect = RuntimeError("redis down")
-    client.pipeline.return_value = pipeline
+    client.json.return_value.get.side_effect = RuntimeError("redis down")
     _patch_sync_client(monkeypatch, client)
 
     assert redis_service.get_character_by_id(9) is None
@@ -206,19 +212,21 @@ def test_get_character_by_id_returns_none_when_redis_get_raises(monkeypatch):
 def test_get_characters_by_group_id_filters_across_servers(monkeypatch):
     monkeypatch.setattr(redis_service, "SERVER_NAMES_LOWERCASE", ["alpha", "beta"])
 
-    client = MagicMock()
-    pipeline = MagicMock()
-    pipeline.execute.return_value = [
-        {
-            "1": _character_payload(1, "One", group_id=42),
-            "2": _character_payload(2, "Two", group_id=10),
-        },
-        {
-            "3": _character_payload(3, "Three", group_id=42),
-        },
-    ]
-    client.pipeline.return_value = pipeline
-    _patch_sync_client(monkeypatch, client)
+    def _get_server_characters(server_name):
+        if server_name == "alpha":
+            return {
+                1: _character_payload(1, "One", group_id=42),
+                2: _character_payload(2, "Two", group_id=10),
+            }
+        return {
+            3: _character_payload(3, "Three", group_id=42),
+        }
+
+    monkeypatch.setattr(
+        redis_service,
+        "get_characters_by_server_name_as_dict",
+        _get_server_characters,
+    )
 
     result = redis_service.get_characters_by_group_id(42)
 
@@ -523,77 +531,69 @@ def test_traffic_top_routes_maps_results(monkeypatch, run_async):
     top_mock.assert_awaited_once_with(suffix="req:route", minutes=60, limit=5)
 
 
-def test_get_cached_user_auth_version_decodes_bytes_and_handles_missing(
-    monkeypatch, run_async
-):
+def test_get_cached_user_auth_version_decodes_bytes_and_handles_missing(monkeypatch):
     client = MagicMock()
-    client.get = AsyncMock(side_effect=[b"5", None])
-    _patch_async_client(monkeypatch, client)
+    client.get.side_effect = [b"5", None]
+    _patch_sync_client(monkeypatch, client)
 
-    assert run_async(redis_service.async_get_cached_user_auth_version(10)) == 5
-    assert run_async(redis_service.async_get_cached_user_auth_version(10)) is None
+    assert redis_service.get_cached_user_auth_version(10) == 5
+    assert redis_service.get_cached_user_auth_version(10) is None
 
 
-def test_get_cached_user_auth_version_returns_none_for_invalid_value(
-    monkeypatch, run_async
-):
+def test_get_cached_user_auth_version_returns_none_for_invalid_value(monkeypatch):
     client = MagicMock()
-    client.get = AsyncMock(return_value=b"not-an-int")
-    _patch_async_client(monkeypatch, client)
+    client.get.return_value = b"not-an-int"
+    _patch_sync_client(monkeypatch, client)
 
-    assert run_async(redis_service.async_get_cached_user_auth_version(5)) is None
+    assert redis_service.get_cached_user_auth_version(5) is None
 
 
-def test_cache_user_auth_version_sets_ttl(monkeypatch, run_async):
+def test_cache_user_auth_version_sets_ttl(monkeypatch):
     client = MagicMock()
-    client.setex = AsyncMock()
-    _patch_async_client(monkeypatch, client)
+    _patch_sync_client(monkeypatch, client)
     monkeypatch.setattr(redis_service, "AUTH_CACHE_TTL_SECONDS", 321)
 
-    run_async(redis_service.async_cache_user_auth_version(7, 9))
+    redis_service.cache_user_auth_version(7, 9)
 
     client.setex.assert_called_once_with("auth:user:version:7", 321, 9)
 
 
-def test_get_cached_auth_session_decodes_dict_payload(monkeypatch, run_async):
+def test_get_cached_auth_session_decodes_dict_payload(monkeypatch):
     client = MagicMock()
-    client.get = AsyncMock(return_value=b'{"session_id":"s1","user_id":1}')
-    _patch_async_client(monkeypatch, client)
+    client.get.return_value = b'{"session_id":"s1","user_id":1}'
+    _patch_sync_client(monkeypatch, client)
 
-    result = run_async(redis_service.async_get_cached_auth_session("s1"))
+    result = redis_service.get_cached_auth_session("s1")
 
     assert result == {"session_id": "s1", "user_id": 1}
 
 
-def test_get_cached_auth_session_rejects_invalid_payloads(monkeypatch, run_async):
+def test_get_cached_auth_session_rejects_invalid_payloads(monkeypatch):
     client = MagicMock()
-    client.get = AsyncMock(side_effect=[b"[1,2,3]", b"not-json"])
-    _patch_async_client(monkeypatch, client)
+    client.get.side_effect = [b"[1,2,3]", b"not-json"]
+    _patch_sync_client(monkeypatch, client)
 
-    assert run_async(redis_service.async_get_cached_auth_session("s1")) is None
-    assert run_async(redis_service.async_get_cached_auth_session("s2")) is None
+    assert redis_service.get_cached_auth_session("s1") is None
+    assert redis_service.get_cached_auth_session("s2") is None
 
 
-def test_cache_auth_session_filters_keys_and_uses_computed_ttl(monkeypatch, run_async):
+def test_cache_auth_session_filters_keys_and_uses_computed_ttl(monkeypatch):
     client = MagicMock()
-    client.setex = AsyncMock()
-    _patch_async_client(monkeypatch, client)
+    _patch_sync_client(monkeypatch, client)
     monkeypatch.setattr(redis_service, "_compute_auth_cache_ttl", lambda expires: 42)
 
     now = datetime(2026, 3, 15, 10, 0, 0, tzinfo=timezone.utc)
-    run_async(
-        redis_service.async_cache_auth_session(
-            "sess-1",
-            {
-                "session_id": "sess-1",
-                "user_id": 1,
-                "auth_version": 4,
-                "expires_at": now,
-                "revoked_at": None,
-                "updated_at": now,
-                "internal_only_field": "ignore-me",
-            },
-        )
+    redis_service.cache_auth_session(
+        "sess-1",
+        {
+            "session_id": "sess-1",
+            "user_id": 1,
+            "auth_version": 4,
+            "expires_at": now,
+            "revoked_at": None,
+            "updated_at": now,
+            "internal_only_field": "ignore-me",
+        },
     )
 
     client.setex.assert_called_once()
@@ -612,12 +612,11 @@ def test_cache_auth_session_filters_keys_and_uses_computed_ttl(monkeypatch, run_
     }
 
 
-def test_clear_cached_auth_session_deletes_cache_key(monkeypatch, run_async):
+def test_clear_cached_auth_session_deletes_cache_key(monkeypatch):
     client = MagicMock()
-    client.delete = AsyncMock()
-    _patch_async_client(monkeypatch, client)
+    _patch_sync_client(monkeypatch, client)
 
-    run_async(redis_service.async_clear_cached_auth_session("session-abc"))
+    redis_service.clear_cached_auth_session("session-abc")
 
     client.delete.assert_called_once_with("auth:session:session-abc")
 

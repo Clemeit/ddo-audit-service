@@ -108,7 +108,7 @@ async def get_user_profile(request: Request):
         if not user_id:
             return json({"error": "Unauthorized"}, status=401)
 
-        user = await auth_service.async_get_user_by_id(user_id)
+        user = auth_service.get_user_by_id(user_id)
         if not user:
             return json({"error": "User not found"}, status=404)
 
@@ -156,7 +156,7 @@ async def change_user_password(request: Request):
         change_password_req = ChangePassword(**(request.json or {}))
 
         # Change password
-        success, response_data, error_msg = await auth_service.async_change_password(
+        success, response_data, error_msg = auth_service.change_password(
             user_id,
             change_password_req.old_password,
             change_password_req.new_password,
@@ -201,7 +201,7 @@ async def get_persistent_settings(request: Request):
         if not user_id:
             return json({"error": "Unauthorized"}, status=401)
 
-        user_settings = await postgres_client.async_get_user_settings(user_id)
+        user_settings = postgres_client.get_user_settings(user_id)
         if not user_settings:
             return json({"error": "Settings not found"}, status=404)
 
@@ -255,7 +255,7 @@ async def update_persistent_settings(request: Request):
             return json({"error": "Settings too large"}, status=413)
 
         # Update settings
-        success = await postgres_client.async_update_user_settings(user_id, settings)
+        success = postgres_client.update_user_settings(user_id, settings)
         if not success:
             return json({"error": "Failed to update settings"}, status=500)
 

@@ -51,14 +51,10 @@ def test_jwt_middleware_rejects_invalid_token(
     monkeypatch, make_request, run_async, response_json
 ):
     monkeypatch.setattr(jwt_middleware_module, "is_jwt_protected", lambda request: True)
-
-    async def _mock_async_validate(token):
-        return None
-
     monkeypatch.setattr(
         jwt_middleware_module.auth_service,
-        "async_validate_access_token",
-        _mock_async_validate,
+        "validate_access_token",
+        lambda token: None,
     )
     request = make_request(
         method="GET",
@@ -76,14 +72,10 @@ def test_jwt_middleware_rejects_expired_token(
     monkeypatch, make_request, run_async, response_json
 ):
     monkeypatch.setattr(jwt_middleware_module, "is_jwt_protected", lambda request: True)
-
-    async def _mock_async_validate(token):
-        return None
-
     monkeypatch.setattr(
         jwt_middleware_module.auth_service,
-        "async_validate_access_token",
-        _mock_async_validate,
+        "validate_access_token",
+        lambda token: None,
     )
     request = make_request(
         method="GET",
@@ -102,7 +94,7 @@ def test_jwt_middleware_uses_bearer_token_without_prefix(
 ):
     captured = {}
 
-    async def _mock_async_validate(token):
+    def _validate_access_token(token):
         captured["token"] = token
         return {
             "user_id": 42,
@@ -114,8 +106,8 @@ def test_jwt_middleware_uses_bearer_token_without_prefix(
     monkeypatch.setattr(jwt_middleware_module, "is_jwt_protected", lambda request: True)
     monkeypatch.setattr(
         jwt_middleware_module.auth_service,
-        "async_validate_access_token",
-        _mock_async_validate,
+        "validate_access_token",
+        _validate_access_token,
     )
     request = make_request(
         method="GET",
@@ -137,19 +129,15 @@ def test_jwt_middleware_rejects_payload_missing_user_id(
     monkeypatch, make_request, run_async, response_json
 ):
     monkeypatch.setattr(jwt_middleware_module, "is_jwt_protected", lambda request: True)
-
-    async def _mock_async_validate(token):
-        return {
+    monkeypatch.setattr(
+        jwt_middleware_module.auth_service,
+        "validate_access_token",
+        lambda token: {
             "user_id": None,
             "username": "user88",
             "session_id": "session-88",
             "auth_version": 1,
-        }
-
-    monkeypatch.setattr(
-        jwt_middleware_module.auth_service,
-        "async_validate_access_token",
-        _mock_async_validate,
+        },
     )
     request = make_request(
         method="GET",
@@ -167,19 +155,15 @@ def test_jwt_middleware_rejects_payload_missing_session_id(
     monkeypatch, make_request, run_async, response_json
 ):
     monkeypatch.setattr(jwt_middleware_module, "is_jwt_protected", lambda request: True)
-
-    async def _mock_async_validate(token):
-        return {
+    monkeypatch.setattr(
+        jwt_middleware_module.auth_service,
+        "validate_access_token",
+        lambda token: {
             "user_id": 88,
             "username": "user88",
             "session_id": None,
             "auth_version": 1,
-        }
-
-    monkeypatch.setattr(
-        jwt_middleware_module.auth_service,
-        "async_validate_access_token",
-        _mock_async_validate,
+        },
     )
     request = make_request(
         method="GET",

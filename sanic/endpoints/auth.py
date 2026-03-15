@@ -60,7 +60,7 @@ async def register(request: Request):
 
         # Register user
         client_ip, user_agent = _get_client_metadata(request)
-        success, user_data, error_msg = await auth_service.async_register_user(
+        success, user_data, error_msg = auth_service.register_user(
             user_register.username,
             user_register.password,
             created_ip=client_ip,
@@ -133,7 +133,7 @@ async def login(request: Request):
 
         # Authenticate user
         client_ip, user_agent = _get_client_metadata(request)
-        success, user_data, error_msg = await auth_service.async_login_user(
+        success, user_data, error_msg = auth_service.login_user(
             user_login.username,
             user_login.password,
             created_ip=client_ip,
@@ -173,7 +173,7 @@ async def refresh(request: Request):
             return json({"error": "Invalid or missing JSON body"}, status=400)
         refresh_request = RefreshTokenRequest(**body)
 
-        success, token_data, error_msg = await auth_service.async_refresh_session(
+        success, token_data, error_msg = auth_service.refresh_session(
             refresh_request.refresh_token
         )
         if not success:
@@ -204,7 +204,7 @@ async def logout(request: Request):
         if not session_id:
             return json({"error": "Unauthorized"}, status=401)
 
-        if not await auth_service.async_logout_session(session_id):
+        if not auth_service.logout_session(session_id):
             return json({"error": "Failed to log out"}, status=500)
 
         return json({"data": {"message": "Logged out successfully"}}, status=200)

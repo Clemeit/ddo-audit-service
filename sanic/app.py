@@ -18,12 +18,7 @@ from endpoints.user import user_blueprint
 from endpoints.auth import auth_blueprint
 from reports.server_status import get_game_info_scheduler
 from services.redis import close_redis_async, initialize_redis
-from services.postgres import (
-    initialize_postgres,
-    close_postgres_client,
-    initialize_async_postgres,
-    close_async_postgres,
-)
+from services.postgres import initialize_postgres, close_postgres_client
 from utils.route import is_method_open, is_route_open, is_jwt_protected
 from utils.access_log import (
     build_access_event,
@@ -99,14 +94,12 @@ async def rate_limiting_middleware(request: Request):
 async def set_up_connections(app, loop):
     initialize_redis()
     initialize_postgres()
-    await initialize_async_postgres()
     start_game_info_polling()
 
 
 @app.listener("after_server_stop")
 async def close_connections(app, loop):
     await close_redis_async()
-    await close_async_postgres()
     close_postgres_client()
     stop_game_info_polling()
 

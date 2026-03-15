@@ -46,14 +46,10 @@ def test_jwt_middleware_rejects_invalid_token_payload(
     monkeypatch, make_request, run_async, response_json
 ):
     monkeypatch.setattr(jwt_middleware_module, "is_jwt_protected", lambda request: True)
-
-    async def _mock_async_validate(token):
-        return None
-
     monkeypatch.setattr(
         jwt_middleware_module.auth_service,
-        "async_validate_access_token",
-        _mock_async_validate,
+        "validate_access_token",
+        lambda token: None,
     )
     request = make_request(
         method="GET",
@@ -71,19 +67,15 @@ def test_jwt_middleware_attaches_context_for_valid_token(
     monkeypatch, make_request, run_async
 ):
     monkeypatch.setattr(jwt_middleware_module, "is_jwt_protected", lambda request: True)
-
-    async def _mock_async_validate(token):
-        return {
+    monkeypatch.setattr(
+        jwt_middleware_module.auth_service,
+        "validate_access_token",
+        lambda token: {
             "user_id": 88,
             "username": "user88",
             "session_id": "session-88",
             "auth_version": 6,
-        }
-
-    monkeypatch.setattr(
-        jwt_middleware_module.auth_service,
-        "async_validate_access_token",
-        _mock_async_validate,
+        },
     )
     request = make_request(
         method="GET",
@@ -104,19 +96,15 @@ def test_jwt_middleware_rejects_payload_missing_session_id(
     monkeypatch, make_request, run_async, response_json
 ):
     monkeypatch.setattr(jwt_middleware_module, "is_jwt_protected", lambda request: True)
-
-    async def _mock_async_validate(token):
-        return {
+    monkeypatch.setattr(
+        jwt_middleware_module.auth_service,
+        "validate_access_token",
+        lambda token: {
             "user_id": 88,
             "username": "user88",
             "session_id": None,
             "auth_version": 6,
-        }
-
-    monkeypatch.setattr(
-        jwt_middleware_module.auth_service,
-        "async_validate_access_token",
-        _mock_async_validate,
+        },
     )
     request = make_request(
         method="GET",
@@ -136,14 +124,10 @@ def test_rate_limit_middleware_allows_auth_request_under_limit(
     monkeypatch.setattr(
         rate_limit_module, "get_client_ip", lambda request: "198.51.100.5"
     )
-
-    async def _mock_async_check(*args, **kwargs):
-        return (True, 120)
-
     monkeypatch.setattr(
         rate_limit_module,
-        "_async_increment_and_check_limit",
-        _mock_async_check,
+        "_increment_and_check_limit",
+        lambda *args, **kwargs: (True, 120),
     )
     request = make_request(method="POST", path="/v1/auth/login")
 
@@ -158,14 +142,10 @@ def test_rate_limit_middleware_blocks_auth_request_over_limit(
     monkeypatch.setattr(
         rate_limit_module, "get_client_ip", lambda request: "198.51.100.5"
     )
-
-    async def _mock_async_check(*args, **kwargs):
-        return (False, 55)
-
     monkeypatch.setattr(
         rate_limit_module,
-        "_async_increment_and_check_limit",
-        _mock_async_check,
+        "_increment_and_check_limit",
+        lambda *args, **kwargs: (False, 55),
     )
     request = make_request(method="POST", path="/v1/auth/login")
 
@@ -179,14 +159,10 @@ def test_rate_limit_middleware_blocks_auth_request_over_limit(
 def test_rate_limit_middleware_blocks_user_request_over_limit(
     monkeypatch, make_request, run_async, response_json
 ):
-
-    async def _mock_async_check(*args, **kwargs):
-        return (False, 88)
-
     monkeypatch.setattr(
         rate_limit_module,
-        "_async_increment_and_check_limit",
-        _mock_async_check,
+        "_increment_and_check_limit",
+        lambda *args, **kwargs: (False, 88),
     )
     request = make_request(
         method="PUT",
@@ -204,15 +180,13 @@ def test_rate_limit_middleware_blocks_user_request_over_limit(
 def test_rate_limit_middleware_fail_open_on_errors(
     monkeypatch, make_request, run_async
 ):
-    async def _raise_error(*args, **kwargs):
+    def _raise_error(*args, **kwargs):
         raise RuntimeError("redis unavailable")
 
     monkeypatch.setattr(
         rate_limit_module, "get_client_ip", lambda request: "198.51.100.5"
     )
-    monkeypatch.setattr(
-        rate_limit_module, "_async_increment_and_check_limit", _raise_error
-    )
+    monkeypatch.setattr(rate_limit_module, "_increment_and_check_limit", _raise_error)
     request = make_request(method="POST", path="/v1/auth/refresh")
 
     response = run_async(rate_limit_module.rate_limit_middleware(request))
