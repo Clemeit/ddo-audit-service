@@ -1,6 +1,7 @@
 from enum import Enum
 import services.redis as redis_client
 import services.postgres as postgres_client
+from typing import Any
 
 from constants.redis import (
     REPORT_1_DAY_CACHE_TTL,
@@ -191,7 +192,7 @@ def get_cached_data_with_fallback(key: str, fallback_func, cache_ttl: int) -> di
 
 async def async_get_cached_data_with_fallback(
     key: str, fallback_func, cache_ttl: int
-) -> dict:
+) -> Any:
     """Async version: get cached data, regenerate if expired.
 
     *fallback_func* must be an async callable (coroutine function).

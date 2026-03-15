@@ -68,12 +68,12 @@ DB_CONFIG = {
 class OnConflict:
     """Structured ON CONFLICT clause for safe SQL composition.
 
-    *conflict_columns*  – column(s) that form the unique constraint
+    *conflict_columns*  - column(s) that form the unique constraint
                           (used in ``ON CONFLICT (col, ...)``)
-    *action*            – ``"nothing"`` or ``"update"``
-    *update_columns*    – columns to SET on conflict when *action* is ``"update"``.
+    *action*            - ``"nothing"`` or ``"update"``
+    *update_columns*    - columns to SET on conflict when *action* is ``"update"``.
                           Each column is set to ``EXCLUDED.<col>``.
-    *update_expressions*– raw SQL expressions keyed by column name for cases
+    *update_expressions*- raw SQL expressions keyed by column name for cases
                           that need more than ``col = EXCLUDED.col``
                           (e.g. ``"last_save": "NOW()"``).  Keys are validated as
                           identifiers; values are emitted verbatim so they must
@@ -86,6 +86,10 @@ class OnConflict:
     update_expressions: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self):
+        if not self.conflict_columns:
+            raise ValueError(
+                "OnConflict conflict_columns must be a non-empty list of column names"
+            )
         if self.action not in ("nothing", "update"):
             raise ValueError(
                 f"OnConflict action must be 'nothing' or 'update', got {self.action!r}"
@@ -120,7 +124,8 @@ def _build_on_conflict_psycopg2(oc: OnConflict) -> psycopg2.sql.Composed:
     ]
     for col, expr in oc.update_expressions.items():
         set_parts.append(
-            psycopg2.sql.SQL("{col} = " + expr).format(col=psycopg2.sql.Identifier(col))
+            psycopg2.sql.SQL("{col} = ").format(col=psycopg2.sql.Identifier(col))
+            + psycopg2.sql.SQL(expr)
         )
     return psycopg2.sql.SQL("ON CONFLICT ({cols}) DO UPDATE SET {sets}").format(
         cols=conflict_cols,
@@ -578,7 +583,8 @@ def _build_on_conflict_psycopg3(oc: OnConflict) -> psycopg.sql.Composed:
     ]
     for col, expr in oc.update_expressions.items():
         set_parts.append(
-            psycopg.sql.SQL("{col} = " + expr).format(col=psycopg.sql.Identifier(col))
+            psycopg.sql.SQL("{col} = ").format(col=psycopg.sql.Identifier(col))
+            + psycopg.sql.SQL(expr)
         )
     return psycopg.sql.SQL("ON CONFLICT ({cols}) DO UPDATE SET {sets}").format(
         cols=conflict_cols,

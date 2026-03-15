@@ -3,6 +3,7 @@ import services.postgres as postgres_client
 from models.game import PopulationPointInTime, PopulationDataPoint
 from utils.time import datetime_to_datetime_string
 from typing import Optional
+from typing import Any
 
 from constants.redis import (
     REPORT_1_DAY_CACHE_TTL,
@@ -540,7 +541,7 @@ def get_by_hour_and_day_of_week_server_population_year() -> (
 # ===== HELPER FUNCTIONS =====
 
 
-def get_cached_data_with_fallback(key: str, fallback_func, ttl: int = 60 * 60) -> dict:
+def get_cached_data_with_fallback(key: str, fallback_func, ttl: int = 60 * 60) -> Any:
     """Get cached data, regenerate if expired."""
     cached_data = redis_client.get_by_key(key)
 
@@ -554,7 +555,7 @@ def get_cached_data_with_fallback(key: str, fallback_func, ttl: int = 60 * 60) -
 
 async def async_get_cached_data_with_fallback(
     key: str, fallback_func, ttl: int = 60 * 60
-) -> dict:
+) -> Any:
     """Async version: get cached data, regenerate if expired.
 
     *fallback_func* must be an async callable (coroutine function).
