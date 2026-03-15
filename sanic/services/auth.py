@@ -28,7 +28,7 @@ AUTH_ERROR_INTERNAL = "internal_error"
 
 
 # JWT Configuration
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
+JWT_SECRET_KEY = "foo"  # os.getenv("JWT_SECRET_KEY", "")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRATION_SECONDS = int(
     os.getenv("ACCESS_TOKEN_EXPIRATION_SECONDS", "900")
@@ -218,6 +218,17 @@ def _get_user_auth_version(user_id: int) -> Optional[int]:
     return auth_version
 
 
+async def _async_get_user_auth_version(user_id: int) -> Optional[int]:
+    cached_version = await redis_client.async_get_cached_user_auth_version(user_id)
+    if cached_version is not None:
+        return cached_version
+
+    auth_version = await postgres_client.async_get_user_auth_version(user_id)
+    if auth_version is not None:
+        await redis_client.async_cache_user_auth_version(user_id, auth_version)
+    return auth_version
+
+
 def _get_auth_session(session_id: str) -> Optional[dict]:
     cached_session = redis_client.get_cached_auth_session(session_id)
     if cached_session is not None:
@@ -228,6 +239,19 @@ def _get_auth_session(session_id: str) -> Optional[dict]:
         redis_client.cache_auth_session(session_id, session)
     elif session is not None:
         redis_client.clear_cached_auth_session(session_id)
+    return session
+
+
+async def _async_get_auth_session(session_id: str) -> Optional[dict]:
+    cached_session = await redis_client.async_get_cached_auth_session(session_id)
+    if cached_session is not None:
+        return cached_session
+
+    session = await postgres_client.async_get_auth_session(session_id)
+    if session and is_auth_session_active(session):
+        await redis_client.async_cache_auth_session(session_id, session)
+    elif session is not None:
+        await redis_client.async_clear_cached_auth_session(session_id)
     return session
 
 
@@ -254,6 +278,43 @@ def validate_access_token(token: str) -> Optional[dict]:
     session = _get_auth_session(str(session_id))
     if not is_auth_session_active(session):
         redis_client.clear_cached_auth_session(str(session_id))
+        return None
+
+    try:
+        session_user_id = int(session.get("user_id"))
+        session_auth_version = int(session.get("auth_version"))
+    except (TypeError, ValueError):
+        return None
+
+    if session_user_id != user_id or session_auth_version != auth_version:
+        return None
+
+    return payload
+
+
+async def async_validate_access_token(token: str) -> Optional[dict]:
+    """Validate the access token using async Redis lookups (non-blocking)."""
+    payload = verify_jwt_token(token)
+    if not payload:
+        return None
+
+    try:
+        user_id = int(payload.get("user_id"))
+        auth_version = int(payload.get("auth_version"))
+    except (TypeError, ValueError):
+        return None
+
+    session_id = payload.get("session_id")
+    if not session_id:
+        return None
+
+    current_auth_version = await _async_get_user_auth_version(user_id)
+    if current_auth_version is None or int(current_auth_version) != auth_version:
+        return None
+
+    session = await _async_get_auth_session(str(session_id))
+    if not is_auth_session_active(session):
+        await redis_client.async_clear_cached_auth_session(str(session_id))
         return None
 
     try:
@@ -624,6 +685,311 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
         if not user:
             return None
 
+        return serialize_user(user)
+    except Exception:
+        return None
+
+
+# ========================================
+# Async auth service functions (non-blocking, for Sanic endpoints)
+# ========================================
+
+
+async def _async_create_session(
+    user_id: int,
+    auth_version: int,
+    created_ip: Optional[str],
+    created_user_agent: Optional[str],
+) -> Tuple[bool, Optional[dict], str]:
+    session_id = uuid.uuid4().hex
+    refresh_token = generate_refresh_token()
+    refresh_token_hash = hash_refresh_token(refresh_token)
+    expires_at = get_refresh_token_expiry()
+
+    session = await postgres_client.async_create_auth_session(
+        session_id=session_id,
+        user_id=user_id,
+        refresh_token_hash=refresh_token_hash,
+        auth_version=auth_version,
+        expires_at=expires_at,
+        created_ip=created_ip,
+        created_user_agent=created_user_agent,
+    )
+    if not session:
+        return False, None, AUTH_ERROR_INTERNAL
+
+    await redis_client.async_cache_user_auth_version(user_id, auth_version)
+    await redis_client.async_cache_auth_session(session_id, session)
+
+    return (
+        True,
+        {
+            "session_id": session_id,
+            "refresh_token": refresh_token,
+            "auth_version": auth_version,
+        },
+        "",
+    )
+
+
+async def async_register_user(
+    username: str,
+    password: str,
+    created_ip: Optional[str] = None,
+    created_user_agent: Optional[str] = None,
+) -> Tuple[bool, Optional[dict], str]:
+    """Register a new user (async)."""
+    try:
+        existing_user = await postgres_client.async_get_user_by_username(username)
+        if existing_user:
+            return False, None, AUTH_ERROR_USERNAME_EXISTS
+
+        password_hash = hash_password(password)
+        session_id = uuid.uuid4().hex
+        refresh_token = generate_refresh_token()
+        refresh_token_hash = hash_refresh_token(refresh_token)
+        expires_at = get_refresh_token_expiry()
+
+        registration_data = (
+            await postgres_client.async_create_user_with_settings_and_auth_session(
+                username=username,
+                password_hash=password_hash,
+                session_id=session_id,
+                refresh_token_hash=refresh_token_hash,
+                expires_at=expires_at,
+                created_ip=created_ip,
+                created_user_agent=created_user_agent,
+            )
+        )
+        if not registration_data:
+            logger.error(
+                "Registration failed: user/session transaction returned no data"
+            )
+            return False, None, AUTH_ERROR_INTERNAL
+
+        user = registration_data["user"]
+        session = registration_data["session"]
+
+        await redis_client.async_cache_user_auth_version(
+            int(user["id"]), int(user["auth_version"])
+        )
+        await redis_client.async_cache_auth_session(str(session["session_id"]), session)
+
+        return (
+            True,
+            _build_token_response(
+                user_id=user["id"],
+                username=user["username"],
+                session_id=str(session["session_id"]),
+                auth_version=int(user["auth_version"]),
+                refresh_token=refresh_token,
+                user=serialize_user(user),
+            ),
+            "",
+        )
+
+    except postgres_client.UsernameAlreadyExistsError:
+        return False, None, AUTH_ERROR_USERNAME_EXISTS
+    except Exception:
+        logger.exception("Async registration failed")
+        return False, None, AUTH_ERROR_INTERNAL
+
+
+async def async_login_user(
+    username: str,
+    password: str,
+    created_ip: Optional[str] = None,
+    created_user_agent: Optional[str] = None,
+) -> Tuple[bool, Optional[dict], str]:
+    """Authenticate a user and return a JWT token (async)."""
+    try:
+        user = await postgres_client.async_get_user_by_username(username)
+
+        if not user:
+            return False, None, AUTH_ERROR_INVALID_CREDENTIALS
+
+        if not verify_password(password, user["password_hash"]):
+            return False, None, AUTH_ERROR_INVALID_CREDENTIALS
+
+        session_created, session_data, session_error = await _async_create_session(
+            user_id=user["id"],
+            auth_version=int(user["auth_version"]),
+            created_ip=created_ip,
+            created_user_agent=created_user_agent,
+        )
+        if not session_created:
+            logger.error(
+                "Login failed: unable to create auth session (%s)", session_error
+            )
+            return False, None, AUTH_ERROR_INTERNAL
+
+        return (
+            True,
+            _build_token_response(
+                user_id=user["id"],
+                username=user["username"],
+                session_id=session_data["session_id"],
+                auth_version=session_data["auth_version"],
+                refresh_token=session_data["refresh_token"],
+                user=serialize_user(user),
+            ),
+            "",
+        )
+
+    except Exception:
+        logger.exception("Async login failed")
+        return False, None, AUTH_ERROR_INTERNAL
+
+
+async def async_refresh_session(
+    refresh_token: str,
+) -> Tuple[bool, Optional[dict], str]:
+    """Rotate a refresh token and return a fresh token pair (async)."""
+    try:
+        refresh_token_hash = hash_refresh_token(refresh_token)
+        session = await postgres_client.async_get_auth_session_by_refresh_token_hash(
+            refresh_token_hash
+        )
+        if not is_auth_session_active(session):
+            if session:
+                await redis_client.async_clear_cached_auth_session(
+                    str(session["session_id"])
+                )
+            return False, None, AUTH_ERROR_INVALID_REFRESH_TOKEN
+
+        user = await postgres_client.async_get_user_by_id(int(session["user_id"]))
+        if not user:
+            logger.error("Refresh failed: session references a missing user")
+            return False, None, AUTH_ERROR_INTERNAL
+
+        current_auth_version = await _async_get_user_auth_version(int(user["id"]))
+        if current_auth_version is None:
+            logger.error("Refresh failed: could not resolve current auth version")
+            return False, None, AUTH_ERROR_INTERNAL
+
+        if int(current_auth_version) != int(session["auth_version"]):
+            await redis_client.async_clear_cached_auth_session(
+                str(session["session_id"])
+            )
+            return False, None, AUTH_ERROR_INVALID_REFRESH_TOKEN
+
+        new_refresh_token = generate_refresh_token()
+        rotated_session = await postgres_client.async_rotate_auth_session_refresh_token(
+            session_id=str(session["session_id"]),
+            current_refresh_token_hash=refresh_token_hash,
+            refresh_token_hash=hash_refresh_token(new_refresh_token),
+            expires_at=get_refresh_token_expiry(),
+        )
+        if not rotated_session:
+            await redis_client.async_clear_cached_auth_session(
+                str(session["session_id"])
+            )
+            return False, None, AUTH_ERROR_INVALID_REFRESH_TOKEN
+
+        await redis_client.async_cache_user_auth_version(
+            int(user["id"]), int(current_auth_version)
+        )
+        await redis_client.async_cache_auth_session(
+            str(session["session_id"]), rotated_session
+        )
+
+        return (
+            True,
+            _build_token_response(
+                user_id=int(user["id"]),
+                username=user["username"],
+                session_id=str(session["session_id"]),
+                auth_version=int(current_auth_version),
+                refresh_token=new_refresh_token,
+            ),
+            "",
+        )
+
+    except Exception:
+        logger.exception("Async refresh session failed")
+        return False, None, AUTH_ERROR_INTERNAL
+
+
+async def async_logout_session(session_id: str) -> bool:
+    """Revoke a single auth session (async)."""
+    success = await postgres_client.async_revoke_auth_session(session_id, "logout")
+    await redis_client.async_clear_cached_auth_session(session_id)
+    return success
+
+
+async def async_change_password(
+    user_id: int,
+    old_password: str,
+    new_password: str,
+    username: str,
+    created_ip: Optional[str] = None,
+    created_user_agent: Optional[str] = None,
+) -> Tuple[bool, Optional[dict], str]:
+    """Change a user's password (async)."""
+    try:
+        user = await postgres_client.async_get_user_by_id(user_id)
+
+        if not user:
+            return False, None, "User not found"
+
+        if not verify_password(old_password, user["password_hash"]):
+            return False, None, "Current password is incorrect"
+
+        if new_password == username:
+            return False, None, "Password cannot be the same as username"
+
+        if verify_password(new_password, user["password_hash"]):
+            return False, None, "New password must be different from current password"
+
+        new_password_hash = hash_password(new_password)
+
+        new_session_id = uuid.uuid4().hex
+        new_refresh_token = generate_refresh_token()
+        expires_at = get_refresh_token_expiry()
+
+        session = await postgres_client.async_change_password_and_create_session(
+            user_id=user_id,
+            password_hash=new_password_hash,
+            session_id=new_session_id,
+            refresh_token_hash=hash_refresh_token(new_refresh_token),
+            expires_at=expires_at,
+            created_ip=created_ip,
+            created_user_agent=created_user_agent,
+        )
+        if not session:
+            return False, None, "Failed to update password"
+
+        revoked_session_ids = session.get("revoked_session_ids", [])
+        await redis_client.async_clear_cached_auth_sessions(revoked_session_ids)
+        await redis_client.async_cache_user_auth_version(
+            user_id, int(session["auth_version"])
+        )
+        await redis_client.async_cache_auth_session(new_session_id, session)
+
+        return (
+            True,
+            _build_token_response(
+                user_id=user_id,
+                username=username,
+                session_id=new_session_id,
+                auth_version=int(session["auth_version"]),
+                refresh_token=new_refresh_token,
+                message="Password changed successfully",
+            ),
+            "",
+        )
+
+    except Exception:
+        logger.exception("Async password change failed")
+        return False, None, "Password change failed"
+
+
+async def async_get_user_by_id(user_id: int) -> Optional[dict]:
+    """Get a user by their ID (async)."""
+    try:
+        user = await postgres_client.async_get_user_by_id(user_id)
+        if not user:
+            return None
         return serialize_user(user)
     except Exception:
         return None

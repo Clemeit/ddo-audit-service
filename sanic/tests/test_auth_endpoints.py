@@ -3,6 +3,13 @@ from types import SimpleNamespace
 import endpoints.auth as auth_endpoints
 
 
+def _amock(fn):
+    """Wrap a sync function to return a coroutine."""
+    async def wrapper(*a, **kw):
+        return fn(*a, **kw)
+    return wrapper
+
+
 def test_register_returns_400_when_json_body_missing(
     make_request, run_async, response_json
 ):
@@ -49,12 +56,12 @@ def test_register_returns_generic_400_for_existing_username(
 ):
     monkeypatch.setattr(
         auth_endpoints.auth_service,
-        "register_user",
-        lambda *args, **kwargs: (
+        "async_register_user",
+        _amock(lambda *args, **kwargs: (
             False,
             None,
             auth_endpoints.auth_service.AUTH_ERROR_USERNAME_EXISTS,
-        ),
+        )),
     )
     request = make_request(
         method="POST",
@@ -73,8 +80,8 @@ def test_register_returns_500_for_internal_registration_failure(
 ):
     monkeypatch.setattr(
         auth_endpoints.auth_service,
-        "register_user",
-        lambda *args, **kwargs: (False, None, "internal"),
+        "async_register_user",
+        _amock(lambda *args, **kwargs: (False, None, "internal")),
     )
     request = make_request(
         method="POST",
@@ -93,7 +100,7 @@ def test_register_success_forwards_client_metadata(
 ):
     captured = {}
 
-    def _register_user(username, password, created_ip=None, created_user_agent=None):
+    async def _register_user(username, password, created_ip=None, created_user_agent=None):
         captured.update(
             {
                 "username": username,
@@ -119,7 +126,7 @@ def test_register_success_forwards_client_metadata(
             "",
         )
 
-    monkeypatch.setattr(auth_endpoints.auth_service, "register_user", _register_user)
+    monkeypatch.setattr(auth_endpoints.auth_service, "async_register_user", _register_user)
 
     request = make_request(
         method="POST",
@@ -154,12 +161,12 @@ def test_login_returns_401_for_invalid_credentials(
 ):
     monkeypatch.setattr(
         auth_endpoints.auth_service,
-        "login_user",
-        lambda *args, **kwargs: (
+        "async_login_user",
+        _amock(lambda *args, **kwargs: (
             False,
             None,
             auth_endpoints.auth_service.AUTH_ERROR_INVALID_CREDENTIALS,
-        ),
+        )),
     )
     request = make_request(
         method="POST",
@@ -178,8 +185,8 @@ def test_login_returns_500_for_internal_failure(
 ):
     monkeypatch.setattr(
         auth_endpoints.auth_service,
-        "login_user",
-        lambda *args, **kwargs: (False, None, "internal"),
+        "async_login_user",
+        _amock(lambda *args, **kwargs: (False, None, "internal")),
     )
     request = make_request(
         method="POST",
@@ -196,8 +203,8 @@ def test_login_returns_500_for_internal_failure(
 def test_login_success_returns_200(monkeypatch, make_request, run_async, response_json):
     monkeypatch.setattr(
         auth_endpoints.auth_service,
-        "login_user",
-        lambda *args, **kwargs: (
+        "async_login_user",
+        _amock(lambda *args, **kwargs: (
             True,
             {
                 "access_token": "access",
@@ -212,7 +219,7 @@ def test_login_success_returns_200(monkeypatch, make_request, run_async, respons
                 },
             },
             "",
-        ),
+        )),
     )
 
     request = make_request(
@@ -243,12 +250,12 @@ def test_refresh_returns_401_for_invalid_refresh_token(
 ):
     monkeypatch.setattr(
         auth_endpoints.auth_service,
-        "refresh_session",
-        lambda *args, **kwargs: (
+        "async_refresh_session",
+        _amock(lambda *args, **kwargs: (
             False,
             None,
             auth_endpoints.auth_service.AUTH_ERROR_INVALID_REFRESH_TOKEN,
-        ),
+        )),
     )
     request = make_request(
         method="POST",
@@ -267,8 +274,8 @@ def test_refresh_returns_500_for_internal_failure(
 ):
     monkeypatch.setattr(
         auth_endpoints.auth_service,
-        "refresh_session",
-        lambda *args, **kwargs: (False, None, "internal"),
+        "async_refresh_session",
+        _amock(lambda *args, **kwargs: (False, None, "internal")),
     )
     request = make_request(
         method="POST",
@@ -287,8 +294,8 @@ def test_refresh_success_returns_200(
 ):
     monkeypatch.setattr(
         auth_endpoints.auth_service,
-        "refresh_session",
-        lambda *args, **kwargs: (
+        "async_refresh_session",
+        _amock(lambda *args, **kwargs: (
             True,
             {
                 "access_token": "access-new",
@@ -298,7 +305,7 @@ def test_refresh_success_returns_200(
                 "refresh_expires_in": 2592000,
             },
             "",
-        ),
+        )),
     )
     request = make_request(
         method="POST",
@@ -326,8 +333,8 @@ def test_logout_returns_500_when_session_revoke_fails(
 ):
     monkeypatch.setattr(
         auth_endpoints.auth_service,
-        "logout_session",
-        lambda session_id: False,
+        "async_logout_session",
+        _amock(lambda session_id: False),
     )
     request = make_request(
         method="POST",
@@ -347,8 +354,8 @@ def test_logout_success_returns_200(
 ):
     monkeypatch.setattr(
         auth_endpoints.auth_service,
-        "logout_session",
-        lambda session_id: True,
+        "async_logout_session",
+        _amock(lambda session_id: True),
     )
     request = make_request(
         method="POST",
