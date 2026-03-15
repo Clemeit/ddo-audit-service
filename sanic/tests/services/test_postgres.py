@@ -790,9 +790,7 @@ def test_async_get_all_character_activity_returns_empty_for_no_rows(
     assert result == []
 
 
-def test_async_get_all_character_activity_returns_typed_entries(
-    monkeypatch, run_async
-):
+def test_async_get_all_character_activity_returns_typed_entries(monkeypatch, run_async):
     cursor, fake_ctx = _mock_async_cursor()
     cursor.fetchall.return_value = [
         {
@@ -821,9 +819,7 @@ def test_async_get_all_character_activity_returns_typed_entries(
     assert result[1]["data"]["status"] is True
 
 
-def test_async_get_all_character_activity_clamps_date_window(
-    monkeypatch, run_async
-):
+def test_async_get_all_character_activity_clamps_date_window(monkeypatch, run_async):
     cursor, fake_ctx = _mock_async_cursor()
     cursor.fetchall.return_value = []
     monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)

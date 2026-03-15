@@ -73,8 +73,10 @@ async def get_activity_by_character_id_and_activity_type(
             if limit > 500:
                 return json({"message": "limit must be <= 500"}, status=400)
 
-        activity = await postgres_client.async_get_character_activity_by_type_and_character_id(
-            character_id, activity_type, start_date, end_date, limit
+        activity = (
+            await postgres_client.async_get_character_activity_by_type_and_character_id(
+                character_id, activity_type, start_date, end_date, limit
+            )
         )
     except AuthorizationError as e:
         return json({"message": str(e)}, status=401)
@@ -212,8 +214,10 @@ async def get_recent_quests_by_character_id(request, character_id: str):
 
     try:
         await verify_authorization(request, character_id)
-        quest_activity = await postgres_client.async_get_recent_quest_activity_by_character_id(
-            character_id
+        quest_activity = (
+            await postgres_client.async_get_recent_quest_activity_by_character_id(
+                character_id
+            )
         )
     except AuthorizationError as e:
         return json({"message": str(e)}, status=401)
@@ -261,8 +265,10 @@ async def get_raid_activity_by_character_ids(request: Request):
                 status=400,
             )
 
-        raid_activity = await postgres_client.async_get_recent_raid_activity_by_character_ids(
-            character_ids
+        raid_activity = (
+            await postgres_client.async_get_recent_raid_activity_by_character_ids(
+                character_ids
+            )
         )
         return json({"data": raid_activity})
     except Exception as e:

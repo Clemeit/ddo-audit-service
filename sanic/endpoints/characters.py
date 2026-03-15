@@ -294,8 +294,10 @@ async def get_character_playstyle_score(request: Request, character_id: int):
         if not character:
             return json({"message": "Character not found"}, status=404)
 
-        activity_data = await postgres_client.async_get_all_character_activity_by_character_id(
-            character_id
+        activity_data = (
+            await postgres_client.async_get_all_character_activity_by_character_id(
+                character_id
+            )
         )
         if not activity_data or len(activity_data) == 0:
             return json({"message": "No activity data found"}, status=404)

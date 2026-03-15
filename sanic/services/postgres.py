@@ -5212,13 +5212,9 @@ async def async_get_all_character_activity_by_character_id(
             elif atype == CharacterActivityType.STATUS:
                 built = build_character_status_activity_from_row((ts, cid, data))
             elif atype == CharacterActivityType.TOTAL_LEVEL:
-                built = build_character_total_level_activity_from_row(
-                    (ts, cid, data)
-                )
+                built = build_character_total_level_activity_from_row((ts, cid, data))
             elif atype == CharacterActivityType.GUILD_NAME:
-                built = build_character_guild_name_activity_from_row(
-                    (ts, cid, data)
-                )
+                built = build_character_guild_name_activity_from_row((ts, cid, data))
             else:
                 built = {
                     "timestamp": (
@@ -5298,8 +5294,7 @@ async def async_get_character_activity_by_type_and_character_id(
             ]
         elif activity_Type == CharacterActivityType.STATUS:
             return [
-                build_character_status_activity_from_row(row)
-                for row in rows_as_tuples
+                build_character_status_activity_from_row(row) for row in rows_as_tuples
             ]
         elif activity_Type == CharacterActivityType.TOTAL_LEVEL:
             return [
