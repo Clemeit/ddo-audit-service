@@ -21,6 +21,7 @@ import os
 import argparse
 import time
 import json
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Allow importing from sibling script
@@ -97,20 +98,38 @@ class ScenarioTester:
         self.method = method.upper()
         self.json_body = json_body
         self.timeout = timeout
-        self.session = req_lib.Session()
-        self.session.headers.update(
-            {"User-Agent": "DDO-Audit-PerfSuite/1.0", **(headers or {})}
-        )
+        # Keep one session per worker thread; requests.Session is not thread-safe.
+        self._base_headers = {
+            "User-Agent": "DDO-Audit-PerfSuite/1.0",
+            **(headers or {}),
+        }
+        self._thread_local = threading.local()
+        self._sessions: list[req_lib.Session] = []
+        self._sessions_lock = threading.Lock()
+
+    def _get_thread_session(self) -> req_lib.Session:
+        session = getattr(self._thread_local, "session", None)
+        if session is None:
+            session = req_lib.Session()
+            session.headers.update(self._base_headers)
+            self._thread_local.session = session
+            with self._sessions_lock:
+                self._sessions.append(session)
+        return session
+
+    def _close_sessions(self) -> None:
+        for session in self._sessions:
+            session.close()
+        self._sessions.clear()
 
     def _single_request(self) -> RequestResult:
         start = time.time()
+        session = self._get_thread_session()
         try:
             if self.method == "POST":
-                resp = self.session.post(
-                    self.url, json=self.json_body, timeout=self.timeout
-                )
+                resp = session.post(self.url, json=self.json_body, timeout=self.timeout)
             else:
-                resp = self.session.get(self.url, timeout=self.timeout)
+                resp = session.get(self.url, timeout=self.timeout)
             elapsed = time.time() - start
             return RequestResult(
                 success=200 <= resp.status_code < 300,
@@ -128,10 +147,13 @@ class ScenarioTester:
     def run(self, count: int, concurrency: int) -> list[RequestResult]:
         print(f"  {count} requests, concurrency {concurrency} -> {self.url}")
         results: list[RequestResult] = []
-        with ThreadPoolExecutor(max_workers=concurrency) as pool:
-            futures = [pool.submit(self._single_request) for _ in range(count)]
-            for future in as_completed(futures):
-                results.append(future.result())
+        try:
+            with ThreadPoolExecutor(max_workers=concurrency) as pool:
+                futures = [pool.submit(self._single_request) for _ in range(count)]
+                for future in as_completed(futures):
+                    results.append(future.result())
+        finally:
+            self._close_sessions()
         return results
 
 
