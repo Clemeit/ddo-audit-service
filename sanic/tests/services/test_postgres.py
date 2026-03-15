@@ -769,3 +769,275 @@ def test_async_add_or_update_characters_excludes_transient_fields(
         "is_recruiting",
     ]:
         assert excluded not in query_repr
+
+
+# =============================================
+# Phase 2b: async activity function tests
+# =============================================
+
+
+def test_async_get_all_character_activity_returns_empty_for_no_rows(
+    monkeypatch, run_async
+):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchall.return_value = []
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(
+        postgres_service.async_get_all_character_activity_by_character_id(1)
+    )
+
+    assert result == []
+
+
+def test_async_get_all_character_activity_returns_typed_entries(
+    monkeypatch, run_async
+):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchall.return_value = [
+        {
+            "timestamp": datetime(2026, 3, 15, 12, 0, 0),
+            "character_id": 1,
+            "activity_type": "location",
+            "data": {"value": 42},
+        },
+        {
+            "timestamp": datetime(2026, 3, 15, 11, 0, 0),
+            "character_id": 1,
+            "activity_type": "status",
+            "data": {"value": True},
+        },
+    ]
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(
+        postgres_service.async_get_all_character_activity_by_character_id(1)
+    )
+
+    assert len(result) == 2
+    assert result[0]["activity_type"] == "location"
+    assert result[0]["data"]["location_id"] == 42
+    assert result[1]["activity_type"] == "status"
+    assert result[1]["data"]["status"] is True
+
+
+def test_async_get_all_character_activity_clamps_date_window(
+    monkeypatch, run_async
+):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchall.return_value = []
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    far_past = datetime(2020, 1, 1)
+    future = datetime(2026, 12, 31)
+    run_async(
+        postgres_service.async_get_all_character_activity_by_character_id(
+            1, start_date=far_past, end_date=future
+        )
+    )
+
+    call_args = cursor.execute.call_args[0]
+    # start_date should have been clamped (not the original far_past)
+    passed_start = call_args[1][1]
+    assert passed_start != far_past.isoformat()
+
+
+def test_async_get_character_activity_by_type_returns_location_entries(
+    monkeypatch, run_async
+):
+    from constants.activity import CharacterActivityType
+
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchall.return_value = [
+        {
+            "timestamp": datetime(2026, 3, 15, 12, 0, 0),
+            "character_id": 1,
+            "data": {"value": 99},
+        },
+    ]
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(
+        postgres_service.async_get_character_activity_by_type_and_character_id(
+            1, CharacterActivityType.LOCATION
+        )
+    )
+
+    assert len(result) == 1
+    assert result[0]["data"]["location_id"] == 99
+
+
+def test_async_get_character_activity_by_type_returns_empty_for_no_rows(
+    monkeypatch, run_async
+):
+    from constants.activity import CharacterActivityType
+
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchall.return_value = []
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(
+        postgres_service.async_get_character_activity_by_type_and_character_id(
+            1, CharacterActivityType.STATUS
+        )
+    )
+
+    assert result == []
+
+
+def test_async_get_character_activity_by_type_rejects_invalid_type(
+    monkeypatch, run_async
+):
+    cursor, fake_ctx = _mock_async_cursor()
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    with pytest.raises(ValueError, match="Invalid activity type"):
+        run_async(
+            postgres_service.async_get_character_activity_by_type_and_character_id(
+                1, "not_a_valid_type"
+            )
+        )
+
+
+def test_async_get_recent_quest_activity_returns_tuples(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchall.return_value = [
+        {
+            "timestamp": datetime(2026, 3, 15, 12, 0, 0),
+            "character_id": 1,
+            "name": "The Pit",
+        },
+    ]
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(
+        postgres_service.async_get_recent_quest_activity_by_character_id(1)
+    )
+
+    assert len(result) == 1
+    assert result[0] == (datetime(2026, 3, 15, 12, 0, 0), 1, "The Pit")
+
+
+def test_async_get_recent_quest_activity_returns_empty(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchall.return_value = []
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(
+        postgres_service.async_get_recent_quest_activity_by_character_id(1)
+    )
+
+    assert result == []
+
+
+def test_async_get_recent_raid_activity_by_character_id_builds_dicts(
+    monkeypatch, run_async
+):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchall.return_value = [
+        {
+            "timestamp": datetime(2026, 3, 15, 12, 0, 0),
+            "character_id": 1,
+            "id": 42,
+        },
+    ]
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(
+        postgres_service.async_get_recent_raid_activity_by_character_id(1)
+    )
+
+    assert len(result) == 1
+    assert result[0]["character_id"] == 1
+    assert result[0]["data"]["quest_ids"] == [42]
+
+
+def test_async_get_recent_raid_activity_by_character_ids_builds_dicts(
+    monkeypatch, run_async
+):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchall.return_value = [
+        {
+            "timestamp": datetime(2026, 3, 15, 12, 0, 0),
+            "character_id": 1,
+            "quest_ids": [10, 20],
+        },
+    ]
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(
+        postgres_service.async_get_recent_raid_activity_by_character_ids([1, 2])
+    )
+
+    assert len(result) == 1
+    assert result[0]["data"]["quest_ids"] == [10, 20]
+
+
+def test_async_get_recent_raid_activity_by_character_ids_returns_empty(
+    monkeypatch, run_async
+):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchall.return_value = []
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(
+        postgres_service.async_get_recent_raid_activity_by_character_ids([1])
+    )
+
+    assert result == []
+
+
+def test_async_set_character_active_status_executes_upsert(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    run_async(postgres_service.async_set_character_active_status(1, True))
+
+    cursor.execute.assert_awaited_once()
+    call_args = cursor.execute.call_args[0]
+    assert call_args[1][0] == 1
+    assert call_args[1][1] is True
+    assert call_args[1][2] is None
+
+
+def test_async_set_character_active_status_passes_checked_at(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    ts = datetime(2026, 3, 15, 12, 0, 0)
+    run_async(postgres_service.async_set_character_active_status(1, False, ts))
+
+    call_args = cursor.execute.call_args[0]
+    assert call_args[1][2] == ts
+
+
+def test_async_set_characters_active_status_bulk_skips_empty(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(postgres_service.async_set_characters_active_status_bulk([]))
+
+    assert result == 0
+    cursor.executemany.assert_not_awaited()
+
+
+def test_async_set_characters_active_status_bulk_returns_rowcount(
+    monkeypatch, run_async
+):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.rowcount = 3
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    updates = [
+        (1, True, None),
+        (2, False, datetime(2026, 3, 15)),
+        (3, True, None),
+    ]
+    result = run_async(
+        postgres_service.async_set_characters_active_status_bulk(updates)
+    )
+
+    assert result == 3
+    cursor.executemany.assert_awaited_once()
+    call_args = cursor.executemany.call_args[0]
+    assert len(call_args[1]) == 3

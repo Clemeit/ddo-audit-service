@@ -1,3 +1,5 @@
+from conftest import _amock
+
 import endpoints.activity as activity_endpoints
 
 
@@ -7,8 +9,10 @@ def test_get_activity_returns_401_when_authorization_missing(
     monkeypatch.setattr(
         activity_endpoints,
         "verify_authorization",
-        lambda _request, _character_id: (_ for _ in ()).throw(
-            activity_endpoints.AuthorizationError("Authorization required")
+        _amock(
+            lambda _request, _character_id: (_ for _ in ()).throw(
+                activity_endpoints.AuthorizationError("Authorization required")
+            )
         ),
     )
 
@@ -30,7 +34,7 @@ def test_get_activity_returns_400_for_invalid_activity_type(
     monkeypatch.setattr(
         activity_endpoints,
         "verify_authorization",
-        lambda _request, _character_id: None,
+        _amock(lambda _request, _character_id: None),
     )
 
     request = make_request(path="/v1/activity/1/invalid")
@@ -51,7 +55,7 @@ def test_get_activity_returns_400_for_invalid_date_format(
     monkeypatch.setattr(
         activity_endpoints,
         "verify_authorization",
-        lambda _request, _character_id: None,
+        _amock(lambda _request, _character_id: None),
     )
 
     request = make_request(path="/v1/activity/1/status")
@@ -72,7 +76,7 @@ def test_get_activity_returns_400_for_limit_above_max(
     monkeypatch.setattr(
         activity_endpoints,
         "verify_authorization",
-        lambda _request, _character_id: None,
+        _amock(lambda _request, _character_id: None),
     )
 
     request = make_request(path="/v1/activity/1/status")
@@ -95,7 +99,7 @@ def test_get_activity_success_passes_parsed_filters_to_postgres(
     monkeypatch.setattr(
         activity_endpoints,
         "verify_authorization",
-        lambda _request, _character_id: None,
+        _amock(lambda _request, _character_id: None),
     )
 
     def _get_activity(character_id, activity_type, start_date, end_date, limit):
@@ -108,8 +112,8 @@ def test_get_activity_success_passes_parsed_filters_to_postgres(
 
     monkeypatch.setattr(
         activity_endpoints.postgres_client,
-        "get_character_activity_by_type_and_character_id",
-        _get_activity,
+        "async_get_character_activity_by_type_and_character_id",
+        _amock(_get_activity),
     )
 
     request = make_request(path="/v1/activity/15/status")
@@ -140,8 +144,12 @@ def test_get_recent_quests_returns_403_on_verification_error(
     monkeypatch.setattr(
         activity_endpoints,
         "verify_authorization",
-        lambda _request, _character_id: (_ for _ in ()).throw(
-            activity_endpoints.VerificationError("This character has not been verified")
+        _amock(
+            lambda _request, _character_id: (_ for _ in ()).throw(
+                activity_endpoints.VerificationError(
+                    "This character has not been verified"
+                )
+            )
         ),
     )
 
@@ -192,8 +200,8 @@ def test_get_raid_activity_returns_data_for_valid_ids(
 
     monkeypatch.setattr(
         activity_endpoints.postgres_client,
-        "get_recent_raid_activity_by_character_ids",
-        _get_raid_activity,
+        "async_get_recent_raid_activity_by_character_ids",
+        _amock(_get_raid_activity),
     )
 
     request = make_request(path="/v1/activity/raids")
@@ -207,7 +215,7 @@ def test_get_raid_activity_returns_data_for_valid_ids(
 
 
 def test_verify_authorization_raises_for_invalid_access_token(
-    monkeypatch, make_request
+    monkeypatch, make_request, run_async
 ):
     monkeypatch.setattr(
         activity_endpoints.postgres_client,
@@ -220,7 +228,7 @@ def test_verify_authorization_raises_for_invalid_access_token(
     )
 
     try:
-        activity_endpoints.verify_authorization(request, 1)
+        run_async(activity_endpoints.verify_authorization(request, 1))
     except activity_endpoints.AuthorizationError as exc:
         assert str(exc) == "Invalid access token"
     else:
