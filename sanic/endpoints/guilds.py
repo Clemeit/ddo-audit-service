@@ -42,7 +42,9 @@ async def get_guilds_by_name_deprecated(request: Request, guild_name: str):
         )
 
     try:
-        return json({"data": postgres_client.get_guilds_by_name(guild_name)})
+        return json(
+            {"data": await postgres_client.async_get_guilds_by_name(guild_name)}
+        )
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -64,7 +66,7 @@ async def get_all_guilds(request: Request):
         if page < 1:
             raise ValueError
         offset = (page - 1) * GUILD_PAGE_LENGTH
-        guild_data = guild_utils.get_all_guilds()
+        guild_data = await guild_utils.async_get_all_guilds()
         # filter the results
         if name_filter:
             guild_data = [
@@ -124,8 +126,10 @@ async def get_guild_by_server_name_and_guild_name(
             status=400,
         )
     try:
-        guild_data = postgres_client.get_guild_by_server_name_and_guild_name(
-            server_name, guild_name
+        guild_data = (
+            await postgres_client.async_get_guild_by_server_name_and_guild_name(
+                server_name, guild_name
+            )
         )
         if not guild_data:
             return json({"data": None}, status=404)
@@ -148,11 +152,11 @@ async def get_guild_by_server_name_and_guild_name(
         if sort_by not in ("last_save", "total_level", "name", "id"):
             raise ValueError
         # if auth header is provided, hydrate guilds that the user is a member of
-        verified_character_id = postgres_client.get_character_id_by_access_token(
-            auth_header
+        verified_character_id = (
+            await postgres_client.async_get_character_id_by_access_token(auth_header)
         )
         verified_character = (
-            postgres_client.get_character_by_id(verified_character_id)
+            await postgres_client.async_get_character_by_id(verified_character_id)
             if verified_character_id
             else None
         )
@@ -171,7 +175,7 @@ async def get_guild_by_server_name_and_guild_name(
 
         # The verified character is in the requested guild, so we can
         # safely add member information
-        member_ids = postgres_client.get_character_ids_by_server_and_guild(
+        member_ids = await postgres_client.async_get_character_ids_by_server_and_guild(
             server_name, guild_name, page, page_size, sort_by
         )
         guild_data.update(

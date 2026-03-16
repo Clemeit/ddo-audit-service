@@ -219,8 +219,8 @@ def test_verify_authorization_raises_for_invalid_access_token(
 ):
     monkeypatch.setattr(
         activity_endpoints.postgres_client,
-        "get_access_token_by_character_id",
-        lambda _character_id: "expected-token",
+        "async_get_access_token_by_character_id",
+        _amock(lambda _character_id: "expected-token"),
     )
 
     request = make_request(

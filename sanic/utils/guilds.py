@@ -16,6 +16,14 @@ def get_all_guilds() -> list[dict]:
     )
 
 
+async def async_get_all_guilds() -> list[dict]:
+    return await async_get_cached_data_with_fallback(
+        "all_guilds",
+        postgres_client.async_get_all_guilds,
+        ttl=UNIQUE_GUILDS_CACHE_TTL,
+    )
+
+
 def get_cached_data_with_fallback(key: str, fallback_func, ttl: int = 60 * 60) -> Any:
     """Get cached data, regenerate if expired."""
     cached_data = redis_client.get_by_key(key)

@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from conftest import _amock
 import endpoints.guilds as guild_endpoints
 
 
@@ -36,11 +37,13 @@ def test_get_all_guilds_filters_results_by_name_and_server(
 ):
     monkeypatch.setattr(
         guild_endpoints.guild_utils,
-        "get_all_guilds",
-        lambda: [
-            {"guild_name": "Stormwatch", "server_name": "Khyber"},
-            {"guild_name": "Raiders", "server_name": "Orien"},
-        ],
+        "async_get_all_guilds",
+        _amock(
+            lambda: [
+                {"guild_name": "Stormwatch", "server_name": "Khyber"},
+                {"guild_name": "Raiders", "server_name": "Orien"},
+            ]
+        ),
     )
 
     request = make_request(path="/v1/guilds")
@@ -77,8 +80,8 @@ def test_get_guild_by_server_and_name_returns_404_when_not_found(
     )
     monkeypatch.setattr(
         guild_endpoints.postgres_client,
-        "get_guild_by_server_name_and_guild_name",
-        lambda _server_name, _guild_name: None,
+        "async_get_guild_by_server_name_and_guild_name",
+        _amock(lambda _server_name, _guild_name: None),
     )
 
     request = make_request(path="/v1/guilds/khyber/MyGuild")
@@ -103,8 +106,8 @@ def test_get_guild_by_server_and_name_returns_data_without_auth(
     )
     monkeypatch.setattr(
         guild_endpoints.postgres_client,
-        "get_guild_by_server_name_and_guild_name",
-        lambda _server_name, _guild_name: dict(guild_data),
+        "async_get_guild_by_server_name_and_guild_name",
+        _amock(lambda _server_name, _guild_name: dict(guild_data)),
     )
     monkeypatch.setattr(
         guild_endpoints.redis_client,
@@ -134,11 +137,13 @@ def test_get_guild_by_server_and_name_returns_400_for_bad_member_query_params(
     )
     monkeypatch.setattr(
         guild_endpoints.postgres_client,
-        "get_guild_by_server_name_and_guild_name",
-        lambda _server_name, _guild_name: {
-            "guild_name": "Stormwatch",
-            "server_name": "Khyber",
-        },
+        "async_get_guild_by_server_name_and_guild_name",
+        _amock(
+            lambda _server_name, _guild_name: {
+                "guild_name": "Stormwatch",
+                "server_name": "Khyber",
+            }
+        ),
     )
     monkeypatch.setattr(
         guild_endpoints.redis_client,
@@ -172,11 +177,13 @@ def test_get_guild_by_server_and_name_hydrates_member_data_when_verified_member(
     )
     monkeypatch.setattr(
         guild_endpoints.postgres_client,
-        "get_guild_by_server_name_and_guild_name",
-        lambda _server_name, _guild_name: {
-            "guild_name": "Stormwatch",
-            "server_name": "Khyber",
-        },
+        "async_get_guild_by_server_name_and_guild_name",
+        _amock(
+            lambda _server_name, _guild_name: {
+                "guild_name": "Stormwatch",
+                "server_name": "Khyber",
+            }
+        ),
     )
     monkeypatch.setattr(
         guild_endpoints.redis_client,
@@ -185,20 +192,22 @@ def test_get_guild_by_server_and_name_hydrates_member_data_when_verified_member(
     )
     monkeypatch.setattr(
         guild_endpoints.postgres_client,
-        "get_character_id_by_access_token",
-        lambda _token: 55,
+        "async_get_character_id_by_access_token",
+        _amock(lambda _token: 55),
     )
     monkeypatch.setattr(
         guild_endpoints.postgres_client,
-        "get_character_by_id",
-        lambda _character_id: SimpleNamespace(
-            guild_name="Stormwatch", server_name="Khyber"
+        "async_get_character_by_id",
+        _amock(
+            lambda _character_id: SimpleNamespace(
+                guild_name="Stormwatch", server_name="Khyber"
+            )
         ),
     )
     monkeypatch.setattr(
         guild_endpoints.postgres_client,
-        "get_character_ids_by_server_and_guild",
-        lambda _server_name, _guild_name, _page, _page_size, _sort_by: [55, 56],
+        "async_get_character_ids_by_server_and_guild",
+        _amock(lambda _server_name, _guild_name, _page, _page_size, _sort_by: [55, 56]),
     )
 
     request = make_request(

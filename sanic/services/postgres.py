@@ -5446,6 +5446,170 @@ async def async_set_characters_active_status_bulk(
 
 
 # ========================================
+# Async guild Postgres functions (psycopg3)
+# ========================================
+
+
+async def async_get_guilds_by_name(guild_name: str) -> list[dict]:
+    """Async version of get_guilds_by_name()."""
+    if len(guild_name) <= 3:
+        match_value = guild_name
+    else:
+        match_value = f"%{guild_name}%"
+
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            """
+            WITH ranked_characters AS (
+                SELECT 
+                    guild_name, 
+                    server_name, 
+                    last_update,
+                    EXTRACT(EPOCH FROM last_update) AS last_update_epoch,
+                    ROW_NUMBER() OVER (PARTITION BY guild_name, server_name ORDER BY last_update DESC) AS rn,
+                    COUNT(*) OVER (PARTITION BY guild_name, server_name) AS total_count
+                FROM public.characters
+                WHERE guild_name ILIKE %s
+            ), top_10_percent AS (
+                SELECT 
+                    guild_name, 
+                    server_name,
+                    last_update_epoch,
+                    total_count
+                FROM ranked_characters
+                WHERE rn <= GREATEST(1, CEIL(total_count * 0.1))
+            )
+            SELECT 
+                guild_name, 
+                server_name, 
+                MAX(total_count) as character_count,
+                AVG(last_update_epoch) as avg_top_10_percent_last_update_epoch
+            FROM top_10_percent
+            GROUP BY guild_name, server_name
+            ORDER BY character_count DESC
+            LIMIT 20
+            """,
+            (match_value,),
+        )
+        guilds = await cursor.fetchall()
+        if not guilds:
+            return []
+        return [
+            {
+                "guild_name": row["guild_name"],
+                "server_name": row["server_name"],
+                "character_count": row["character_count"],
+                "avg_top_10_percent_last_update_epoch": row[
+                    "avg_top_10_percent_last_update_epoch"
+                ],
+            }
+            for row in guilds
+        ]
+
+
+async def async_get_guild_by_server_name_and_guild_name(
+    server_name: str, guild_name: str
+) -> dict | None:
+    """Async version of get_guild_by_server_name_and_guild_name()."""
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            """
+            SELECT 
+                guild_name, 
+                server_name, 
+                COUNT(*) as character_count
+            FROM public.characters
+            WHERE LOWER(server_name) = LOWER(%s)
+                AND LOWER(guild_name) = LOWER(%s)
+                AND guild_name IS NOT NULL AND guild_name != ''
+            GROUP BY guild_name, server_name
+            LIMIT 1
+            """,
+            (server_name, guild_name),
+        )
+        guild = await cursor.fetchone()
+        if not guild:
+            return None
+        return {
+            "guild_name": guild["guild_name"],
+            "server_name": guild["server_name"],
+            "character_count": guild["character_count"],
+        }
+
+
+async def async_get_all_guilds() -> list[dict]:
+    """Async version of get_all_guilds()."""
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            """
+            SELECT 
+                guild_name, 
+                server_name, 
+                COUNT(*) as character_count
+            FROM public.characters
+            WHERE guild_name IS NOT NULL AND guild_name != ''
+            GROUP BY guild_name, server_name
+            ORDER BY character_count DESC
+            """
+        )
+        guilds = await cursor.fetchall()
+        if not guilds:
+            return []
+        return [
+            {
+                "guild_name": row["guild_name"],
+                "server_name": row["server_name"],
+                "character_count": row["character_count"],
+            }
+            for row in guilds
+        ]
+
+
+# =============================================
+# Async auth token Postgres functions (psycopg3)
+# =============================================
+
+
+async def async_save_access_token(character_id: str, access_token: str):
+    """Async version of save_access_token()."""
+    async with get_async_dict_cursor(commit=True) as cursor:
+        await cursor.execute(
+            """
+            INSERT INTO public.access_tokens (character_id, access_token)
+            VALUES (%s, %s)
+            ON CONFLICT (character_id) DO UPDATE SET access_token = EXCLUDED.access_token
+            """,
+            (character_id, access_token),
+        )
+
+
+async def async_get_access_token_by_character_id(character_id: str) -> str:
+    """Async version of get_access_token_by_character_id()."""
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            "SELECT access_token FROM public.access_tokens WHERE character_id = %s",
+            (character_id,),
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return ""
+        return row["access_token"]
+
+
+async def async_get_character_id_by_access_token(access_token: str) -> int | None:
+    """Async version of get_character_id_by_access_token()."""
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            "SELECT character_id FROM public.access_tokens WHERE access_token = %s",
+            (access_token,),
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        return row["character_id"]
+
+
+# ========================================
 # Async auth Postgres functions (psycopg3)
 # ========================================
 
