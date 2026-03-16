@@ -208,7 +208,7 @@ def test_rate_limit_middleware_auth_endpoint_blocks_with_default_retry_after(
         "_async_increment_and_check_limit",
         _blocked,
     )
-    request = make_request(method="POST", path="/v1/auth/refresh")
+    request = make_request(method="POST", path="/v1/auth/login")
 
     response = run_async(rate_limit_module.rate_limit_middleware(request))
 
@@ -219,6 +219,36 @@ def test_rate_limit_middleware_auth_endpoint_blocks_with_default_retry_after(
     )
     assert response.headers["Retry-After"] == str(
         rate_limit_module.AUTH_RATE_LIMIT["window"]
+    )
+
+
+def test_rate_limit_middleware_refresh_endpoint_blocks_with_default_retry_after(
+    monkeypatch, make_request, run_async, response_json
+):
+    async def _blocked(*args, **kwargs):
+        return False, None
+
+    monkeypatch.setattr(
+        rate_limit_module,
+        "get_client_ip",
+        lambda request: "203.0.113.10",
+    )
+    monkeypatch.setattr(
+        rate_limit_module,
+        "_async_increment_and_check_limit",
+        _blocked,
+    )
+    request = make_request(method="POST", path="/v1/auth/refresh")
+
+    response = run_async(rate_limit_module.rate_limit_middleware(request))
+
+    assert response.status == 429
+    assert (
+        response_json(response)["error"]
+        == "Rate limit exceeded. Try again in 1 minute."
+    )
+    assert response.headers["Retry-After"] == str(
+        rate_limit_module.REFRESH_RATE_LIMIT["window"]
     )
 
 

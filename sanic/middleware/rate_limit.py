@@ -14,16 +14,22 @@ import re
 
 # Rate limit configurations (in seconds and requests)
 AUTH_RATE_LIMIT = {
-    "requests": 5,
+    "requests": 10,
     "window": 900,  # 15 minutes
 }
 
-USER_RATE_LIMIT = {
+REFRESH_RATE_LIMIT = {
     "requests": 10,
+    "window": 60,  # 1 minute
+}
+
+USER_RATE_LIMIT = {
+    "requests": 120,
     "window": 3600,  # 1 hour
 }
 
-AUTH_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/auth/(register|login|refresh)$")
+AUTH_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/auth/(register|login)$")
+REFRESH_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/auth/refresh$")
 USER_ENDPOINT_PATTERN = re.compile(
     r"^/v?\d*/(user/(settings/persistent|profile/password)|auth/logout)$"
 )
@@ -105,6 +111,39 @@ async def rate_limit_middleware(request: Request):
                             str(retry_after)
                             if retry_after is not None
                             else str(AUTH_RATE_LIMIT["window"])
+                        )
+                    },
+                )
+        except Exception as e:
+            # Fail open - allow request if Redis is down
+            pass
+
+    elif REFRESH_ENDPOINT_PATTERN.match(path):
+        ip = get_client_ip(request)
+
+        # Create a rate limit key for this IP and specific refresh endpoint path
+        rate_limit_key = f"rate_limit:refresh:{ip}:{path}"
+
+        try:
+            allowed, retry_after = await _async_increment_and_check_limit(
+                rate_limit_key,
+                REFRESH_RATE_LIMIT["requests"],
+                REFRESH_RATE_LIMIT["window"],
+            )
+
+            if not allowed:
+                # Rate limit exceeded
+                return json(
+                    {
+                        "error": "Rate limit exceeded. Try again in 1 minute.",
+                        "retry_after": retry_after,
+                    },
+                    status=429,
+                    headers={
+                        "Retry-After": (
+                            str(retry_after)
+                            if retry_after is not None
+                            else str(REFRESH_RATE_LIMIT["window"])
                         )
                     },
                 )
