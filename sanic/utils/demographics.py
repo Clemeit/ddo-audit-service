@@ -44,7 +44,7 @@ report_lookback_map = {
 }
 
 
-def get_race_distribution(
+async def get_race_distribution(
     period: ReportLookback, activity_level: str = "all"
 ) -> dict[str, int]:
     """
@@ -59,14 +59,14 @@ def get_race_distribution(
     days = report_lookback_map[period]["days"]
     cache_ttl = report_lookback_map[period]["cache_ttl"]
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         f"race_distribution_{period}_{activity_level}",
-        lambda: postgres_client.get_race_distribution(days, activity_level),
+        lambda: postgres_client.async_get_race_distribution(days, activity_level),
         cache_ttl,
     )
 
 
-def get_gender_distribution(
+async def get_gender_distribution(
     period: ReportLookback, activity_level: str = "all"
 ) -> dict[str, int]:
     """
@@ -81,14 +81,14 @@ def get_gender_distribution(
     days = report_lookback_map[period]["days"]
     cache_ttl = report_lookback_map[period]["cache_ttl"]
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         f"gender_distribution_{period}_{activity_level}",
-        lambda: postgres_client.get_gender_distribution(days, activity_level),
+        lambda: postgres_client.async_get_gender_distribution(days, activity_level),
         cache_ttl,
     )
 
 
-def get_total_level_distribution(
+async def get_total_level_distribution(
     period: ReportLookback, activity_level: str = "all"
 ) -> dict[str, int]:
     """
@@ -103,14 +103,16 @@ def get_total_level_distribution(
     days = report_lookback_map[period]["days"]
     cache_ttl = report_lookback_map[period]["cache_ttl"]
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         f"total_level_distribution_{period}_{activity_level}",
-        lambda: postgres_client.get_total_level_distribution(days, activity_level),
+        lambda: postgres_client.async_get_total_level_distribution(
+            days, activity_level
+        ),
         cache_ttl,
     )
 
 
-def get_class_count_distribution(
+async def get_class_count_distribution(
     period: ReportLookback, activity_level: str = "all"
 ) -> dict[str, int]:
     """
@@ -125,14 +127,16 @@ def get_class_count_distribution(
     days = report_lookback_map[period]["days"]
     cache_ttl = report_lookback_map[period]["cache_ttl"]
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         f"class_count_distribution_{period}_{activity_level}",
-        lambda: postgres_client.get_class_count_distribution(days, activity_level),
+        lambda: postgres_client.async_get_class_count_distribution(
+            days, activity_level
+        ),
         cache_ttl,
     )
 
 
-def get_primary_class_distribution(
+async def get_primary_class_distribution(
     period: ReportLookback, activity_level: str = "all"
 ) -> dict[str, int]:
     """
@@ -147,14 +151,16 @@ def get_primary_class_distribution(
     days = report_lookback_map[period]["days"]
     cache_ttl = report_lookback_map[period]["cache_ttl"]
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         f"primary_class_distribution_{period}_{activity_level}",
-        lambda: postgres_client.get_primary_class_distribution(days, activity_level),
+        lambda: postgres_client.async_get_primary_class_distribution(
+            days, activity_level
+        ),
         cache_ttl,
     )
 
 
-def get_guild_affiliation_distribution(
+async def get_guild_affiliation_distribution(
     period: ReportLookback, activity_level: str = "all"
 ) -> dict[str, dict[str, int]]:
     """
@@ -169,9 +175,9 @@ def get_guild_affiliation_distribution(
     days = report_lookback_map[period]["days"]
     cache_ttl = report_lookback_map[period]["cache_ttl"]
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         f"guild_affiliation_distribution_{period}_{activity_level}",
-        lambda: postgres_client.get_guild_affiliation_distribution(
+        lambda: postgres_client.async_get_guild_affiliation_distribution(
             days, activity_level
         ),
         cache_ttl,

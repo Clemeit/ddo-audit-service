@@ -1,4 +1,5 @@
 import endpoints.population as population_endpoints
+from tests.conftest import _amock
 
 
 def test_get_population_timeseries_returns_data_for_valid_period(
@@ -7,7 +8,7 @@ def test_get_population_timeseries_returns_data_for_valid_period(
     monkeypatch.setattr(
         population_endpoints.population_utils,
         "get_game_population_week",
-        lambda: [{"server_name": "Khyber", "character_count": 10}],
+        _amock(lambda: [{"server_name": "Khyber", "character_count": 10}]),
     )
 
     request = make_request(path="/v1/population/timeseries/week")
@@ -34,10 +35,13 @@ def test_get_population_timeseries_returns_400_for_invalid_period(
 def test_get_population_totals_returns_500_when_utility_raises(
     monkeypatch, make_request, run_async, response_json
 ):
+    def _raise():
+        raise RuntimeError("population cache failed")
+
     monkeypatch.setattr(
         population_endpoints.population_utils,
         "get_game_population_totals_day",
-        lambda: (_ for _ in ()).throw(RuntimeError("population cache failed")),
+        _amock(_raise),
     )
 
     request = make_request(path="/v1/population/totals/day")
@@ -53,7 +57,7 @@ def test_get_stats_breakdown_returns_data_for_quarter(
     monkeypatch.setattr(
         population_endpoints.population_utils,
         "get_character_activity_stats_quarter",
-        lambda: {"active": 123},
+        _amock(lambda: {"active": 123}),
     )
 
     request = make_request(path="/v1/population/stats/quarter")

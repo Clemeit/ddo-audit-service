@@ -43,7 +43,7 @@ async def get_population_timeseries(request: Request, period: str):
         )
 
     try:
-        data = period_functions[period]()
+        data = await period_functions[period]()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -81,7 +81,7 @@ async def get_population_totals(request: Request, period: str):
         )
 
     try:
-        data = period_functions[period]()
+        data = await period_functions[period]()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -118,7 +118,7 @@ async def get_unique_breakdown(request: Request, period: str):
         )
 
     try:
-        data = period_functions[period]()
+        data = await period_functions[period]()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -151,7 +151,7 @@ async def get_stats_breakdown(request: Request, period: str):
         )
 
     try:
-        data = period_functions[period]()
+        data = await period_functions[period]()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -188,7 +188,7 @@ async def get_average_population(request: Request, period: str):
         )
 
     try:
-        data = period_functions[period]()
+        data = await period_functions[period]()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -225,7 +225,7 @@ async def get_population_by_hour(request: Request, period: str):
         )
 
     try:
-        data = period_functions[period]()
+        data = await period_functions[period]()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -262,7 +262,7 @@ async def get_population_by_day_of_week(request: Request, period: str):
         )
 
     try:
-        data = period_functions[period]()
+        data = await period_functions[period]()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -298,7 +298,7 @@ async def get_population_by_hour_and_day_of_week(request: Request, period: str):
         )
 
     try:
-        data = period_functions[period]()
+        data = await period_functions[period]()
     except Exception as e:
         return json({"message": str(e)}, status=500)
 

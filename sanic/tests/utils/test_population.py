@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from models.game import PopulationDataPoint, PopulationPointInTime
+from tests.conftest import _amock
 import utils.population as population
 
 
@@ -212,175 +213,175 @@ class TestPopulationHelperFunctions:
     [
         (
             "get_unique_character_and_guild_count_breakdown_day",
-            "get_unique_character_and_guild_count",
+            "async_get_unique_character_and_guild_count",
             1,
             "get_unique_character_and_guild_count_breakdown_day",
             population.REPORT_1_DAY_CACHE_TTL,
         ),
         (
             "get_unique_character_and_guild_count_breakdown_week",
-            "get_unique_character_and_guild_count",
+            "async_get_unique_character_and_guild_count",
             7,
             "get_unique_character_and_guild_count_breakdown_week",
             population.REPORT_1_WEEK_CACHE_TTL,
         ),
         (
             "get_unique_character_and_guild_count_breakdown_month",
-            "get_unique_character_and_guild_count",
+            "async_get_unique_character_and_guild_count",
             30,
             "get_unique_character_and_guild_count_breakdown_month",
             population.REPORT_1_MONTH_CACHE_TTL,
         ),
         (
             "get_unique_character_and_guild_count_breakdown_quarter",
-            "get_unique_character_and_guild_count",
+            "async_get_unique_character_and_guild_count",
             90,
             "get_unique_character_and_guild_count_breakdown_quarter",
             population.REPORT_1_QUARTER_CACHE_TTL,
         ),
         (
             "get_unique_character_and_guild_count_breakdown_year",
-            "get_unique_character_and_guild_count",
+            "async_get_unique_character_and_guild_count",
             365,
             "get_unique_character_and_guild_count_breakdown_year",
             population.REPORT_1_YEAR_CACHE_TTL,
         ),
         (
             "get_character_activity_stats_quarter",
-            "get_character_activity_stats",
+            "async_get_character_activity_stats",
             90,
             "get_character_activity_stats_quarter",
             population.REPORT_1_QUARTER_CACHE_TTL,
         ),
         (
             "get_average_server_population_day",
-            "get_average_population_by_server",
+            "async_get_average_population_by_server",
             1,
             "get_average_server_population_day",
             population.REPORT_1_DAY_CACHE_TTL,
         ),
         (
             "get_average_server_population_week",
-            "get_average_population_by_server",
+            "async_get_average_population_by_server",
             7,
             "get_average_server_population_week",
             population.REPORT_1_WEEK_CACHE_TTL,
         ),
         (
             "get_average_server_population_month",
-            "get_average_population_by_server",
+            "async_get_average_population_by_server",
             28,
             "get_average_server_population_month",
             population.REPORT_1_MONTH_CACHE_TTL,
         ),
         (
             "get_average_server_population_quarter",
-            "get_average_population_by_server",
+            "async_get_average_population_by_server",
             90,
             "get_average_server_population_quarter",
             population.REPORT_1_QUARTER_CACHE_TTL,
         ),
         (
             "get_average_server_population_year",
-            "get_average_population_by_server",
+            "async_get_average_population_by_server",
             365,
             "get_average_server_population_year",
             population.REPORT_1_YEAR_CACHE_TTL,
         ),
         (
             "get_hourly_server_population_day",
-            "get_average_population_by_hour_per_server",
+            "async_get_average_population_by_hour_per_server",
             1,
             "get_hourly_server_population_day",
             population.REPORT_1_DAY_CACHE_TTL,
         ),
         (
             "get_hourly_server_population_week",
-            "get_average_population_by_hour_per_server",
+            "async_get_average_population_by_hour_per_server",
             7,
             "get_hourly_server_population_week",
             population.REPORT_1_WEEK_CACHE_TTL,
         ),
         (
             "get_hourly_server_population_month",
-            "get_average_population_by_hour_per_server",
+            "async_get_average_population_by_hour_per_server",
             28,
             "get_hourly_server_population_month",
             population.REPORT_1_MONTH_CACHE_TTL,
         ),
         (
             "get_hourly_server_population_quarter",
-            "get_average_population_by_hour_per_server",
+            "async_get_average_population_by_hour_per_server",
             90,
             "get_hourly_server_population_quarter",
             population.REPORT_1_QUARTER_CACHE_TTL,
         ),
         (
             "get_hourly_server_population_year",
-            "get_average_population_by_hour_per_server",
+            "async_get_average_population_by_hour_per_server",
             365,
             "get_hourly_server_population_year",
             population.REPORT_1_YEAR_CACHE_TTL,
         ),
         (
             "get_daily_server_population_day",
-            "get_average_population_by_day_of_week_per_server",
+            "async_get_average_population_by_day_of_week_per_server",
             1,
             "get_daily_server_population_day",
             population.REPORT_1_DAY_CACHE_TTL,
         ),
         (
             "get_daily_server_population_week",
-            "get_average_population_by_day_of_week_per_server",
+            "async_get_average_population_by_day_of_week_per_server",
             7,
             "get_daily_server_population_week",
             population.REPORT_1_WEEK_CACHE_TTL,
         ),
         (
             "get_daily_server_population_month",
-            "get_average_population_by_day_of_week_per_server",
+            "async_get_average_population_by_day_of_week_per_server",
             28,
             "get_daily_server_population_month",
             population.REPORT_1_MONTH_CACHE_TTL,
         ),
         (
             "get_daily_server_population_quarter",
-            "get_average_population_by_day_of_week_per_server",
+            "async_get_average_population_by_day_of_week_per_server",
             90,
             "get_daily_server_population_quarter",
             population.REPORT_1_QUARTER_CACHE_TTL,
         ),
         (
             "get_daily_server_population_year",
-            "get_average_population_by_day_of_week_per_server",
+            "async_get_average_population_by_day_of_week_per_server",
             365,
             "get_daily_server_population_year",
             population.REPORT_1_YEAR_CACHE_TTL,
         ),
         (
             "get_by_hour_and_day_of_week_server_population_week",
-            "get_average_population_by_hour_and_day_of_week_per_server",
+            "async_get_average_population_by_hour_and_day_of_week_per_server",
             7,
             "get_by_hour_and_day_of_week_server_population_week",
             population.REPORT_1_WEEK_CACHE_TTL,
         ),
         (
             "get_by_hour_and_day_of_week_server_population_month",
-            "get_average_population_by_hour_and_day_of_week_per_server",
+            "async_get_average_population_by_hour_and_day_of_week_per_server",
             28,
             "get_by_hour_and_day_of_week_server_population_month",
             population.REPORT_1_MONTH_CACHE_TTL,
         ),
         (
             "get_by_hour_and_day_of_week_server_population_quarter",
-            "get_average_population_by_hour_and_day_of_week_per_server",
+            "async_get_average_population_by_hour_and_day_of_week_per_server",
             90,
             "get_by_hour_and_day_of_week_server_population_quarter",
             population.REPORT_1_QUARTER_CACHE_TTL,
         ),
         (
             "get_by_hour_and_day_of_week_server_population_year",
-            "get_average_population_by_hour_and_day_of_week_per_server",
+            "async_get_average_population_by_hour_and_day_of_week_per_server",
             365,
             "get_by_hour_and_day_of_week_server_population_year",
             population.REPORT_1_YEAR_CACHE_TTL,
@@ -388,7 +389,7 @@ class TestPopulationHelperFunctions:
     ],
 )
 def test_simple_population_getters_delegate_to_cache_and_postgres(
-    monkeypatch, getter_name, postgres_name, postgres_arg, key, ttl
+    monkeypatch, run_async, getter_name, postgres_name, postgres_arg, key, ttl
 ):
     calls = {}
     postgres_result = {"source": getter_name}
@@ -397,19 +398,21 @@ def test_simple_population_getters_delegate_to_cache_and_postgres(
         calls["postgres"] = days
         return postgres_result
 
-    monkeypatch.setattr(population.postgres_client, postgres_name, fake_postgres)
+    monkeypatch.setattr(
+        population.postgres_client, postgres_name, _amock(fake_postgres)
+    )
 
-    def fake_cached_fallback(cache_key, fallback_func, cache_ttl):
+    async def fake_cached_fallback(cache_key, fallback_func, cache_ttl):
         calls["cache"] = (cache_key, cache_ttl)
-        calls["fallback_result"] = fallback_func()
+        calls["fallback_result"] = await fallback_func()
         return {"wrapped": True}
 
     monkeypatch.setattr(
-        population, "get_cached_data_with_fallback", fake_cached_fallback
+        population, "async_get_cached_data_with_fallback", fake_cached_fallback
     )
 
     getter = getattr(population, getter_name)
-    result = getter()
+    result = run_async(getter())
 
     assert result == {"wrapped": True}
     assert calls["postgres"] == postgres_arg
@@ -419,7 +422,7 @@ def test_simple_population_getters_delegate_to_cache_and_postgres(
 
 class TestGamePopulationGetters:
     def test_get_game_population_day_uses_relative_data_and_model_dump(
-        self, monkeypatch
+        self, monkeypatch, run_async
     ):
         calls = {}
         rows = [
@@ -432,19 +435,21 @@ class TestGamePopulationGetters:
             return rows
 
         monkeypatch.setattr(
-            population.postgres_client, "get_game_population_relative", fake_postgres
+            population.postgres_client,
+            "async_get_game_population_relative",
+            _amock(fake_postgres),
         )
 
-        def fake_cached_fallback(cache_key, fallback_func, cache_ttl):
+        async def fake_cached_fallback(cache_key, fallback_func, cache_ttl):
             calls["cache"] = (cache_key, cache_ttl)
-            calls["fallback_result"] = fallback_func()
+            calls["fallback_result"] = await fallback_func()
             return {"wrapped": True}
 
         monkeypatch.setattr(
-            population, "get_cached_data_with_fallback", fake_cached_fallback
+            population, "async_get_cached_data_with_fallback", fake_cached_fallback
         )
 
-        result = population.get_game_population_day()
+        result = run_async(population.get_game_population_day())
 
         assert result == {"wrapped": True}
         assert calls["postgres"] == 1
@@ -459,28 +464,28 @@ class TestGamePopulationGetters:
         [
             (
                 "get_game_population_week",
-                "get_game_population_last_week",
+                "async_get_game_population_last_week",
                 "average_hourly_data",
                 "get_game_population_week",
                 population.REPORT_1_WEEK_CACHE_TTL,
             ),
             (
                 "get_game_population_month",
-                "get_game_population_last_month",
+                "async_get_game_population_last_month",
                 "average_daily_data",
                 "get_game_population_month",
                 population.REPORT_1_MONTH_CACHE_TTL,
             ),
             (
                 "get_game_population_quarter",
-                "get_game_population_last_quarter",
+                "async_get_game_population_last_quarter",
                 "average_daily_data",
                 "get_game_population_quarter",
                 population.REPORT_1_QUARTER_CACHE_TTL,
             ),
             (
                 "get_game_population_year",
-                "get_game_population_last_year",
+                "async_get_game_population_last_year",
                 "average_daily_data",
                 "get_game_population_year",
                 population.REPORT_1_YEAR_CACHE_TTL,
@@ -490,6 +495,7 @@ class TestGamePopulationGetters:
     def test_get_game_population_period_getters_apply_expected_averaging(
         self,
         monkeypatch,
+        run_async,
         getter_name,
         postgres_name,
         average_helper,
@@ -506,7 +512,7 @@ class TestGamePopulationGetters:
         monkeypatch.setattr(
             population.postgres_client,
             postgres_name,
-            lambda: postgres_rows,
+            _amock(lambda: postgres_rows),
         )
 
         def fake_average(rows):
@@ -515,17 +521,17 @@ class TestGamePopulationGetters:
 
         monkeypatch.setattr(population, average_helper, fake_average)
 
-        def fake_cached_fallback(cache_key, fallback_func, cache_ttl):
+        async def fake_cached_fallback(cache_key, fallback_func, cache_ttl):
             calls["cache"] = (cache_key, cache_ttl)
-            calls["fallback_result"] = fallback_func()
+            calls["fallback_result"] = await fallback_func()
             return {"wrapped": True}
 
         monkeypatch.setattr(
-            population, "get_cached_data_with_fallback", fake_cached_fallback
+            population, "async_get_cached_data_with_fallback", fake_cached_fallback
         )
 
         getter = getattr(population, getter_name)
-        result = getter()
+        result = run_async(getter())
 
         assert result == {"wrapped": True}
         assert calls["cache"] == (key, ttl)
@@ -538,35 +544,35 @@ class TestGamePopulationGetters:
     [
         (
             "get_game_population_totals_day",
-            "get_game_population_relative",
+            "async_get_game_population_relative",
             1,
             "get_game_population_totals_day",
             population.REPORT_1_DAY_CACHE_TTL,
         ),
         (
             "get_game_population_totals_week",
-            "get_game_population_last_week",
+            "async_get_game_population_last_week",
             None,
             "get_game_population_totals_week",
             population.REPORT_1_WEEK_CACHE_TTL,
         ),
         (
             "get_game_population_totals_month",
-            "get_game_population_last_month",
+            "async_get_game_population_last_month",
             None,
             "get_game_population_totals_month",
             population.REPORT_1_MONTH_CACHE_TTL,
         ),
         (
             "get_game_population_totals_quarter",
-            "get_game_population_last_quarter",
+            "async_get_game_population_last_quarter",
             None,
             "get_game_population_totals_quarter",
             population.REPORT_1_QUARTER_CACHE_TTL,
         ),
         (
             "get_game_population_totals_year",
-            "get_game_population_last_year",
+            "async_get_game_population_last_year",
             None,
             "get_game_population_totals_year",
             population.REPORT_1_YEAR_CACHE_TTL,
@@ -574,7 +580,7 @@ class TestGamePopulationGetters:
     ],
 )
 def test_game_population_totals_getters_use_summed_data(
-    monkeypatch, getter_name, postgres_name, postgres_arg, key, ttl
+    monkeypatch, run_async, getter_name, postgres_name, postgres_arg, key, ttl
 ):
     calls = {}
     postgres_rows = [
@@ -585,13 +591,13 @@ def test_game_population_totals_getters_use_summed_data(
         monkeypatch.setattr(
             population.postgres_client,
             postgres_name,
-            lambda: postgres_rows,
+            _amock(lambda: postgres_rows),
         )
     else:
         monkeypatch.setattr(
             population.postgres_client,
             postgres_name,
-            lambda days: postgres_rows,
+            _amock(lambda days: postgres_rows),
         )
 
     summed_data = {
@@ -605,17 +611,17 @@ def test_game_population_totals_getters_use_summed_data(
 
     monkeypatch.setattr(population, "summed_population_data_points", fake_summed)
 
-    def fake_cached_fallback(cache_key, fallback_func, cache_ttl):
+    async def fake_cached_fallback(cache_key, fallback_func, cache_ttl):
         calls["cache"] = (cache_key, cache_ttl)
-        calls["fallback_result"] = fallback_func()
+        calls["fallback_result"] = await fallback_func()
         return {"wrapped": True}
 
     monkeypatch.setattr(
-        population, "get_cached_data_with_fallback", fake_cached_fallback
+        population, "async_get_cached_data_with_fallback", fake_cached_fallback
     )
 
     getter = getattr(population, getter_name)
-    result = getter()
+    result = run_async(getter())
 
     assert result == {"wrapped": True}
     assert calls["cache"] == (key, ttl)

@@ -6006,3 +6006,901 @@ async def async_update_user_settings(user_id: int, settings: dict) -> bool:
     except Exception as e:
         logger.error(f"async_update_user_settings failed: {e}")
         return False
+
+
+# ====================================================
+# Async demographics Postgres functions (psycopg3)
+# ====================================================
+
+
+async def async_get_gender_distribution(
+    lookback_in_days: int = 90, activity_level: str = "all"
+) -> dict[str, int]:
+    """Async version of get_gender_distribution()."""
+    validate_lookback(lookback_in_days)
+    if activity_level == "active":
+        query = """
+            SELECT server_name, gender, COUNT(*) as count FROM public.characters
+            LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+            WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS TRUE
+            GROUP BY gender, server_name
+            """
+    elif activity_level == "inactive":
+        query = """
+            SELECT server_name, gender, COUNT(*) as count FROM public.characters
+            LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+            WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS FALSE
+            GROUP BY gender, server_name
+            """
+    else:
+        query = """
+            SELECT server_name, gender, COUNT(*) as count FROM public.characters
+            WHERE last_save > NOW() - (make_interval(days => %s))
+            GROUP BY gender, server_name
+            """
+
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(query, (lookback_in_days,))
+        gender_distribution = await cursor.fetchall()
+        if not gender_distribution:
+            return {}
+        output = {}
+        for row in gender_distribution:
+            server_name_lower = str(row["server_name"]).lower()
+            if server_name_lower not in output:
+                output[server_name_lower] = {}
+            output[server_name_lower][str(row["gender"])] = row["count"]
+        return output
+
+
+async def async_get_race_distribution(
+    lookback_in_days: int = 90, activity_level: str = "all"
+) -> dict[str, int]:
+    """Async version of get_race_distribution()."""
+    validate_lookback(lookback_in_days)
+
+    if activity_level == "active":
+        query = """
+            SELECT server_name, race, COUNT(*) as count FROM public.characters
+            LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+            WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS TRUE
+            GROUP BY race, server_name
+            """
+    elif activity_level == "inactive":
+        query = """
+            SELECT server_name, race, COUNT(*) as count FROM public.characters
+            LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+            WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS FALSE
+            GROUP BY race, server_name
+            """
+    else:
+        query = """
+            SELECT server_name, race, COUNT(*) as count FROM public.characters
+            WHERE last_save > NOW() - (make_interval(days => %s))
+            GROUP BY race, server_name
+            """
+
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(query, (lookback_in_days,))
+        race_distribution = await cursor.fetchall()
+        if not race_distribution:
+            return {}
+        output = {}
+        for row in race_distribution:
+            server_name_lower = str(row["server_name"]).lower()
+            if server_name_lower not in output:
+                output[server_name_lower] = {}
+            output[server_name_lower][str(row["race"])] = row["count"]
+        return output
+
+
+async def async_get_total_level_distribution(
+    lookback_in_days: int = 90, activity_level: str = "all"
+) -> dict[str, int]:
+    """Async version of get_total_level_distribution()."""
+    validate_lookback(lookback_in_days)
+
+    if activity_level == "active":
+        query = """
+                SELECT server_name, total_level, COUNT(*) as count FROM public.characters
+                LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+                WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS TRUE
+                GROUP BY total_level, server_name
+                ORDER BY server_name, total_level
+                """
+    elif activity_level == "inactive":
+        query = """
+                SELECT server_name, total_level, COUNT(*) as count FROM public.characters
+                LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+                WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS FALSE
+                GROUP BY total_level, server_name
+                ORDER BY server_name, total_level
+                """
+    else:
+        query = """
+                SELECT server_name, total_level, COUNT(*) as count FROM public.characters
+                WHERE last_save > NOW() - (make_interval(days => %s))
+                GROUP BY total_level, server_name
+                ORDER BY server_name, total_level
+                """
+
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(query, (lookback_in_days,))
+        total_level_distribution = await cursor.fetchall()
+        if not total_level_distribution:
+            return {}
+        output = {}
+        for row in total_level_distribution:
+            server_name_lower = str(row["server_name"]).lower()
+            if server_name_lower not in output:
+                output[server_name_lower] = {}
+            output[server_name_lower][str(row["total_level"])] = row["count"]
+        return output
+
+
+async def async_get_class_count_distribution(
+    lookback_in_days: int = 90, activity_level: str = "all"
+) -> dict[str, int]:
+    """Async version of get_class_count_distribution()."""
+    validate_lookback(lookback_in_days)
+    if activity_level == "active":
+        query = """
+            SELECT server_name, class_count, COUNT(*) as count
+            FROM (
+                SELECT server_name,
+                    (
+                        SELECT COUNT(*)
+                        FROM jsonb_array_elements(classes) AS elem
+                        WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                    ) AS class_count
+                FROM public.characters
+                LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+                WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS TRUE
+            ) AS sub
+            GROUP BY server_name, class_count
+            ORDER BY server_name, class_count
+            """
+    elif activity_level == "inactive":
+        query = """
+            SELECT server_name, class_count, COUNT(*) as count
+            FROM (
+                SELECT server_name,
+                    (
+                        SELECT COUNT(*)
+                        FROM jsonb_array_elements(classes) AS elem
+                        WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                    ) AS class_count
+                FROM public.characters
+                LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+                WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS FALSE
+            ) AS sub
+            GROUP BY server_name, class_count
+            ORDER BY server_name, class_count
+            """
+    else:
+        query = """
+            SELECT server_name, class_count, COUNT(*) as count
+            FROM (
+                SELECT server_name,
+                    (
+                        SELECT COUNT(*)
+                        FROM jsonb_array_elements(classes) AS elem
+                        WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                    ) AS class_count
+                FROM public.characters
+                WHERE last_save > NOW() - (make_interval(days => %s))
+            ) AS sub
+            GROUP BY server_name, class_count
+            ORDER BY server_name, class_count
+            """
+
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(query, (lookback_in_days,))
+        result = await cursor.fetchall()
+        if not result:
+            return {}
+        output = {}
+        for row in result:
+            server_name_lower = str(row["server_name"]).lower()
+            if server_name_lower not in output:
+                output[server_name_lower] = {}
+            output[server_name_lower][str(row["class_count"])] = row["count"]
+        return output
+
+
+async def async_get_primary_class_distribution(
+    lookback_in_days: int = 90, activity_level: str = "all"
+) -> dict[str, int]:
+    """Async version of get_primary_class_distribution()."""
+    validate_lookback(lookback_in_days)
+    if activity_level == "active":
+        query = """
+            SELECT
+                server_name,
+                primary_class,
+                COUNT(*) as count
+            FROM (
+                SELECT
+                    server_name,
+                    (
+                        SELECT elem->>'name'
+                        FROM jsonb_array_elements(classes) AS elem
+                        WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                        ORDER BY (elem->>'level')::int DESC
+                        LIMIT 1
+                    ) AS primary_class
+                FROM public.characters
+                LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+                WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS TRUE
+            ) AS sub
+            GROUP BY server_name, primary_class
+            ORDER BY server_name, count DESC
+            """
+    elif activity_level == "inactive":
+        query = """
+            SELECT
+                server_name,
+                primary_class,
+                COUNT(*) as count
+            FROM (
+                SELECT
+                    server_name,
+                    (
+                        SELECT elem->>'name'
+                        FROM jsonb_array_elements(classes) AS elem
+                        WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                        ORDER BY (elem->>'level')::int DESC
+                        LIMIT 1
+                    ) AS primary_class
+                FROM public.characters
+                LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+                WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS FALSE
+            ) AS sub
+            GROUP BY server_name, primary_class
+            ORDER BY server_name, count DESC
+            """
+    else:
+        query = """
+            SELECT
+                server_name,
+                primary_class,
+                COUNT(*) as count
+            FROM (
+                SELECT
+                    server_name,
+                    (
+                        SELECT elem->>'name'
+                        FROM jsonb_array_elements(classes) AS elem
+                        WHERE elem->>'name' NOT IN ('Legendary', 'Epic')
+                        ORDER BY (elem->>'level')::int DESC
+                        LIMIT 1
+                    ) AS primary_class
+                FROM public.characters
+                WHERE last_save > NOW() - (make_interval(days => %s))
+            ) AS sub
+            GROUP BY server_name, primary_class
+            ORDER BY server_name, count DESC
+            """
+
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(query, (lookback_in_days,))
+        result = await cursor.fetchall()
+        if not result:
+            return {}
+        output = {}
+        for row in result:
+            server_name_lower = str(row["server_name"]).lower()
+            if server_name_lower not in output:
+                output[server_name_lower] = {}
+            output[server_name_lower][str(row["primary_class"])] = row["count"]
+        return output
+
+
+async def async_get_guild_affiliation_distribution(
+    lookback_in_days: int = 90, activity_level: str = "all"
+) -> dict[str, dict[str, int]]:
+    """Async version of get_guild_affiliation_distribution()."""
+    validate_lookback(lookback_in_days)
+    if activity_level == "active":
+        query = """
+            SELECT server_name,
+                SUM(CASE WHEN guild_name IS NOT NULL AND guild_name <> '' THEN 1 ELSE 0 END) AS in_guild,
+                SUM(CASE WHEN guild_name IS NULL OR guild_name = '' THEN 1 ELSE 0 END) AS not_in_guild
+            FROM public.characters
+            LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+            WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS TRUE
+            GROUP BY server_name
+            """
+    elif activity_level == "inactive":
+        query = """
+            SELECT server_name,
+                SUM(CASE WHEN guild_name IS NOT NULL AND guild_name <> '' THEN 1 ELSE 0 END) AS in_guild,
+                SUM(CASE WHEN guild_name IS NULL OR guild_name = '' THEN 1 ELSE 0 END) AS not_in_guild
+            FROM public.characters
+            LEFT JOIN public.character_report_status crs ON public.characters.id = crs.character_id
+            WHERE last_save > NOW() - (make_interval(days => %s)) AND crs.active IS FALSE
+            GROUP BY server_name
+            """
+    else:
+        query = """
+            SELECT server_name,
+                SUM(CASE WHEN guild_name IS NOT NULL AND guild_name <> '' THEN 1 ELSE 0 END) AS in_guild,
+                SUM(CASE WHEN guild_name IS NULL OR guild_name = '' THEN 1 ELSE 0 END) AS not_in_guild
+            FROM public.characters
+            WHERE last_save > NOW() - (make_interval(days => %s))
+            GROUP BY server_name
+            """
+
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(query, (lookback_in_days,))
+        result = await cursor.fetchall()
+        if not result:
+            return {}
+        output = {}
+        for row in result:
+            output[str(row["server_name"]).lower()] = {
+                "in_guild": row["in_guild"],
+                "not_in_guild": row["not_in_guild"],
+            }
+        return output
+
+
+# ====================================================
+# Async population Postgres functions (psycopg3)
+# ====================================================
+
+
+async def async_get_average_population_by_server(
+    lookback_in_days: int = 90,
+) -> dict[str, Optional[float]]:
+    """Async version of get_average_population_by_server()."""
+    validate_lookback(lookback_in_days)
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            """
+            SELECT
+                server_name,
+                AVG(character_count) AS avg_character_count,
+                AVG(lfm_count) AS avg_lfm_count
+            FROM (
+                SELECT
+                    jsonb_object_keys(data->'servers') AS server_name,
+                    (data->'servers'->jsonb_object_keys(data->'servers')->>'character_count')::int AS character_count,
+                    (data->'servers'->jsonb_object_keys(data->'servers')->>'lfm_count')::int AS lfm_count
+                FROM public.game_info
+                WHERE "timestamp" > NOW() - (make_interval(days => %s))
+            ) AS sub
+            GROUP BY server_name
+            ORDER BY server_name
+            """,
+            (lookback_in_days,),
+        )
+        result = await cursor.fetchall()
+        if not result:
+            return {}
+        output = {}
+        for row in result:
+            output[row["server_name"]] = {
+                "avg_character_count": (
+                    float(row["avg_character_count"])
+                    if row["avg_character_count"] is not None
+                    else None
+                ),
+                "avg_lfm_count": (
+                    float(row["avg_lfm_count"])
+                    if row["avg_lfm_count"] is not None
+                    else None
+                ),
+            }
+        return output
+
+
+async def async_get_average_population_by_hour_per_server(
+    lookback_in_days: int = 90,
+) -> dict[str, Optional[float]]:
+    """Async version of get_average_population_by_hour_per_server()."""
+    validate_lookback(lookback_in_days)
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            """
+            SELECT
+                server_name,
+                EXTRACT(HOUR FROM "timestamp") AS hour,
+                AVG(character_count) AS avg_character_count,
+                AVG(lfm_count) AS avg_lfm_count
+            FROM (
+                SELECT
+                    jsonb_object_keys(data->'servers') AS server_name,
+                    (data->'servers'->jsonb_object_keys(data->'servers')->>'character_count')::int AS character_count,
+                    (data->'servers'->jsonb_object_keys(data->'servers')->>'lfm_count')::int AS lfm_count,
+                    "timestamp"
+                FROM public.game_info
+                WHERE "timestamp" > NOW() - (make_interval(days => %s))
+            ) AS sub
+            GROUP BY server_name, hour
+            ORDER BY server_name, hour
+            """,
+            (lookback_in_days,),
+        )
+        result = await cursor.fetchall()
+        if not result:
+            return {}
+        output = {}
+        for row in result:
+            server_name = row["server_name"]
+            if server_name not in output:
+                output[server_name] = {}
+            output[server_name][int(row["hour"])] = {
+                "avg_character_count": (
+                    float(row["avg_character_count"])
+                    if row["avg_character_count"] is not None
+                    else None
+                ),
+                "avg_lfm_count": (
+                    float(row["avg_lfm_count"])
+                    if row["avg_lfm_count"] is not None
+                    else None
+                ),
+            }
+        return output
+
+
+async def async_get_average_population_by_day_of_week_per_server(
+    lookback_in_days: int = 90,
+) -> dict[str, Optional[float]]:
+    """Async version of get_average_population_by_day_of_week_per_server()."""
+    validate_lookback(lookback_in_days)
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            """
+            SELECT
+                server_name,
+                EXTRACT(DOW FROM "timestamp") AS day_of_week,
+                AVG(character_count) AS avg_character_count,
+                AVG(lfm_count) AS avg_lfm_count
+            FROM (
+                SELECT
+                    jsonb_object_keys(data->'servers') AS server_name,
+                    (data->'servers'->jsonb_object_keys(data->'servers')->>'character_count')::int AS character_count,
+                    (data->'servers'->jsonb_object_keys(data->'servers')->>'lfm_count')::int AS lfm_count,
+                    "timestamp"
+                FROM public.game_info
+                WHERE "timestamp" > NOW() - (make_interval(days => %s))
+            ) AS sub
+            GROUP BY server_name, day_of_week
+            ORDER BY server_name, day_of_week
+            """,
+            (lookback_in_days,),
+        )
+        result = await cursor.fetchall()
+        if not result:
+            return {}
+        output = {}
+        for row in result:
+            server_name = row["server_name"]
+            if server_name not in output:
+                output[server_name] = {}
+            output[server_name][int(row["day_of_week"])] = {
+                "avg_character_count": (
+                    float(row["avg_character_count"])
+                    if row["avg_character_count"] is not None
+                    else None
+                ),
+                "avg_lfm_count": (
+                    float(row["avg_lfm_count"])
+                    if row["avg_lfm_count"] is not None
+                    else None
+                ),
+            }
+        return output
+
+
+async def async_get_average_population_by_hour_and_day_of_week_per_server(
+    lookback_in_days: int = 90,
+) -> dict[str, dict[int, dict[int, dict[str, Optional[float]]]]]:
+    """Async version of get_average_population_by_hour_and_day_of_week_per_server()."""
+    validate_lookback(lookback_in_days)
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            """
+            SELECT
+                server_name,
+                EXTRACT(DOW FROM "timestamp") AS day_of_week,
+                EXTRACT(HOUR FROM "timestamp") AS hour,
+                AVG(character_count) AS avg_character_count,
+                AVG(lfm_count) AS avg_lfm_count
+            FROM (
+                SELECT
+                    jsonb_object_keys(data->'servers') AS server_name,
+                    (data->'servers'->jsonb_object_keys(data->'servers')->>'character_count')::int AS character_count,
+                    (data->'servers'->jsonb_object_keys(data->'servers')->>'lfm_count')::int AS lfm_count,
+                    "timestamp"
+                FROM public.game_info
+                WHERE "timestamp" > NOW() - (make_interval(days => %s))
+            ) AS sub
+            GROUP BY server_name, day_of_week, hour
+            ORDER BY server_name, day_of_week, hour
+            """,
+            (lookback_in_days,),
+        )
+        result = await cursor.fetchall()
+        if not result:
+            return {}
+        output = {}
+        for row in result:
+            server_name = row["server_name"]
+            day_of_week = int(row["day_of_week"])
+            hour = int(row["hour"])
+            if server_name not in output:
+                output[server_name] = {}
+            if day_of_week not in output[server_name]:
+                output[server_name][day_of_week] = {}
+            output[server_name][day_of_week][hour] = {
+                "avg_character_count": (
+                    float(row["avg_character_count"])
+                    if row["avg_character_count"] is not None
+                    else None
+                ),
+                "avg_lfm_count": (
+                    float(row["avg_lfm_count"])
+                    if row["avg_lfm_count"] is not None
+                    else None
+                ),
+            }
+        return output
+
+
+async def async_get_game_population_relative(
+    days: int = 1,
+) -> list[PopulationPointInTime]:
+    """Async version of get_game_population_relative()."""
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+    return await async_get_game_population(start_date=start_date, end_date=end_date)
+
+
+async def async_get_game_population(
+    start_date: datetime = None, end_date: datetime = None
+) -> list[PopulationPointInTime]:
+    """Async version of get_game_population()."""
+    if not end_date:
+        end_date = datetime.now()
+    if not start_date:
+        start_date = end_date - timedelta(days=1)
+
+    if start_date >= end_date:
+        raise ValueError("start_date must be before end_date")
+
+    max_days = 30
+    if (end_date - start_date).days > max_days:
+        raise ValueError(f"Date range cannot exceed {max_days} days")
+
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            """
+            SELECT timestamp, data
+            FROM public.game_info
+            WHERE timestamp BETWEEN %s AND %s
+            ORDER BY timestamp ASC
+            """,
+            (
+                start_date.isoformat(),
+                end_date.isoformat(),
+            ),
+        )
+        game_info_list = await cursor.fetchall()
+        if not game_info_list:
+            return []
+
+        population_points: list[PopulationPointInTime] = []
+        for game_info in game_info_list:
+            try:
+                timestamp = datetime_to_datetime_string(game_info["timestamp"])
+                data = ServerInfo(**game_info["data"])
+                population_data_points: dict[str, PopulationDataPoint] = {}
+                for server_name, server_info in data.servers.items():
+                    character_count = 0
+                    lfm_count = 0
+                    if server_info:
+                        if server_info.character_count:
+                            character_count = server_info.character_count
+                        if server_info.lfm_count:
+                            lfm_count = server_info.lfm_count
+                    population_data_point = PopulationDataPoint(
+                        character_count=character_count,
+                        lfm_count=lfm_count,
+                    )
+                    population_data_points[server_name] = population_data_point
+                population_point = PopulationPointInTime(
+                    timestamp=timestamp, data=population_data_points
+                )
+                population_points.append(population_point)
+            except Exception:
+                pass
+        return population_points
+
+
+async def async_get_game_population_last_week() -> list[PopulationPointInTime]:
+    """Async version of get_game_population_last_week()."""
+    now = datetime.now()
+    end_of_range = now.replace(minute=0, second=0, microsecond=0)
+    start_of_range = end_of_range - timedelta(days=7)
+    return await async_get_game_population(
+        start_date=start_of_range, end_date=end_of_range
+    )
+
+
+async def async_get_game_population_last_month() -> list[PopulationPointInTime]:
+    """Async version of get_game_population_last_month()."""
+    now = datetime.now()
+    end_of_range = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_range = end_of_range - timedelta(days=28)
+    return await async_get_game_population(
+        start_date=start_of_range, end_date=end_of_range
+    )
+
+
+async def async_get_game_population_last_quarter() -> list[PopulationPointInTime]:
+    """Async version of get_game_population_last_quarter()."""
+    now = datetime.now()
+    end_of_range = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_range = end_of_range - timedelta(days=90)
+    return await async_get_game_population(
+        start_date=start_of_range, end_date=end_of_range
+    )
+
+
+async def async_get_game_population_last_year() -> list[PopulationPointInTime]:
+    """Async version of get_game_population_last_year()."""
+    now = datetime.now()
+    end_of_range = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_range = end_of_range - timedelta(days=365)
+    return await async_get_game_population(
+        start_date=start_of_range, end_date=end_of_range
+    )
+
+
+async def async_get_unique_character_and_guild_count(
+    days: int = 90, server_name: str = None
+) -> dict:
+    """Async version of get_unique_character_and_guild_count()."""
+    try:
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+
+        async with get_async_dict_cursor(commit=False) as cursor:
+            if server_name:
+                await cursor.execute(
+                    """
+                    SELECT 
+                        COUNT(*) AS unique_character_count,
+                        COUNT(DISTINCT c.guild_name) AS unique_guild_count,
+                        COUNT(*) FILTER (WHERE crs.active IS TRUE) AS active_unique_character_count,
+                        COUNT(DISTINCT c.guild_name) FILTER (WHERE crs.active IS TRUE) AS active_unique_guild_count
+                    FROM public.characters c
+                    LEFT JOIN public.character_report_status crs
+                        ON crs.character_id = c.id
+                    WHERE c.last_save >= %s 
+                        AND LOWER(c.server_name) = LOWER(%s)
+                        AND c.guild_name IS NOT NULL
+                        AND c.guild_name != ''
+                    """,
+                    (start_date, server_name),
+                )
+                result = await cursor.fetchone()
+                unique_character_count = result["unique_character_count"] if result else 0
+                unique_guild_count = result["unique_guild_count"] if result else 0
+                active_unique_character_count = result["active_unique_character_count"] if result else 0
+                active_unique_guild_count = result["active_unique_guild_count"] if result else 0
+                server_breakdown = {}
+            else:
+                await cursor.execute(
+                    """
+                    SELECT 
+                        c.server_name, 
+                        COUNT(*) AS unique_character_count,
+                        COUNT(DISTINCT c.guild_name) AS unique_guild_count,
+                        COUNT(*) FILTER (WHERE crs.active IS TRUE) AS active_unique_character_count,
+                        COUNT(DISTINCT c.guild_name) FILTER (WHERE crs.active IS TRUE) AS active_unique_guild_count
+                    FROM public.characters c
+                    LEFT JOIN public.character_report_status crs
+                        ON crs.character_id = c.id
+                    WHERE c.last_save >= %s
+                        AND c.server_name IS NOT NULL
+                    GROUP BY c.server_name
+                    ORDER BY unique_character_count DESC
+                    """,
+                    (start_date,),
+                )
+
+                server_results = await cursor.fetchall()
+                server_breakdown = (
+                    {
+                        str(row["server_name"]).lower(): {
+                            "unique_character_count": row["unique_character_count"],
+                            "unique_guild_count": row["unique_guild_count"],
+                            "active_unique_character_count": row["active_unique_character_count"],
+                            "active_unique_guild_count": row["active_unique_guild_count"],
+                        }
+                        for row in server_results
+                    }
+                    if server_results
+                    else {}
+                )
+
+                unique_character_count = (
+                    sum(
+                        data["unique_character_count"]
+                        for data in server_breakdown.values()
+                    )
+                    if server_breakdown
+                    else 0
+                )
+                unique_guild_count = (
+                    sum(
+                        data["unique_guild_count"] for data in server_breakdown.values()
+                    )
+                    if server_breakdown
+                    else 0
+                )
+                active_unique_character_count = (
+                    sum(
+                        data["active_unique_character_count"]
+                        for data in server_breakdown.values()
+                    )
+                    if server_breakdown
+                    else 0
+                )
+                active_unique_guild_count = (
+                    sum(
+                        data["active_unique_guild_count"]
+                        for data in server_breakdown.values()
+                    )
+                    if server_breakdown
+                    else 0
+                )
+
+            return {
+                "unique_character_count": unique_character_count,
+                "unique_guild_count": unique_guild_count,
+                "active_unique_character_count": active_unique_character_count,
+                "active_unique_guild_count": active_unique_guild_count,
+                "days_analyzed": days,
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "server_name": server_name,
+                "server_breakdown": server_breakdown if not server_name else None,
+            }
+
+    except Exception as e:
+        logger.error(f"Error getting unique character count: {e}")
+        return {
+            "unique_character_count": 0,
+            "unique_guild_count": 0,
+            "active_unique_character_count": 0,
+            "active_unique_guild_count": 0,
+            "error": str(e),
+            "days_analyzed": days,
+            "server_name": server_name,
+        }
+
+
+async def async_get_character_activity_stats(
+    days: int = 90, server_name: str = None
+) -> dict:
+    """Async version of get_character_activity_stats()."""
+    try:
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+
+        async with get_async_dict_cursor(commit=False) as cursor:
+            base_where = "WHERE last_save >= %s"
+            params = [start_date]
+
+            if server_name:
+                base_where += " AND LOWER(server_name) = LOWER(%s)"
+                params.append(server_name)
+
+            await cursor.execute(
+                f"""
+                SELECT 
+                    COUNT(*) as unique_characters,
+                    COUNT(*) as total_character_records,
+                    COUNT(DISTINCT server_name) as servers_with_activity,
+                    MIN(last_save) as earliest_activity,
+                    MAX(last_save) as latest_activity,
+                    AVG(total_level) as avg_character_level
+                FROM public.characters 
+                {base_where}
+                """,
+                params,
+            )
+
+            stats = await cursor.fetchone()
+
+            await cursor.execute(
+                f"""
+                SELECT 
+                    CASE 
+                        WHEN total_level >= 30 THEN '30+'
+                        WHEN total_level >= 20 THEN '20-29'
+                        WHEN total_level >= 10 THEN '10-19'
+                        WHEN total_level >= 1 THEN '1-9'
+                        ELSE 'Unknown'
+                    END as level_range,
+                    COUNT(*) as character_count
+                FROM public.characters 
+                {base_where}
+                GROUP BY level_range
+                ORDER BY level_range
+                """,
+                params,
+            )
+
+            level_results = await cursor.fetchall()
+            level_distribution = {
+                row["level_range"]: row["character_count"] for row in level_results
+            }
+
+            server_breakdown = {}
+            if not server_name:
+                await cursor.execute(
+                    f"""
+                    SELECT 
+                        server_name,
+                        COUNT(*) as unique_characters,
+                        AVG(total_level) as avg_level
+                    FROM public.characters 
+                    {base_where}
+                        AND server_name IS NOT NULL
+                    GROUP BY server_name
+                    ORDER BY unique_characters DESC
+                    """,
+                    params,
+                )
+
+                server_results = await cursor.fetchall()
+                server_breakdown = {
+                    str(row["server_name"]).lower(): {
+                        "unique_characters": row["unique_characters"],
+                        "avg_level": round(float(row["avg_level"]), 1) if row["avg_level"] else 0,
+                    }
+                    for row in server_results
+                }
+
+            return {
+                "unique_characters": stats["unique_characters"] if stats else 0,
+                "total_character_records": stats["total_character_records"] if stats else 0,
+                "servers_with_activity": stats["servers_with_activity"] if stats else 0,
+                "earliest_activity": (
+                    stats["earliest_activity"].isoformat()
+                    if stats and stats["earliest_activity"]
+                    else None
+                ),
+                "latest_activity": (
+                    stats["latest_activity"].isoformat()
+                    if stats and stats["latest_activity"]
+                    else None
+                ),
+                "avg_character_level": (
+                    round(float(stats["avg_character_level"]), 1)
+                    if stats and stats["avg_character_level"]
+                    else 0
+                ),
+                "level_distribution": level_distribution,
+                "server_breakdown": server_breakdown if not server_name else None,
+                "query_parameters": {
+                    "days_analyzed": days,
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                    "server_name": server_name,
+                },
+            }
+
+    except Exception as e:
+        logger.error(f"Error getting character activity stats: {e}")
+        return {
+            "unique_characters": 0,
+            "error": str(e),
+            "query_parameters": {"days_analyzed": days, "server_name": server_name},
+        }
