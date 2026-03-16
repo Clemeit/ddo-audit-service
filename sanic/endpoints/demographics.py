@@ -35,34 +35,26 @@ async def get_population_race(request: Request, period: str):
             status=400,
         )
 
-    period_functions = {
-        "day": lambda: demographics_utils.get_race_distribution(
-            ReportLookback.day, activity_level
-        ),
-        "week": lambda: demographics_utils.get_race_distribution(
-            ReportLookback.week, activity_level
-        ),
-        "month": lambda: demographics_utils.get_race_distribution(
-            ReportLookback.month, activity_level
-        ),
-        "quarter": lambda: demographics_utils.get_race_distribution(
-            ReportLookback.quarter, activity_level
-        ),
-        "year": lambda: demographics_utils.get_race_distribution(
-            ReportLookback.year, activity_level
-        ),
+    period_map = {
+        "day": ReportLookback.day,
+        "week": ReportLookback.week,
+        "month": ReportLookback.month,
+        "quarter": ReportLookback.quarter,
+        "year": ReportLookback.year,
     }
 
-    if period not in period_functions:
+    if period not in period_map:
         return json(
             {
-                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_functions.keys())}"
+                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_map.keys())}"
             },
             status=400,
         )
 
     try:
-        data = period_functions[period]()
+        data = await demographics_utils.get_race_distribution(
+            period_map[period], activity_level
+        )
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -90,34 +82,26 @@ async def get_population_gender(request: Request, period: str):
             status=400,
         )
 
-    period_functions = {
-        "day": lambda: demographics_utils.get_gender_distribution(
-            ReportLookback.day, activity_level
-        ),
-        "week": lambda: demographics_utils.get_gender_distribution(
-            ReportLookback.week, activity_level
-        ),
-        "month": lambda: demographics_utils.get_gender_distribution(
-            ReportLookback.month, activity_level
-        ),
-        "quarter": lambda: demographics_utils.get_gender_distribution(
-            ReportLookback.quarter, activity_level
-        ),
-        "year": lambda: demographics_utils.get_gender_distribution(
-            ReportLookback.year, activity_level
-        ),
+    period_map = {
+        "day": ReportLookback.day,
+        "week": ReportLookback.week,
+        "month": ReportLookback.month,
+        "quarter": ReportLookback.quarter,
+        "year": ReportLookback.year,
     }
 
-    if period not in period_functions:
+    if period not in period_map:
         return json(
             {
-                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_functions.keys())}"
+                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_map.keys())}"
             },
             status=400,
         )
 
     try:
-        data = period_functions[period]()
+        data = await demographics_utils.get_gender_distribution(
+            period_map[period], activity_level
+        )
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -145,34 +129,26 @@ async def get_population_total_level(request: Request, period: str):
             status=400,
         )
 
-    period_functions = {
-        "day": lambda: demographics_utils.get_total_level_distribution(
-            ReportLookback.day, activity_level
-        ),
-        "week": lambda: demographics_utils.get_total_level_distribution(
-            ReportLookback.week, activity_level
-        ),
-        "month": lambda: demographics_utils.get_total_level_distribution(
-            ReportLookback.month, activity_level
-        ),
-        "quarter": lambda: demographics_utils.get_total_level_distribution(
-            ReportLookback.quarter, activity_level
-        ),
-        "year": lambda: demographics_utils.get_total_level_distribution(
-            ReportLookback.year, activity_level
-        ),
+    period_map = {
+        "day": ReportLookback.day,
+        "week": ReportLookback.week,
+        "month": ReportLookback.month,
+        "quarter": ReportLookback.quarter,
+        "year": ReportLookback.year,
     }
 
-    if period not in period_functions:
+    if period not in period_map:
         return json(
             {
-                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_functions.keys())}"
+                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_map.keys())}"
             },
             status=400,
         )
 
     try:
-        data = period_functions[period]()
+        data = await demographics_utils.get_total_level_distribution(
+            period_map[period], activity_level
+        )
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -200,34 +176,26 @@ async def get_population_class_count(request: Request, period: str):
             status=400,
         )
 
-    period_functions = {
-        "day": lambda: demographics_utils.get_class_count_distribution(
-            ReportLookback.day, activity_level
-        ),
-        "week": lambda: demographics_utils.get_class_count_distribution(
-            ReportLookback.week, activity_level
-        ),
-        "month": lambda: demographics_utils.get_class_count_distribution(
-            ReportLookback.month, activity_level
-        ),
-        "quarter": lambda: demographics_utils.get_class_count_distribution(
-            ReportLookback.quarter, activity_level
-        ),
-        "year": lambda: demographics_utils.get_class_count_distribution(
-            ReportLookback.year, activity_level
-        ),
+    period_map = {
+        "day": ReportLookback.day,
+        "week": ReportLookback.week,
+        "month": ReportLookback.month,
+        "quarter": ReportLookback.quarter,
+        "year": ReportLookback.year,
     }
 
-    if period not in period_functions:
+    if period not in period_map:
         return json(
             {
-                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_functions.keys())}"
+                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_map.keys())}"
             },
             status=400,
         )
 
     try:
-        data = period_functions[period]()
+        data = await demographics_utils.get_class_count_distribution(
+            period_map[period], activity_level
+        )
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -255,34 +223,26 @@ async def get_population_primary_class(request: Request, period: str):
             status=400,
         )
 
-    period_functions = {
-        "day": lambda: demographics_utils.get_primary_class_distribution(
-            ReportLookback.day, activity_level
-        ),
-        "week": lambda: demographics_utils.get_primary_class_distribution(
-            ReportLookback.week, activity_level
-        ),
-        "month": lambda: demographics_utils.get_primary_class_distribution(
-            ReportLookback.month, activity_level
-        ),
-        "quarter": lambda: demographics_utils.get_primary_class_distribution(
-            ReportLookback.quarter, activity_level
-        ),
-        "year": lambda: demographics_utils.get_primary_class_distribution(
-            ReportLookback.year, activity_level
-        ),
+    period_map = {
+        "day": ReportLookback.day,
+        "week": ReportLookback.week,
+        "month": ReportLookback.month,
+        "quarter": ReportLookback.quarter,
+        "year": ReportLookback.year,
     }
 
-    if period not in period_functions:
+    if period not in period_map:
         return json(
             {
-                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_functions.keys())}"
+                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_map.keys())}"
             },
             status=400,
         )
 
     try:
-        data = period_functions[period]()
+        data = await demographics_utils.get_primary_class_distribution(
+            period_map[period], activity_level
+        )
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
@@ -310,34 +270,26 @@ async def get_guild_affiliation_demographics(request: Request, period: str):
             status=400,
         )
 
-    period_functions = {
-        "day": lambda: demographics_utils.get_guild_affiliation_distribution(
-            ReportLookback.day, activity_level
-        ),
-        "week": lambda: demographics_utils.get_guild_affiliation_distribution(
-            ReportLookback.week, activity_level
-        ),
-        "month": lambda: demographics_utils.get_guild_affiliation_distribution(
-            ReportLookback.month, activity_level
-        ),
-        "quarter": lambda: demographics_utils.get_guild_affiliation_distribution(
-            ReportLookback.quarter, activity_level
-        ),
-        "year": lambda: demographics_utils.get_guild_affiliation_distribution(
-            ReportLookback.year, activity_level
-        ),
+    period_map = {
+        "day": ReportLookback.day,
+        "week": ReportLookback.week,
+        "month": ReportLookback.month,
+        "quarter": ReportLookback.quarter,
+        "year": ReportLookback.year,
     }
 
-    if period not in period_functions:
+    if period not in period_map:
         return json(
             {
-                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_functions.keys())}"
+                "message": f"Invalid period '{period}'. Supported periods: {', '.join(period_map.keys())}"
             },
             status=400,
         )
 
     try:
-        data = period_functions[period]()
+        data = await demographics_utils.get_guild_affiliation_distribution(
+            period_map[period], activity_level
+        )
     except Exception as e:
         return json({"message": str(e)}, status=500)
 

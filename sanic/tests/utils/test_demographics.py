@@ -79,32 +79,36 @@ class TestGetCachedDataWithFallback:
 @pytest.mark.parametrize(
     "getter_name,postgres_func_name,key_prefix",
     [
-        ("get_race_distribution", "get_race_distribution", "race_distribution"),
-        ("get_gender_distribution", "get_gender_distribution", "gender_distribution"),
+        ("get_race_distribution", "async_get_race_distribution", "race_distribution"),
+        (
+            "get_gender_distribution",
+            "async_get_gender_distribution",
+            "gender_distribution",
+        ),
         (
             "get_total_level_distribution",
-            "get_total_level_distribution",
+            "async_get_total_level_distribution",
             "total_level_distribution",
         ),
         (
             "get_class_count_distribution",
-            "get_class_count_distribution",
+            "async_get_class_count_distribution",
             "class_count_distribution",
         ),
         (
             "get_primary_class_distribution",
-            "get_primary_class_distribution",
+            "async_get_primary_class_distribution",
             "primary_class_distribution",
         ),
         (
             "get_guild_affiliation_distribution",
-            "get_guild_affiliation_distribution",
+            "async_get_guild_affiliation_distribution",
             "guild_affiliation_distribution",
         ),
     ],
 )
 def test_distribution_getters_use_days_ttl_and_fallback(
-    monkeypatch, getter_name, postgres_func_name, key_prefix
+    monkeypatch, run_async, getter_name, postgres_func_name, key_prefix
 ):
     calls = {}
 
@@ -112,22 +116,24 @@ def test_distribution_getters_use_days_ttl_and_fallback(
         calls["postgres"] = (days, activity_level)
         return {"source": postgres_func_name}
 
-    monkeypatch.setattr(demographics.postgres_client, postgres_func_name, fake_postgres)
+    monkeypatch.setattr(
+        demographics.postgres_client, postgres_func_name, _amock(fake_postgres)
+    )
 
-    def fake_cached_fallback(key, fallback_func, cache_ttl):
+    async def fake_cached_fallback(key, fallback_func, cache_ttl):
         calls["cache"] = (key, cache_ttl)
-        calls["fallback_result"] = fallback_func()
+        calls["fallback_result"] = await fallback_func()
         return {"ok": True}
 
     monkeypatch.setattr(
         demographics,
-        "get_cached_data_with_fallback",
+        "async_get_cached_data_with_fallback",
         fake_cached_fallback,
     )
 
     getter = getattr(demographics, getter_name)
     period = demographics.ReportLookback.week
-    result = getter(period, activity_level="active")
+    result = run_async(getter(period, activity_level="active"))
 
     expected_days = demographics.report_lookback_map[period]["days"]
     expected_ttl = demographics.report_lookback_map[period]["cache_ttl"]
@@ -149,11 +155,11 @@ def test_distribution_getters_use_days_ttl_and_fallback(
         "get_guild_affiliation_distribution",
     ],
 )
-def test_distribution_getters_raise_for_invalid_period(getter_name):
+def test_distribution_getters_raise_for_invalid_period(run_async, getter_name):
     getter = getattr(demographics, getter_name)
 
     with pytest.raises(ValueError, match="Invalid period"):
-        getter("1d", activity_level="all")
+        run_async(getter("1d", activity_level="all"))
 
 
 class TestAsyncGetCachedDataWithFallback:

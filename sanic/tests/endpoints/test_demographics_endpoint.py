@@ -1,4 +1,5 @@
 import endpoints.demographics as demographics_endpoints
+from tests.conftest import _amock
 from utils.demographics import ReportLookback
 
 
@@ -45,7 +46,7 @@ def test_get_population_total_level_delegates_to_util_with_lookback_and_activity
     monkeypatch.setattr(
         demographics_endpoints.demographics_utils,
         "get_total_level_distribution",
-        _distribution,
+        _amock(_distribution),
     )
 
     request = make_request(path="/v1/demographics/total-level/month")
@@ -64,12 +65,13 @@ def test_get_population_total_level_delegates_to_util_with_lookback_and_activity
 def test_get_guild_affiliation_demographics_returns_500_on_failure(
     monkeypatch, make_request, run_async, response_json
 ):
+    def _raise(*_args, **_kwargs):
+        raise RuntimeError("demographics query failed")
+
     monkeypatch.setattr(
         demographics_endpoints.demographics_utils,
         "get_guild_affiliation_distribution",
-        lambda _lookback, _activity: (_ for _ in ()).throw(
-            RuntimeError("demographics query failed")
-        ),
+        _amock(_raise),
     )
 
     request = make_request(path="/v1/demographics/guild-affiliated/year")

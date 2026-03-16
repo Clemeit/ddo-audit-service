@@ -28,510 +28,515 @@ from datetime import datetime
 #     return PopulationPointInTime(timestamp=first.timestamp, data=summed_data)
 
 
-def get_game_population_day() -> list[dict]:
+async def get_game_population_day() -> list[dict]:
     """
     Gets 1 day of game population reported by the minute.
     Checks cache then database.
     """
 
-    def fetch_and_normalize_data():
-        postgres_data = postgres_client.get_game_population_relative(1)
-        # normalized_data = normalize_population_data(postgres_data)
+    async def fetch_and_normalize_data():
+        postgres_data = await postgres_client.async_get_game_population_relative(1)
         return [datum.model_dump() for datum in postgres_data]
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_game_population_day",
         fetch_and_normalize_data,
         REPORT_1_DAY_CACHE_TTL,
     )
 
 
-def get_game_population_totals_day() -> list[dict]:
+async def get_game_population_totals_day() -> list[dict]:
     """
     Gets 1 day of total game population per server.
     Checks cache then database.
     """
 
-    def fetch_data():
-        postgres_data = postgres_client.get_game_population_relative(1)
+    async def fetch_data():
+        postgres_data = await postgres_client.async_get_game_population_relative(1)
         _, total_data = summed_population_data_points(postgres_data)
         return {
             serverName: datum.model_dump() for serverName, datum in total_data.items()
         }
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_game_population_totals_day",
         fetch_data,
         REPORT_1_DAY_CACHE_TTL,
     )
 
 
-def get_game_population_week() -> list[dict]:
+async def get_game_population_week() -> list[dict]:
     """
     Gets 1 week of game population reported as hourly averages.
     Checks cache then database.
     """
 
-    def fetch_data():
-        postgres_data = postgres_client.get_game_population_last_week()
+    async def fetch_data():
+        postgres_data = await postgres_client.async_get_game_population_last_week()
         averaged_data = average_hourly_data(postgres_data)
-        # normalized_data = normalize_population_data(averaged_data)
         return [datum.model_dump() for datum in averaged_data]
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_game_population_week",
         fetch_data,
         REPORT_1_WEEK_CACHE_TTL,
     )
 
 
-def get_game_population_totals_week() -> list[dict]:
+async def get_game_population_totals_week() -> list[dict]:
     """
     Gets 1 week of total game population per server.
     Checks cache then database.
     """
 
-    def fetch_data():
-        postgres_data = postgres_client.get_game_population_last_week()
+    async def fetch_data():
+        postgres_data = await postgres_client.async_get_game_population_last_week()
         _, total_data = summed_population_data_points(postgres_data)
         return {
             serverName: datum.model_dump() for serverName, datum in total_data.items()
         }
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_game_population_totals_week",
         fetch_data,
         REPORT_1_WEEK_CACHE_TTL,
     )
 
 
-def get_game_population_month() -> list[dict]:
+async def get_game_population_month() -> list[dict]:
     """
     Gets 1 month of game population reported as daily averages.
     Checks cache then database.
     """
 
-    def fetch_data():
-        postgres_data = postgres_client.get_game_population_last_month()
+    async def fetch_data():
+        postgres_data = await postgres_client.async_get_game_population_last_month()
         averaged_data = average_daily_data(postgres_data)
-        # normalized_data = normalize_population_data(averaged_data)
         return [datum.model_dump() for datum in averaged_data]
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_game_population_month",
         fetch_data,
         REPORT_1_MONTH_CACHE_TTL,
     )
 
 
-def get_game_population_quarter() -> list[dict]:
+async def get_game_population_quarter() -> list[dict]:
     """
     Gets 1 quarter of game population reported as daily averages.
     Checks cache then database.
     """
 
-    def fetch_data():
-        postgres_data = postgres_client.get_game_population_last_quarter()
+    async def fetch_data():
+        postgres_data = await postgres_client.async_get_game_population_last_quarter()
         averaged_data = average_daily_data(postgres_data)
-        # normalized_data = normalize_population_data(averaged_data)
         return [datum.model_dump() for datum in averaged_data]
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_game_population_quarter",
         fetch_data,
         REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
-def get_game_population_totals_month() -> list[dict]:
+async def get_game_population_totals_month() -> list[dict]:
     """
     Gets 1 month of total game population per server.
     Checks cache then database.
     """
 
-    def fetch_data():
-        postgres_data = postgres_client.get_game_population_last_month()
+    async def fetch_data():
+        postgres_data = await postgres_client.async_get_game_population_last_month()
         _, total_data = summed_population_data_points(postgres_data)
         return {
             serverName: datum.model_dump() for serverName, datum in total_data.items()
         }
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_game_population_totals_month",
         fetch_data,
         REPORT_1_MONTH_CACHE_TTL,
     )
 
 
-def get_game_population_totals_quarter() -> list[dict]:
+async def get_game_population_totals_quarter() -> list[dict]:
     """
     Gets 1 quarter of total game population per server.
     Checks cache then database.
     """
 
-    def fetch_data():
-        postgres_data = postgres_client.get_game_population_last_quarter()
+    async def fetch_data():
+        postgres_data = await postgres_client.async_get_game_population_last_quarter()
         _, total_data = summed_population_data_points(postgres_data)
         return {
             serverName: datum.model_dump() for serverName, datum in total_data.items()
         }
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_game_population_totals_quarter",
         fetch_data,
         REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
-def get_game_population_year() -> list[dict]:
+async def get_game_population_year() -> list[dict]:
     """
     Gets 1 year of game population reported as daily averages.
     Checks cache then database.
     """
 
-    def fetch_data():
-        postgres_data = postgres_client.get_game_population_last_year()
+    async def fetch_data():
+        postgres_data = await postgres_client.async_get_game_population_last_year()
         averaged_data = average_daily_data(postgres_data)
-        # normalized_data = normalize_population_data(averaged_data)
         return [datum.model_dump() for datum in averaged_data]
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_game_population_year",
         fetch_data,
         REPORT_1_YEAR_CACHE_TTL,
     )
 
 
-def get_game_population_totals_year() -> list[dict]:
+async def get_game_population_totals_year() -> list[dict]:
     """
     Gets 1 year of total game population per server.
     Checks cache then database.
     """
 
-    def fetch_data():
-        postgres_data = postgres_client.get_game_population_last_year()
+    async def fetch_data():
+        postgres_data = await postgres_client.async_get_game_population_last_year()
         _, total_data = summed_population_data_points(postgres_data)
         return {
             serverName: datum.model_dump() for serverName, datum in total_data.items()
         }
 
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_game_population_totals_year",
         fetch_data,
         REPORT_1_YEAR_CACHE_TTL,
     )
 
 
-def get_unique_character_and_guild_count_breakdown_day() -> dict:
+async def get_unique_character_and_guild_count_breakdown_day() -> dict:
     """
     Gets a unique character and guild count breakdown for the last day.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_unique_character_and_guild_count_breakdown_day",
-        lambda: postgres_client.get_unique_character_and_guild_count(1),
+        lambda: postgres_client.async_get_unique_character_and_guild_count(1),
         REPORT_1_DAY_CACHE_TTL,
     )
 
 
-def get_unique_character_and_guild_count_breakdown_week() -> dict:
+async def get_unique_character_and_guild_count_breakdown_week() -> dict:
     """
     Gets a unique character and guild count breakdown for the last week.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_unique_character_and_guild_count_breakdown_week",
-        lambda: postgres_client.get_unique_character_and_guild_count(7),
+        lambda: postgres_client.async_get_unique_character_and_guild_count(7),
         REPORT_1_WEEK_CACHE_TTL,
     )
 
 
-def get_unique_character_and_guild_count_breakdown_month() -> dict:
+async def get_unique_character_and_guild_count_breakdown_month() -> dict:
     """
     Gets a unique character and guild count breakdown for the last month.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_unique_character_and_guild_count_breakdown_month",
-        lambda: postgres_client.get_unique_character_and_guild_count(30),
+        lambda: postgres_client.async_get_unique_character_and_guild_count(30),
         REPORT_1_MONTH_CACHE_TTL,
     )
 
 
-def get_unique_character_and_guild_count_breakdown_quarter() -> dict:
+async def get_unique_character_and_guild_count_breakdown_quarter() -> dict:
     """
     Gets a unique character and guild count breakdown for the last quarter.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_unique_character_and_guild_count_breakdown_quarter",
-        lambda: postgres_client.get_unique_character_and_guild_count(90),
+        lambda: postgres_client.async_get_unique_character_and_guild_count(90),
         REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
-def get_unique_character_and_guild_count_breakdown_year() -> dict:
+async def get_unique_character_and_guild_count_breakdown_year() -> dict:
     """
     Gets a unique character and guild count breakdown for the last year.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_unique_character_and_guild_count_breakdown_year",
-        lambda: postgres_client.get_unique_character_and_guild_count(365),
+        lambda: postgres_client.async_get_unique_character_and_guild_count(365),
         REPORT_1_YEAR_CACHE_TTL,
     )
 
 
-def get_character_activity_stats_quarter() -> dict:
+async def get_character_activity_stats_quarter() -> dict:
     """
     Gets character activity stats for the last quarter.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_character_activity_stats_quarter",
-        lambda: postgres_client.get_character_activity_stats(90),
+        lambda: postgres_client.async_get_character_activity_stats(90),
         REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
-def get_average_server_population_day() -> dict[str, Optional[float]]:
+async def get_average_server_population_day() -> dict[str, Optional[float]]:
     """
     Gets 1 day of average server population data.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_average_server_population_day",
-        lambda: postgres_client.get_average_population_by_server(1),
+        lambda: postgres_client.async_get_average_population_by_server(1),
         REPORT_1_DAY_CACHE_TTL,
     )
 
 
-def get_average_server_population_week() -> dict[str, Optional[float]]:
+async def get_average_server_population_week() -> dict[str, Optional[float]]:
     """
     Gets 7 days of average server population data.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_average_server_population_week",
-        lambda: postgres_client.get_average_population_by_server(7),
+        lambda: postgres_client.async_get_average_population_by_server(7),
         REPORT_1_WEEK_CACHE_TTL,
     )
 
 
-def get_average_server_population_month() -> dict[str, Optional[float]]:
+async def get_average_server_population_month() -> dict[str, Optional[float]]:
     """
     Gets 28 days of average server population data.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_average_server_population_month",
-        lambda: postgres_client.get_average_population_by_server(28),
+        lambda: postgres_client.async_get_average_population_by_server(28),
         REPORT_1_MONTH_CACHE_TTL,
     )
 
 
-def get_average_server_population_quarter() -> dict[str, Optional[float]]:
+async def get_average_server_population_quarter() -> dict[str, Optional[float]]:
     """
     Gets 90 days of average server population data.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_average_server_population_quarter",
-        lambda: postgres_client.get_average_population_by_server(90),
+        lambda: postgres_client.async_get_average_population_by_server(90),
         REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
-def get_average_server_population_year() -> dict[str, Optional[float]]:
+async def get_average_server_population_year() -> dict[str, Optional[float]]:
     """
     Gets 365 days of average server population data.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_average_server_population_year",
-        lambda: postgres_client.get_average_population_by_server(365),
+        lambda: postgres_client.async_get_average_population_by_server(365),
         REPORT_1_YEAR_CACHE_TTL,
     )
 
 
-def get_hourly_server_population_day() -> dict[str, Optional[float]]:
+async def get_hourly_server_population_day() -> dict[str, Optional[float]]:
     """
     Gets 1 day of average hourly server population data.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_hourly_server_population_day",
-        lambda: postgres_client.get_average_population_by_hour_per_server(1),
+        lambda: postgres_client.async_get_average_population_by_hour_per_server(1),
         REPORT_1_DAY_CACHE_TTL,
     )
 
 
-def get_hourly_server_population_week() -> dict[str, Optional[float]]:
+async def get_hourly_server_population_week() -> dict[str, Optional[float]]:
     """
     Gets 7 days of average hourly server population data.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_hourly_server_population_week",
-        lambda: postgres_client.get_average_population_by_hour_per_server(7),
+        lambda: postgres_client.async_get_average_population_by_hour_per_server(7),
         REPORT_1_WEEK_CACHE_TTL,
     )
 
 
-def get_hourly_server_population_month() -> dict[str, Optional[float]]:
+async def get_hourly_server_population_month() -> dict[str, Optional[float]]:
     """
     Gets 28 days of average hourly server population data.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_hourly_server_population_month",
-        lambda: postgres_client.get_average_population_by_hour_per_server(28),
+        lambda: postgres_client.async_get_average_population_by_hour_per_server(28),
         REPORT_1_MONTH_CACHE_TTL,
     )
 
 
-def get_hourly_server_population_quarter() -> dict[str, Optional[float]]:
+async def get_hourly_server_population_quarter() -> dict[str, Optional[float]]:
     """
     Gets 90 days of average hourly server population data.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_hourly_server_population_quarter",
-        lambda: postgres_client.get_average_population_by_hour_per_server(90),
+        lambda: postgres_client.async_get_average_population_by_hour_per_server(90),
         REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
-def get_hourly_server_population_year() -> dict[str, Optional[float]]:
+async def get_hourly_server_population_year() -> dict[str, Optional[float]]:
     """
     Gets 365 days of average hourly server population data.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_hourly_server_population_year",
-        lambda: postgres_client.get_average_population_by_hour_per_server(365),
+        lambda: postgres_client.async_get_average_population_by_hour_per_server(365),
         REPORT_1_YEAR_CACHE_TTL,
     )
 
 
-def get_daily_server_population_day() -> dict[str, Optional[float]]:
+async def get_daily_server_population_day() -> dict[str, Optional[float]]:
     """
     Gets 1 day of average daily server population data.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_daily_server_population_day",
-        lambda: postgres_client.get_average_population_by_day_of_week_per_server(1),
+        lambda: postgres_client.async_get_average_population_by_day_of_week_per_server(
+            1
+        ),
         REPORT_1_DAY_CACHE_TTL,
     )
 
 
-def get_daily_server_population_week() -> dict[str, Optional[float]]:
+async def get_daily_server_population_week() -> dict[str, Optional[float]]:
     """
     Gets 7 days of average daily server population data.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_daily_server_population_week",
-        lambda: postgres_client.get_average_population_by_day_of_week_per_server(7),
-        REPORT_1_WEEK_CACHE_TTL,
-    )
-
-
-def get_daily_server_population_month() -> dict[str, Optional[float]]:
-    """
-    Gets 28 days of average daily server population data.
-    Checks cache then database.
-    """
-    return get_cached_data_with_fallback(
-        "get_daily_server_population_month",
-        lambda: postgres_client.get_average_population_by_day_of_week_per_server(28),
-        REPORT_1_MONTH_CACHE_TTL,
-    )
-
-
-def get_daily_server_population_quarter() -> dict[str, Optional[float]]:
-    """
-    Gets 90 days of average daily server population data.
-    Checks cache then database.
-    """
-    return get_cached_data_with_fallback(
-        "get_daily_server_population_quarter",
-        lambda: postgres_client.get_average_population_by_day_of_week_per_server(90),
-        REPORT_1_QUARTER_CACHE_TTL,
-    )
-
-
-def get_daily_server_population_year() -> dict[str, Optional[float]]:
-    """
-    Gets 365 days of average daily server population data.
-    Checks cache then database.
-    """
-    return get_cached_data_with_fallback(
-        "get_daily_server_population_year",
-        lambda: postgres_client.get_average_population_by_day_of_week_per_server(365),
-        REPORT_1_YEAR_CACHE_TTL,
-    )
-
-
-def get_by_hour_and_day_of_week_server_population_week() -> (
-    dict[str, dict[int, dict[int, dict[str, Optional[float]]]]]
-):
-    """
-    Gets 7 days of average hourly server population data broken down by day of week.
-    Checks cache then database.
-    """
-    return get_cached_data_with_fallback(
-        "get_by_hour_and_day_of_week_server_population_week",
-        lambda: postgres_client.get_average_population_by_hour_and_day_of_week_per_server(
+        lambda: postgres_client.async_get_average_population_by_day_of_week_per_server(
             7
         ),
         REPORT_1_WEEK_CACHE_TTL,
     )
 
 
-def get_by_hour_and_day_of_week_server_population_month() -> (
-    dict[str, dict[int, dict[int, dict[str, Optional[float]]]]]
-):
+async def get_daily_server_population_month() -> dict[str, Optional[float]]:
     """
-    Gets 28 days of average hourly server population data broken down by day of week.
+    Gets 28 days of average daily server population data.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
-        "get_by_hour_and_day_of_week_server_population_month",
-        lambda: postgres_client.get_average_population_by_hour_and_day_of_week_per_server(
+    return await async_get_cached_data_with_fallback(
+        "get_daily_server_population_month",
+        lambda: postgres_client.async_get_average_population_by_day_of_week_per_server(
             28
         ),
         REPORT_1_MONTH_CACHE_TTL,
     )
 
 
-def get_by_hour_and_day_of_week_server_population_quarter() -> (
-    dict[str, dict[int, dict[int, dict[str, Optional[float]]]]]
-):
+async def get_daily_server_population_quarter() -> dict[str, Optional[float]]:
     """
-    Gets 90 days of average hourly server population data broken down by day of week.
+    Gets 90 days of average daily server population data.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
-        "get_by_hour_and_day_of_week_server_population_quarter",
-        lambda: postgres_client.get_average_population_by_hour_and_day_of_week_per_server(
+    return await async_get_cached_data_with_fallback(
+        "get_daily_server_population_quarter",
+        lambda: postgres_client.async_get_average_population_by_day_of_week_per_server(
             90
         ),
         REPORT_1_QUARTER_CACHE_TTL,
     )
 
 
-def get_by_hour_and_day_of_week_server_population_year() -> (
+async def get_daily_server_population_year() -> dict[str, Optional[float]]:
+    """
+    Gets 365 days of average daily server population data.
+    Checks cache then database.
+    """
+    return await async_get_cached_data_with_fallback(
+        "get_daily_server_population_year",
+        lambda: postgres_client.async_get_average_population_by_day_of_week_per_server(
+            365
+        ),
+        REPORT_1_YEAR_CACHE_TTL,
+    )
+
+
+async def get_by_hour_and_day_of_week_server_population_week() -> (
+    dict[str, dict[int, dict[int, dict[str, Optional[float]]]]]
+):
+    """
+    Gets 7 days of average hourly server population data broken down by day of week.
+    Checks cache then database.
+    """
+    return await async_get_cached_data_with_fallback(
+        "get_by_hour_and_day_of_week_server_population_week",
+        lambda: postgres_client.async_get_average_population_by_hour_and_day_of_week_per_server(
+            7
+        ),
+        REPORT_1_WEEK_CACHE_TTL,
+    )
+
+
+async def get_by_hour_and_day_of_week_server_population_month() -> (
+    dict[str, dict[int, dict[int, dict[str, Optional[float]]]]]
+):
+    """
+    Gets 28 days of average hourly server population data broken down by day of week.
+    Checks cache then database.
+    """
+    return await async_get_cached_data_with_fallback(
+        "get_by_hour_and_day_of_week_server_population_month",
+        lambda: postgres_client.async_get_average_population_by_hour_and_day_of_week_per_server(
+            28
+        ),
+        REPORT_1_MONTH_CACHE_TTL,
+    )
+
+
+async def get_by_hour_and_day_of_week_server_population_quarter() -> (
+    dict[str, dict[int, dict[int, dict[str, Optional[float]]]]]
+):
+    """
+    Gets 90 days of average hourly server population data broken down by day of week.
+    Checks cache then database.
+    """
+    return await async_get_cached_data_with_fallback(
+        "get_by_hour_and_day_of_week_server_population_quarter",
+        lambda: postgres_client.async_get_average_population_by_hour_and_day_of_week_per_server(
+            90
+        ),
+        REPORT_1_QUARTER_CACHE_TTL,
+    )
+
+
+async def get_by_hour_and_day_of_week_server_population_year() -> (
     dict[str, dict[int, dict[int, dict[str, Optional[float]]]]]
 ):
     """
     Gets 365 days of average hourly server population data broken down by day of week.
     Checks cache then database.
     """
-    return get_cached_data_with_fallback(
+    return await async_get_cached_data_with_fallback(
         "get_by_hour_and_day_of_week_server_population_year",
-        lambda: postgres_client.get_average_population_by_hour_and_day_of_week_per_server(
+        lambda: postgres_client.async_get_average_population_by_hour_and_day_of_week_per_server(
             365
         ),
         REPORT_1_YEAR_CACHE_TTL,
