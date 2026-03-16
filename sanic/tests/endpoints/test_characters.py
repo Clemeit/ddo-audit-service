@@ -198,8 +198,8 @@ def test_get_character_playstyle_score_returns_calculated_score(
     )
     monkeypatch.setattr(
         character_endpoints.postgres_client,
-        "get_all_character_activity_by_character_id",
-        lambda _character_id: [{"kind": "login"}],
+        "async_get_all_character_activity_by_character_id",
+        _amock(lambda _character_id: [{"kind": "login"}]),
     )
     monkeypatch.setattr(
         character_endpoints,

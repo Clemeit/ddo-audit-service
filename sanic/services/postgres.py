@@ -5142,6 +5142,309 @@ async def async_add_character_activity(activities: list[dict]):
         raise
 
 
+# =============================================
+# Async activity Postgres functions (psycopg3)
+# =============================================
+
+
+async def async_get_all_character_activity_by_character_id(
+    character_id: int,
+    start_date: datetime = None,
+    end_date: datetime = None,
+    limit: int = MAX_CHARACTER_AGG_ACTIVITY_READ_LENGTH,
+) -> list[dict]:
+    """Get mixed activity entries (all types) for a character (async)."""
+    if not start_date:
+        start_date = datetime.now() - timedelta(days=90)
+    if not end_date:
+        end_date = datetime.now()
+
+    if (end_date - start_date).days > MAX_CHARACTER_ACTIVITY_READ_HISTORY:
+        start_date = datetime.now() - timedelta(
+            days=MAX_CHARACTER_ACTIVITY_READ_HISTORY
+        )
+        end_date = datetime.now()
+
+    limit = max(
+        1,
+        min(
+            limit if limit is not None else MAX_CHARACTER_AGG_ACTIVITY_READ_LENGTH,
+            MAX_CHARACTER_AGG_ACTIVITY_READ_LENGTH,
+        ),
+    )
+
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            """
+            SELECT timestamp, character_id, activity_type, data
+            FROM public.character_activity
+            WHERE character_id = %s
+              AND timestamp BETWEEN %s AND %s
+            ORDER BY timestamp DESC
+            LIMIT %s
+            """,
+            (
+                character_id,
+                start_date.isoformat(),
+                end_date.isoformat(),
+                limit,
+            ),
+        )
+        rows = await cursor.fetchall()
+        if not rows:
+            return []
+
+        results: list[dict] = []
+        for row in rows:
+            ts = row["timestamp"]
+            cid = row["character_id"]
+            activity_type_str = row["activity_type"]
+            data = row["data"]
+
+            try:
+                atype = CharacterActivityType(activity_type_str)
+            except Exception:
+                atype = None
+
+            built: dict
+            if atype == CharacterActivityType.LOCATION:
+                built = build_character_location_activity_from_row((ts, cid, data))
+            elif atype == CharacterActivityType.STATUS:
+                built = build_character_status_activity_from_row((ts, cid, data))
+            elif atype == CharacterActivityType.TOTAL_LEVEL:
+                built = build_character_total_level_activity_from_row((ts, cid, data))
+            elif atype == CharacterActivityType.GUILD_NAME:
+                built = build_character_guild_name_activity_from_row((ts, cid, data))
+            else:
+                built = {
+                    "timestamp": (
+                        datetime_to_datetime_string(ts)
+                        if isinstance(ts, datetime)
+                        else ""
+                    ),
+                    "character_id": int(cid),
+                    "data": data if isinstance(data, dict) else {},
+                }
+
+            built["activity_type"] = activity_type_str
+            results.append(built)
+
+        return results
+
+
+async def async_get_character_activity_by_type_and_character_id(
+    character_id: str,
+    activity_Type: CharacterActivityType,
+    start_date: datetime = None,
+    end_date: datetime = None,
+    limit: int = MAX_CHARACTER_ACTIVITY_READ_LENGTH,
+) -> list[dict]:
+    """Get activity entries of a specific type for a character (async)."""
+    if not start_date:
+        start_date = datetime.now() - timedelta(days=90)
+    if not end_date:
+        end_date = datetime.now()
+
+    if (end_date - start_date).days > MAX_CHARACTER_ACTIVITY_READ_HISTORY:
+        start_date = datetime.now() - timedelta(
+            days=MAX_CHARACTER_ACTIVITY_READ_HISTORY
+        )
+        end_date = datetime.now()
+
+    limit = max(
+        1,
+        min(
+            limit if limit is not None else MAX_CHARACTER_ACTIVITY_READ_LENGTH,
+            MAX_CHARACTER_ACTIVITY_READ_LENGTH,
+        ),
+    )
+
+    if activity_Type not in CharacterActivityType:
+        raise ValueError(f"Invalid activity type: {activity_Type}")
+
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            """
+            SELECT timestamp, character_id, data
+            FROM public.character_activity
+            WHERE character_id = %s AND activity_type = %s AND timestamp BETWEEN %s AND %s
+            ORDER BY timestamp DESC
+            LIMIT %s
+            """,
+            (
+                character_id,
+                activity_Type.value,
+                start_date.isoformat(),
+                end_date.isoformat(),
+                limit,
+            ),
+        )
+        activity = await cursor.fetchall()
+        if not activity:
+            return []
+
+        rows_as_tuples = [
+            (row["timestamp"], row["character_id"], row["data"]) for row in activity
+        ]
+
+        if activity_Type == CharacterActivityType.LOCATION:
+            return [
+                build_character_location_activity_from_row(row)
+                for row in rows_as_tuples
+            ]
+        elif activity_Type == CharacterActivityType.STATUS:
+            return [
+                build_character_status_activity_from_row(row) for row in rows_as_tuples
+            ]
+        elif activity_Type == CharacterActivityType.TOTAL_LEVEL:
+            return [
+                build_character_total_level_activity_from_row(row)
+                for row in rows_as_tuples
+            ]
+        elif activity_Type == CharacterActivityType.GUILD_NAME:
+            return [
+                build_character_guild_name_activity_from_row(row)
+                for row in rows_as_tuples
+            ]
+        else:
+            return []
+
+
+async def async_get_recent_quest_activity_by_character_id(
+    character_id: int,
+) -> list:
+    """Get recent quest activity for a character (async)."""
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            """
+            SELECT timestamp, public.character_activity.character_id, public.quests.name FROM public.character_activity
+            LEFT JOIN public.quests ON public.quests.area_id = CAST(public.character_activity.data ->> 'value' as INTEGER)
+            WHERE public.character_activity.character_id = %s AND activity_type = 'location' AND timestamp >= NOW() - INTERVAL '7 days'
+            ORDER BY timestamp DESC
+            LIMIT 500
+            """,
+            (character_id,),
+        )
+        activity = await cursor.fetchall()
+        if not activity:
+            return []
+
+        return [
+            (row["timestamp"], row["character_id"], row["name"]) for row in activity
+        ]
+
+
+async def async_get_recent_raid_activity_by_character_id(
+    character_id: int,
+) -> list[dict]:
+    """Get recent raid activity for a character (async)."""
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            """
+            SELECT timestamp, public.character_activity.character_id, public.quests.id FROM public.character_activity
+            LEFT JOIN public.quests ON public.quests.area_id = CAST(public.character_activity.data ->> 'value' as INTEGER)
+            WHERE quests.group_size = 'Raid' AND character_activity.character_id = %s AND character_activity.activity_type = 'location' AND timestamp >= NOW() - INTERVAL '5 days'
+            ORDER BY timestamp DESC
+            LIMIT 100
+            """,
+            (character_id,),
+        )
+        activities = await cursor.fetchall()
+        if not activities:
+            return []
+
+        return build_character_raid_activity_from_rows(
+            [
+                (
+                    row["timestamp"],
+                    row["character_id"],
+                    [row["id"]] if row["id"] is not None else [],
+                )
+                for row in activities
+            ]
+        )
+
+
+async def async_get_recent_raid_activity_by_character_ids(
+    character_ids: list[int],
+) -> list[dict]:
+    """Get recent raid activity for multiple characters (async)."""
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            """
+            SELECT
+                next_activity.timestamp as timestamp,
+                current_activity.character_id,
+                ARRAY_AGG(DISTINCT quests.id ORDER BY quests.id) as quest_ids
+            FROM public.character_activity current_activity
+            LEFT JOIN public.quests ON public.quests.area_id = CAST(current_activity.data ->> 'value' as INTEGER)
+            INNER JOIN LATERAL (
+                SELECT timestamp
+                FROM public.character_activity next_activity
+                WHERE next_activity.character_id = current_activity.character_id
+                    AND next_activity.activity_type = 'location'
+                    AND next_activity.timestamp > current_activity.timestamp
+                ORDER BY next_activity.timestamp ASC
+                LIMIT 1
+            ) next_activity ON true
+            WHERE quests.group_size = 'Raid'
+                AND current_activity.character_id = ANY(%s)
+                AND current_activity.activity_type = 'location'
+                AND current_activity.timestamp >= NOW() - INTERVAL '66 hours'
+            GROUP BY next_activity.timestamp, current_activity.character_id
+            ORDER BY timestamp DESC
+            LIMIT 100
+            """,
+            (character_ids,),
+        )
+        activities = await cursor.fetchall()
+        if not activities:
+            return []
+
+        return build_character_raid_activity_from_rows(
+            [
+                (row["timestamp"], row["character_id"], row["quest_ids"])
+                for row in activities
+            ]
+        )
+
+
+async def async_set_character_active_status(
+    character_id: int, active: bool, checked_at: datetime | None = None
+) -> None:
+    """Insert or update a character's active status (async)."""
+    query = """
+        INSERT INTO public.character_report_status (character_id, active, active_checked_at, updated_at)
+        VALUES (%s, %s, COALESCE(%s, NOW()), NOW())
+        ON CONFLICT (character_id) DO UPDATE
+        SET active = EXCLUDED.active,
+            active_checked_at = EXCLUDED.active_checked_at,
+            updated_at = NOW()
+    """
+    async with get_async_dict_cursor(commit=True) as cursor:
+        await cursor.execute(query, (character_id, active, checked_at))
+
+
+async def async_set_characters_active_status_bulk(
+    updates: list[tuple[int, bool, datetime | None]],
+) -> int:
+    """Bulk upsert active status for many characters (async)."""
+    if not updates:
+        return 0
+
+    query = """
+        INSERT INTO public.character_report_status (character_id, active, active_checked_at, updated_at)
+        VALUES (%s, %s, COALESCE(%s, NOW()), NOW())
+        ON CONFLICT (character_id) DO UPDATE
+        SET active = EXCLUDED.active,
+            active_checked_at = EXCLUDED.active_checked_at,
+            updated_at = NOW()
+    """
+    async with get_async_dict_cursor(commit=True) as cursor:
+        await cursor.executemany(query, updates)
+        return cursor.rowcount
+
+
 # ========================================
 # Async auth Postgres functions (psycopg3)
 # ========================================
