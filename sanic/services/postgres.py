@@ -5570,7 +5570,7 @@ async def async_get_all_guilds() -> list[dict]:
 # =============================================
 
 
-async def async_save_access_token(character_id: str, access_token: str):
+async def async_save_access_token(character_id: int | str, access_token: str):
     """Async version of save_access_token()."""
     async with get_async_dict_cursor(commit=True) as cursor:
         await cursor.execute(
@@ -5583,7 +5583,7 @@ async def async_save_access_token(character_id: str, access_token: str):
         )
 
 
-async def async_get_access_token_by_character_id(character_id: str) -> str:
+async def async_get_access_token_by_character_id(character_id: int | str) -> str:
     """Async version of get_access_token_by_character_id()."""
     async with get_async_dict_cursor(commit=False) as cursor:
         await cursor.execute(
