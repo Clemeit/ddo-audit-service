@@ -282,7 +282,9 @@ async def verify_authorization(request: Request, character_id: int):
     auth_header = request.headers.get("Authorization")
     if not auth_header:
         raise AuthorizationError("Authorization required")
-    access_token = postgres_client.get_access_token_by_character_id(character_id)
+    access_token = await postgres_client.async_get_access_token_by_character_id(
+        character_id
+    )
     if not access_token:
         raise VerificationError("This character has not been verified")
     if auth_header != access_token:

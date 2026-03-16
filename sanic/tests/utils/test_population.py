@@ -35,6 +35,30 @@ class TestGetCachedDataWithFallback:
         assert result is cached
         assert set_calls == []
 
+    def test_calls_fallback_and_sets_cache_on_miss(self, monkeypatch):
+        set_calls = []
+        # Simulate cache miss: get_by_key returns None
+        monkeypatch.setattr(population.redis_client, "get_by_key", lambda key: None)
+        monkeypatch.setattr(
+            population.redis_client,
+            "set_by_key",
+            lambda key, value, ttl=None: set_calls.append((key, value, ttl)),
+        )
+        fallback_called = False
+
+        def fallback():
+            nonlocal fallback_called
+            fallback_called = True
+            return {"from": "db"}
+
+        ttl = 60
+        result = population.get_cached_data_with_fallback(
+            "population_day", fallback, ttl
+        )
+        assert result == {"from": "db"}
+        assert fallback_called is True
+        assert set_calls == [("population_day", {"from": "db"}, ttl)]
+
     def test_returns_empty_dict_as_valid_cached_value(self, monkeypatch):
         set_calls = []
 
