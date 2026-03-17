@@ -262,3 +262,57 @@ async def update_persistent_settings(request: Request):
         return json({"data": {"settings": settings}}, status=200)
     except Exception as e:
         return json({"error": "Internal server error"}, status=500)
+
+
+@user_blueprint.patch("/settings/persistent")
+async def patch_persistent_settings(request: Request):
+    """
+    Partially update authenticated user's persistent settings in database.
+
+    Method: PATCH
+    Route: /user/settings/persistent
+
+    Requires: Valid JWT token in Authorization header
+
+    Request body:
+        {
+            "settings": {}
+        }
+
+    Returns:
+        {
+            "data": {
+                "settings": {}
+            }
+        }
+    """
+    try:
+        # User ID should be set by JWT middleware
+        user_id = getattr(request.ctx, "user_id", None)
+        if not user_id:
+            return json({"error": "Unauthorized"}, status=401)
+
+        body = request.json
+        if not body or "settings" not in body:
+            return json(
+                {"error": "Invalid request body: 'settings' field required"}, status=400
+            )
+
+        settings_patch = body.get("settings")
+        if not isinstance(settings_patch, dict):
+            return json({"error": "Settings must be a JSON object"}, status=400)
+
+        # Ensure size is reasonable (e.g., less than 1 MB)
+        if len(json_lib.dumps(settings_patch)) > 1024 * 1024:
+            return json({"error": "Settings too large"}, status=413)
+
+        # Patch settings and return the merged result.
+        merged_settings = await postgres_client.async_patch_user_settings(
+            user_id, settings_patch
+        )
+        if merged_settings is None:
+            return json({"error": "Failed to patch settings"}, status=500)
+
+        return json({"data": {"settings": merged_settings}}, status=200)
+    except Exception as e:
+        return json({"error": "Internal server error"}, status=500)

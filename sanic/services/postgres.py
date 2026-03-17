@@ -6006,3 +6006,31 @@ async def async_update_user_settings(user_id: int, settings: dict) -> bool:
     except Exception as e:
         logger.error(f"async_update_user_settings failed: {e}")
         return False
+
+
+async def async_patch_user_settings(
+    user_id: int, settings_patch: dict
+) -> Optional[dict]:
+    """Partially update user settings with top-level JSON merge semantics (async)."""
+    try:
+        async with get_async_dict_cursor(commit=True) as cursor:
+            await cursor.execute(
+                """
+                INSERT INTO user_settings (user_id, settings)
+                VALUES (%s, %s::jsonb)
+                ON CONFLICT (user_id) DO UPDATE
+                SET settings = COALESCE(user_settings.settings, '{}'::jsonb) || EXCLUDED.settings,
+                    updated_at = NOW()
+                RETURNING settings
+                """,
+                (user_id, json.dumps(settings_patch)),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return None
+
+            merged_settings = row.get("settings")
+            return merged_settings if isinstance(merged_settings, dict) else None
+    except Exception as e:
+        logger.error(f"async_patch_user_settings failed: {e}")
+        return None

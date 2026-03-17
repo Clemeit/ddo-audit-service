@@ -1,3 +1,4 @@
+import json
 from contextlib import contextmanager, asynccontextmanager
 from datetime import datetime, timedelta
 from types import SimpleNamespace
@@ -1040,3 +1041,37 @@ def test_async_set_characters_active_status_bulk_returns_rowcount(
     cursor.executemany.assert_awaited_once()
     call_args = cursor.executemany.call_args[0]
     assert len(call_args[1]) == 3
+
+
+def test_async_patch_user_settings_returns_merged_settings(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchone.return_value = {"settings": {"theme": "dark", "compact": True}}
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(postgres_service.async_patch_user_settings(9, {"theme": "dark"}))
+
+    assert result == {"theme": "dark", "compact": True}
+    cursor.execute.assert_awaited_once()
+    call_args = cursor.execute.call_args[0]
+    assert call_args[1][0] == 9
+    assert json.loads(call_args[1][1]) == {"theme": "dark"}
+
+
+def test_async_patch_user_settings_returns_none_when_no_row(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchone.return_value = None
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(postgres_service.async_patch_user_settings(9, {"theme": "dark"}))
+
+    assert result is None
+
+
+def test_async_patch_user_settings_returns_none_on_error(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.execute.side_effect = RuntimeError("db write failed")
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    result = run_async(postgres_service.async_patch_user_settings(9, {"theme": "dark"}))
+
+    assert result is None

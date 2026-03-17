@@ -305,3 +305,110 @@ def test_update_persistent_settings_returns_200_when_successful(
 
     assert response.status == 200
     assert response_json(response)["data"]["settings"]["theme"] == "dark"
+
+
+def test_patch_persistent_settings_requires_authenticated_user_id(
+    make_request, run_async, response_json
+):
+    request = make_request(
+        method="PATCH",
+        path="/v1/user/settings/persistent",
+        json_body={"settings": {}},
+    )
+
+    response = run_async(user_endpoints.patch_persistent_settings(request))
+
+    assert response.status == 401
+    assert response_json(response)["error"] == "Unauthorized"
+
+
+def test_patch_persistent_settings_returns_400_when_settings_missing(
+    make_request, run_async, response_json
+):
+    request = make_request(
+        method="PATCH",
+        path="/v1/user/settings/persistent",
+        json_body={"something_else": {}},
+        ctx=SimpleNamespace(user_id=9),
+    )
+
+    response = run_async(user_endpoints.patch_persistent_settings(request))
+
+    assert response.status == 400
+    assert "settings" in response_json(response)["error"]
+
+
+def test_patch_persistent_settings_returns_400_when_settings_not_object(
+    make_request, run_async, response_json
+):
+    request = make_request(
+        method="PATCH",
+        path="/v1/user/settings/persistent",
+        json_body={"settings": ["not", "a", "dict"]},
+        ctx=SimpleNamespace(user_id=9),
+    )
+
+    response = run_async(user_endpoints.patch_persistent_settings(request))
+
+    assert response.status == 400
+    assert response_json(response)["error"] == "Settings must be a JSON object"
+
+
+def test_patch_persistent_settings_returns_413_for_large_payload(
+    make_request, run_async, response_json
+):
+    large_value = "x" * (1024 * 1024 + 16)
+    request = make_request(
+        method="PATCH",
+        path="/v1/user/settings/persistent",
+        json_body={"settings": {"blob": large_value}},
+        ctx=SimpleNamespace(user_id=9),
+    )
+
+    response = run_async(user_endpoints.patch_persistent_settings(request))
+
+    assert response.status == 413
+    assert response_json(response)["error"] == "Settings too large"
+
+
+def test_patch_persistent_settings_returns_500_when_patch_fails(
+    monkeypatch, make_request, run_async, response_json
+):
+    monkeypatch.setattr(
+        user_endpoints.postgres_client,
+        "async_patch_user_settings",
+        _amock(lambda user_id, settings_patch: None),
+    )
+    request = make_request(
+        method="PATCH",
+        path="/v1/user/settings/persistent",
+        json_body={"settings": {"theme": "dark"}},
+        ctx=SimpleNamespace(user_id=9),
+    )
+
+    response = run_async(user_endpoints.patch_persistent_settings(request))
+
+    assert response.status == 500
+    assert response_json(response)["error"] == "Failed to patch settings"
+
+
+def test_patch_persistent_settings_returns_200_when_successful(
+    monkeypatch, make_request, run_async, response_json
+):
+    monkeypatch.setattr(
+        user_endpoints.postgres_client,
+        "async_patch_user_settings",
+        _amock(lambda user_id, settings_patch: {"theme": "dark", "compact": True}),
+    )
+    request = make_request(
+        method="PATCH",
+        path="/v1/user/settings/persistent",
+        json_body={"settings": {"theme": "dark"}},
+        ctx=SimpleNamespace(user_id=9),
+    )
+
+    response = run_async(user_endpoints.patch_persistent_settings(request))
+
+    assert response.status == 200
+    assert response_json(response)["data"]["settings"]["theme"] == "dark"
+    assert response_json(response)["data"]["settings"]["compact"] is True
