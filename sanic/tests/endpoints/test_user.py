@@ -412,3 +412,74 @@ def test_patch_persistent_settings_returns_200_when_successful(
     assert response.status == 200
     assert response_json(response)["data"]["settings"]["theme"] == "dark"
     assert response_json(response)["data"]["settings"]["compact"] is True
+
+
+def test_delete_persistent_settings_requires_authenticated_user_id(
+    make_request, run_async, response_json
+):
+    request = make_request(method="DELETE", path="/v1/user/settings/persistent")
+
+    response = run_async(user_endpoints.delete_persistent_settings(request))
+
+    assert response.status == 401
+    assert response_json(response)["error"] == "Unauthorized"
+
+
+def test_delete_persistent_settings_returns_404_when_missing(
+    monkeypatch, make_request, run_async, response_json
+):
+    monkeypatch.setattr(
+        user_endpoints.postgres_client,
+        "async_delete_user_settings",
+        _amock(lambda user_id: False),
+    )
+    request = make_request(
+        method="DELETE",
+        path="/v1/user/settings/persistent",
+        ctx=SimpleNamespace(user_id=9),
+    )
+
+    response = run_async(user_endpoints.delete_persistent_settings(request))
+
+    assert response.status == 404
+    assert response_json(response)["error"] == "Settings not found"
+
+
+def test_delete_persistent_settings_returns_500_when_delete_fails(
+    monkeypatch, make_request, run_async, response_json
+):
+    monkeypatch.setattr(
+        user_endpoints.postgres_client,
+        "async_delete_user_settings",
+        _amock(lambda user_id: None),
+    )
+    request = make_request(
+        method="DELETE",
+        path="/v1/user/settings/persistent",
+        ctx=SimpleNamespace(user_id=9),
+    )
+
+    response = run_async(user_endpoints.delete_persistent_settings(request))
+
+    assert response.status == 500
+    assert response_json(response)["error"] == "Failed to delete settings"
+
+
+def test_delete_persistent_settings_returns_200_when_successful(
+    monkeypatch, make_request, run_async, response_json
+):
+    monkeypatch.setattr(
+        user_endpoints.postgres_client,
+        "async_delete_user_settings",
+        _amock(lambda user_id: True),
+    )
+    request = make_request(
+        method="DELETE",
+        path="/v1/user/settings/persistent",
+        ctx=SimpleNamespace(user_id=9),
+    )
+
+    response = run_async(user_endpoints.delete_persistent_settings(request))
+
+    assert response.status == 200
+    assert response_json(response)["data"]["deleted"] is True

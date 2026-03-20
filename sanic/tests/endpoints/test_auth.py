@@ -376,3 +376,84 @@ def test_logout_success_returns_200(
 
     assert response.status == 200
     assert response_json(response)["data"]["message"] == "Logged out successfully"
+
+
+def test_delete_account_returns_401_without_user_id(
+    make_request, run_async, response_json
+):
+    request = make_request(method="DELETE", path="/v1/auth/account", json_body={})
+
+    response = run_async(auth_endpoints.delete_account(request))
+
+    assert response.status == 401
+    assert response_json(response)["error"] == "Unauthorized"
+
+
+def test_delete_account_returns_404_when_user_missing(
+    monkeypatch, make_request, run_async, response_json
+):
+    monkeypatch.setattr(
+        auth_endpoints.auth_service,
+        "async_delete_user_account",
+        _amock(
+            lambda user_id: (
+                False,
+                auth_endpoints.auth_service.AUTH_ERROR_USER_NOT_FOUND,
+            )
+        ),
+    )
+    request = make_request(
+        method="DELETE",
+        path="/v1/auth/account",
+        json_body={},
+        ctx=SimpleNamespace(user_id=42),
+    )
+
+    response = run_async(auth_endpoints.delete_account(request))
+
+    assert response.status == 404
+    assert response_json(response)["error"] == "User not found"
+
+
+def test_delete_account_returns_500_on_internal_error(
+    monkeypatch, make_request, run_async, response_json
+):
+    monkeypatch.setattr(
+        auth_endpoints.auth_service,
+        "async_delete_user_account",
+        _amock(
+            lambda user_id: (False, auth_endpoints.auth_service.AUTH_ERROR_INTERNAL)
+        ),
+    )
+    request = make_request(
+        method="DELETE",
+        path="/v1/auth/account",
+        json_body={},
+        ctx=SimpleNamespace(user_id=42),
+    )
+
+    response = run_async(auth_endpoints.delete_account(request))
+
+    assert response.status == 500
+    assert response_json(response)["error"] == "Failed to delete account"
+
+
+def test_delete_account_returns_200_when_successful(
+    monkeypatch, make_request, run_async, response_json
+):
+    monkeypatch.setattr(
+        auth_endpoints.auth_service,
+        "async_delete_user_account",
+        _amock(lambda user_id: (True, "")),
+    )
+    request = make_request(
+        method="DELETE",
+        path="/v1/auth/account",
+        json_body={},
+        ctx=SimpleNamespace(user_id=42),
+    )
+
+    response = run_async(auth_endpoints.delete_account(request))
+
+    assert response.status == 200
+    assert response_json(response)["data"]["message"] == "Account deleted successfully"

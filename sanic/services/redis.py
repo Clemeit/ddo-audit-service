@@ -1296,6 +1296,15 @@ async def async_cache_user_auth_version(user_id: int, auth_version: int) -> None
         pass
 
 
+async def async_clear_cached_user_auth_version(user_id: int) -> None:
+    """Remove cached auth version for a user (async)."""
+    try:
+        client = await get_async_redis_client()
+        await client.delete(f"{AUTH_USER_VERSION_PREFIX}{user_id}")
+    except Exception:
+        pass
+
+
 async def async_get_cached_auth_session(session_id: str) -> Optional[dict]:
     """Get a cached auth session by session id (async)."""
     try:

@@ -211,3 +211,24 @@ async def logout(request: Request):
     except Exception:
         logger.exception("Unhandled error in logout endpoint")
         return json({"error": "Internal server error"}, status=500)
+
+
+@auth_blueprint.delete("/account")
+async def delete_account(request: Request):
+    """Delete the authenticated user's account and related records."""
+    try:
+        user_id = getattr(request.ctx, "user_id", None)
+        if not user_id:
+            return json({"error": "Unauthorized"}, status=401)
+
+        success, error_msg = await auth_service.async_delete_user_account(int(user_id))
+        if not success:
+            if error_msg == auth_service.AUTH_ERROR_USER_NOT_FOUND:
+                return json({"error": "User not found"}, status=404)
+
+            return json({"error": "Failed to delete account"}, status=500)
+
+        return json({"data": {"message": "Account deleted successfully"}}, status=200)
+    except Exception:
+        logger.exception("Unhandled error in delete account endpoint")
+        return json({"error": "Internal server error"}, status=500)

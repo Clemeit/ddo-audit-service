@@ -6040,3 +6040,68 @@ async def async_patch_user_settings(
     except Exception as e:
         logger.error(f"async_patch_user_settings failed: {e}")
         return None
+
+
+async def async_delete_user_settings(user_id: int) -> Optional[bool]:
+    """Delete user settings row for a user (async).
+
+    Returns:
+        True when a row was deleted,
+        False when no row existed,
+        None when a database error occurred.
+    """
+    try:
+        async with get_async_dict_cursor(commit=True) as cursor:
+            await cursor.execute(
+                "DELETE FROM user_settings WHERE user_id = %s",
+                (user_id,),
+            )
+            return cursor.rowcount > 0
+    except Exception as e:
+        logger.error(f"async_delete_user_settings failed: {e}")
+        return None
+
+
+async def async_delete_user_account(user_id: int) -> Optional[dict]:
+    """Delete a user account and related rows in dependency-safe order (async).
+
+    Delete order within a single transaction:
+    1) auth_sessions
+    2) user_settings
+    3) users
+
+    Returns:
+        {"deleted": bool, "session_ids": list[str]} on success,
+        None on database error.
+    """
+    try:
+        async with get_async_dict_cursor(commit=True) as cursor:
+            await cursor.execute(
+                "SELECT session_id FROM auth_sessions WHERE user_id = %s",
+                (user_id,),
+            )
+            session_rows = await cursor.fetchall() or []
+            deleted_session_ids = [str(row["session_id"]) for row in session_rows]
+
+            await cursor.execute(
+                "DELETE FROM auth_sessions WHERE user_id = %s",
+                (user_id,),
+            )
+
+            await cursor.execute(
+                "DELETE FROM user_settings WHERE user_id = %s",
+                (user_id,),
+            )
+
+            await cursor.execute(
+                "DELETE FROM users WHERE id = %s RETURNING id",
+                (user_id,),
+            )
+            deleted_user = await cursor.fetchone()
+            if not deleted_user:
+                return {"deleted": False, "session_ids": []}
+
+            return {"deleted": True, "session_ids": deleted_session_ids}
+    except Exception as e:
+        logger.error(f"async_delete_user_account failed: {e}")
+        return None

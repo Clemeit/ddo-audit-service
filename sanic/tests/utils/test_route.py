@@ -42,5 +42,8 @@ class TestIsJwtProtected:
     def test_logout_is_jwt_protected(self):
         assert is_jwt_protected(_request("POST", "/v3/auth/logout")) is True
 
+    def test_delete_account_is_jwt_protected(self):
+        assert is_jwt_protected(_request("DELETE", "/v2/auth/account")) is True
+
     def test_non_jwt_route_is_not_protected(self):
         assert is_jwt_protected(_request("GET", "/auth/login")) is False

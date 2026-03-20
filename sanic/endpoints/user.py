@@ -316,3 +316,37 @@ async def patch_persistent_settings(request: Request):
         return json({"data": {"settings": merged_settings}}, status=200)
     except Exception as e:
         return json({"error": "Internal server error"}, status=500)
+
+
+@user_blueprint.delete("/settings/persistent")
+async def delete_persistent_settings(request: Request):
+    """
+    Delete authenticated user's persistent settings row from database.
+
+    Method: DELETE
+    Route: /user/settings/persistent
+
+    Requires: Valid JWT token in Authorization header
+
+    Returns:
+        {
+            "data": {
+                "deleted": true
+            }
+        }
+    """
+    try:
+        # User ID should be set by JWT middleware
+        user_id = getattr(request.ctx, "user_id", None)
+        if not user_id:
+            return json({"error": "Unauthorized"}, status=401)
+
+        deleted = await postgres_client.async_delete_user_settings(user_id)
+        if deleted is None:
+            return json({"error": "Failed to delete settings"}, status=500)
+        if not deleted:
+            return json({"error": "Settings not found"}, status=404)
+
+        return json({"data": {"deleted": True}}, status=200)
+    except Exception as e:
+        return json({"error": "Internal server error"}, status=500)

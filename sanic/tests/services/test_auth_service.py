@@ -759,6 +759,54 @@ def test_get_user_by_id_returns_serialized_profile(monkeypatch, run_async):
     assert profile["created_at"].startswith("2026-03-14T12:00:00")
 
 
+def test_delete_user_account_returns_not_found_when_user_missing(
+    monkeypatch, run_async
+):
+    monkeypatch.setattr(
+        auth_service.postgres_client,
+        "async_delete_user_account",
+        _amock(lambda user_id: {"deleted": False, "session_ids": []}),
+    )
+
+    success, error = run_async(auth_service.async_delete_user_account(88))
+
+    assert success is False
+    assert error == auth_service.AUTH_ERROR_USER_NOT_FOUND
+
+
+def test_delete_user_account_clears_all_relevant_cache(monkeypatch, run_async):
+    cleared_session_groups = []
+    cleared_user_versions = []
+
+    monkeypatch.setattr(
+        auth_service.postgres_client,
+        "async_delete_user_account",
+        _amock(
+            lambda user_id: {
+                "deleted": True,
+                "session_ids": ["session-a", "session-b"],
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        auth_service.redis_client,
+        "async_clear_cached_auth_sessions",
+        _amock(lambda session_ids: cleared_session_groups.append(session_ids)),
+    )
+    monkeypatch.setattr(
+        auth_service.redis_client,
+        "async_clear_cached_user_auth_version",
+        _amock(lambda user_id: cleared_user_versions.append(user_id)),
+    )
+
+    success, error = run_async(auth_service.async_delete_user_account(99))
+
+    assert success is True
+    assert error == ""
+    assert cleared_session_groups == [["session-a", "session-b"]]
+    assert cleared_user_versions == [99]
+
+
 def test_get_user_by_id_returns_none_on_failure(monkeypatch, run_async):
     def _raise_error(user_id):
         raise RuntimeError("db down")

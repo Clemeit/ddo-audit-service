@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 AUTH_ERROR_INVALID_CREDENTIALS = "invalid_credentials"
 AUTH_ERROR_INVALID_REFRESH_TOKEN = "invalid_refresh_token"
 AUTH_ERROR_USERNAME_EXISTS = "username_exists"
+AUTH_ERROR_USER_NOT_FOUND = "user_not_found"
 AUTH_ERROR_INTERNAL = "internal_error"
 
 
@@ -597,3 +598,27 @@ async def async_get_user_by_id(user_id: int) -> Optional[dict]:
         return serialize_user(user)
     except Exception:
         return None
+
+
+async def async_delete_user_account(
+    user_id: int,
+) -> Tuple[bool, str]:
+    """Delete a user account and all auth/settings rows tied to it (async)."""
+    try:
+        deletion_result = await postgres_client.async_delete_user_account(user_id)
+        if deletion_result is None:
+            return False, AUTH_ERROR_INTERNAL
+        if not deletion_result.get("deleted"):
+            return False, AUTH_ERROR_USER_NOT_FOUND
+
+        deleted_session_ids = deletion_result.get("session_ids", [])
+        if not isinstance(deleted_session_ids, list):
+            deleted_session_ids = []
+
+        await redis_client.async_clear_cached_auth_sessions(deleted_session_ids)
+        await redis_client.async_clear_cached_user_auth_version(user_id)
+
+        return True, ""
+    except Exception:
+        logger.exception("Async account deletion failed")
+        return False, AUTH_ERROR_INTERNAL
