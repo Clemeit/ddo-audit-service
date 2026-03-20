@@ -5999,8 +5999,14 @@ async def async_update_user_settings(user_id: int, settings: dict) -> bool:
     try:
         async with get_async_dict_cursor(commit=True) as cursor:
             await cursor.execute(
-                "UPDATE user_settings SET settings = %s, updated_at = NOW() WHERE user_id = %s",
-                (json.dumps(settings), user_id),
+                """
+                INSERT INTO user_settings (user_id, settings)
+                VALUES (%s, %s::jsonb)
+                ON CONFLICT (user_id) DO UPDATE
+                SET settings = EXCLUDED.settings,
+                    updated_at = NOW()
+                """,
+                (user_id, json.dumps(settings)),
             )
             return cursor.rowcount > 0
     except Exception as e:
