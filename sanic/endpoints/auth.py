@@ -243,7 +243,6 @@ async def refresh(request: Request):
 
 
 @auth_blueprint.post("/logout")
-@auth_blueprint.post("/logout")
 async def logout(request: Request):
     """Revoke the current authenticated session and clear the refresh cookie."""
     try:
