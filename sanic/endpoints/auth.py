@@ -19,7 +19,18 @@ logger = logging.getLogger(__name__)
 
 # Cookie configuration — override via environment for each deployment tier.
 _COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
-_COOKIE_SAME_SITE = os.getenv("COOKIE_SAME_SITE", "Lax")
+
+_SAME_SITE_ALLOWED = {"Lax", "Strict", "None"}
+_raw_same_site = os.getenv("COOKIE_SAME_SITE", "Lax")
+_COOKIE_SAME_SITE = _raw_same_site if _raw_same_site in _SAME_SITE_ALLOWED else "Lax"
+if _COOKIE_SAME_SITE != _raw_same_site:
+    logging.getLogger(__name__).warning(
+        "Invalid COOKIE_SAME_SITE value %r; falling back to 'Lax'", _raw_same_site
+    )
+# SameSite=None requires Secure=True per the cookies spec.
+if _COOKIE_SAME_SITE == "None":
+    _COOKIE_SECURE = True
+
 _REFRESH_COOKIE_NAME = "refresh_token"
 _REFRESH_COOKIE_PATH = "/v1/auth"
 
