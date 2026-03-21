@@ -15,7 +15,7 @@ import secrets
 import string
 import json as json_lib
 from models.user import ChangePassword
-from endpoints.auth import _set_refresh_cookie
+from utils.auth_cookies import set_refresh_cookie
 from utils.access_log import get_client_ip
 
 user_blueprint = Blueprint("user", url_prefix="/user", version=1)
@@ -174,7 +174,7 @@ async def change_user_password(request: Request):
 
         response = json({"data": response_data}, status=200)
         if refresh_token:
-            _set_refresh_cookie(response, refresh_token)
+            set_refresh_cookie(response, refresh_token)
         return response
 
     except ValidationError as e:

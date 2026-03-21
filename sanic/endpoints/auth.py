@@ -2,7 +2,6 @@
 Authentication endpoints for registration, login, refresh, and logout.
 """
 
-import os
 from sanic import Blueprint
 from sanic.response import json
 from sanic.request import Request
@@ -11,54 +10,20 @@ import logging
 
 from models.user import UserLogin, UserRegister
 import services.auth as auth_service
+from utils.auth_cookies import (
+    REFRESH_COOKIE_NAME,
+    clear_refresh_cookie,
+    set_refresh_cookie,
+)
 from utils.access_log import get_client_ip
 
 
 auth_blueprint = Blueprint("auth", url_prefix="/auth", version=1)
 logger = logging.getLogger(__name__)
 
-# Cookie configuration — override via environment for each deployment tier.
-_COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
-
-_SAME_SITE_ALLOWED = {"Lax", "Strict", "None"}
-_raw_same_site = os.getenv("COOKIE_SAME_SITE", "Lax")
-_COOKIE_SAME_SITE = _raw_same_site if _raw_same_site in _SAME_SITE_ALLOWED else "Lax"
-if _COOKIE_SAME_SITE != _raw_same_site:
-    logging.getLogger(__name__).warning(
-        "Invalid COOKIE_SAME_SITE value %r; falling back to 'Lax'", _raw_same_site
-    )
-# SameSite=None requires Secure=True per the cookies spec.
-if _COOKIE_SAME_SITE == "None":
-    _COOKIE_SECURE = True
-
-_REFRESH_COOKIE_NAME = "refresh_token"
-_REFRESH_COOKIE_PATH = "/v1/auth"
-
 
 def _get_client_metadata(request: Request) -> tuple[str, str]:
     return get_client_ip(request), request.headers.get("User-Agent", "")
-
-
-def _set_refresh_cookie(response, token: str) -> None:
-    """Attach an HttpOnly refresh-token cookie to the response."""
-    response.add_cookie(
-        _REFRESH_COOKIE_NAME,
-        token,
-        httponly=True,
-        secure=_COOKIE_SECURE,
-        samesite=_COOKIE_SAME_SITE,
-        path=_REFRESH_COOKIE_PATH,
-        max_age=auth_service.REFRESH_TOKEN_EXPIRATION_SECONDS,
-    )
-    logger.debug(
-        "Refresh cookie set (path=%s, secure=%s)", _REFRESH_COOKIE_PATH, _COOKIE_SECURE
-    )
-
-
-def _clear_refresh_cookie(response) -> None:
-    """Expire and clear the refresh-token cookie from the client."""
-    response.delete_cookie(_REFRESH_COOKIE_NAME, path=_REFRESH_COOKIE_PATH)
-    logger.debug("Refresh cookie cleared")
 
 
 @auth_blueprint.post("/register")
@@ -124,7 +89,7 @@ async def register(request: Request):
 
         response = json({"data": user_data}, status=201)
         if refresh_token:
-            _set_refresh_cookie(response, refresh_token)
+            set_refresh_cookie(response, refresh_token)
         return response
 
     except ValidationError as e:
@@ -198,7 +163,7 @@ async def login(request: Request):
 
         response = json({"data": user_data}, status=200)
         if refresh_token:
-            _set_refresh_cookie(response, refresh_token)
+            set_refresh_cookie(response, refresh_token)
         return response
 
     except ValidationError as e:
@@ -221,10 +186,10 @@ async def refresh(request: Request):
     HttpOnly cookie, not in the response body.
     """
     try:
-        raw_token = request.cookies.get(_REFRESH_COOKIE_NAME)
+        raw_token = request.cookies.get(REFRESH_COOKIE_NAME)
         if not raw_token:
             response = json({"error": "Invalid refresh token"}, status=401)
-            _clear_refresh_cookie(response)
+            clear_refresh_cookie(response)
             return response
 
         success, token_data, error_msg = await auth_service.async_refresh_session(
@@ -233,7 +198,7 @@ async def refresh(request: Request):
         if not success:
             if error_msg == auth_service.AUTH_ERROR_INVALID_REFRESH_TOKEN:
                 response = json({"error": "Invalid refresh token"}, status=401)
-                _clear_refresh_cookie(response)
+                clear_refresh_cookie(response)
                 return response
 
             logger.error("Refresh request failed due to internal error: %s", error_msg)
@@ -245,7 +210,7 @@ async def refresh(request: Request):
 
         response = json({"data": token_data}, status=200)
         if new_refresh_token:
-            _set_refresh_cookie(response, new_refresh_token)
+            set_refresh_cookie(response, new_refresh_token)
         return response
 
     except Exception:
@@ -265,7 +230,7 @@ async def logout(request: Request):
             return json({"error": "Failed to log out"}, status=500)
 
         response = json({"data": {"message": "Logged out successfully"}}, status=200)
-        _clear_refresh_cookie(response)
+        clear_refresh_cookie(response)
         return response
     except Exception:
         logger.exception("Unhandled error in logout endpoint")
@@ -290,7 +255,7 @@ async def delete_account(request: Request):
         response = json(
             {"data": {"message": "Account deleted successfully"}}, status=200
         )
-        _clear_refresh_cookie(response)
+        clear_refresh_cookie(response)
         return response
     except Exception:
         logger.exception("Unhandled error in delete account endpoint")
