@@ -83,7 +83,7 @@ async def register(request: Request):
             )
             return json({"error": "Unable to register account"}, status=500)
 
-        # Move the refresh token to an HttpOnly cookie; strip it from the JSON body.
+        # Deliver the refresh token via HttpOnly cookie only; strip it from the JSON body.
         refresh_token = user_data.pop("refresh_token", None)
         user_data.pop("refresh_expires_in", None)
 
@@ -157,7 +157,7 @@ async def login(request: Request):
             logger.error("Login request failed due to internal error: %s", error_msg)
             return json({"error": "Unable to complete login"}, status=500)
 
-        # Move the refresh token to an HttpOnly cookie; strip it from the JSON body.
+        # Deliver the refresh token via HttpOnly cookie only; strip it from the JSON body.
         refresh_token = user_data.pop("refresh_token", None)
         user_data.pop("refresh_expires_in", None)
 
@@ -204,7 +204,7 @@ async def refresh(request: Request):
             logger.error("Refresh request failed due to internal error: %s", error_msg)
             return json({"error": "Unable to refresh session"}, status=500)
 
-        # Rotate the refresh token via cookie; strip it from the JSON body.
+        # Deliver the rotated refresh token via HttpOnly cookie only; strip it from the JSON body.
         new_refresh_token = token_data.pop("refresh_token", None)
         token_data.pop("refresh_expires_in", None)
 
