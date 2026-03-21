@@ -148,6 +148,9 @@ def test_change_user_password_success_returns_new_tokens(
     data = response_json(response)["data"]
     assert data["message"] == "Password changed successfully"
     assert data["access_token"] == "new-access"
+    assert "refresh_token" not in data
+    assert "refresh_expires_in" not in data
+    assert "refresh_token" in response.cookies
 
 
 def test_get_persistent_settings_requires_authenticated_user_id(

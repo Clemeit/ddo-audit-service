@@ -477,3 +477,5 @@ def test_delete_account_returns_200_when_successful(
 
     assert response.status == 200
     assert response_json(response)["data"]["message"] == "Account deleted successfully"
+    # Refresh cookie should be cleared (expired Set-Cookie) in the response.
+    assert "refresh_token" in response.cookies

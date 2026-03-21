@@ -15,6 +15,7 @@ import secrets
 import string
 import json as json_lib
 from models.user import ChangePassword
+from endpoints.auth import _set_refresh_cookie
 from utils.access_log import get_client_ip
 
 user_blueprint = Blueprint("user", url_prefix="/user", version=1)
@@ -138,12 +139,12 @@ async def change_user_password(request: Request):
             "data": {
                 "message": "Password changed successfully",
                 "access_token": "string",
-                "refresh_token": "string",
                 "token_type": "Bearer",
-                "expires_in": 900,
-                "refresh_expires_in": 2592000
+                "expires_in": 900
             }
         }
+
+    The refresh token is delivered via an HttpOnly cookie, not in the response body.
     """
     try:
         # User ID should be set by JWT middleware
@@ -168,7 +169,13 @@ async def change_user_password(request: Request):
         if not success:
             return json({"error": error_msg}, status=400)
 
-        return json({"data": response_data}, status=200)
+        refresh_token = response_data.pop("refresh_token", None)
+        response_data.pop("refresh_expires_in", None)
+
+        response = json({"data": response_data}, status=200)
+        if refresh_token:
+            _set_refresh_cookie(response, refresh_token)
+        return response
 
     except ValidationError as e:
         errors = e.errors()

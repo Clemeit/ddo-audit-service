@@ -287,7 +287,11 @@ async def delete_account(request: Request):
 
             return json({"error": "Failed to delete account"}, status=500)
 
-        return json({"data": {"message": "Account deleted successfully"}}, status=200)
+        response = json(
+            {"data": {"message": "Account deleted successfully"}}, status=200
+        )
+        _clear_refresh_cookie(response)
+        return response
     except Exception:
         logger.exception("Unhandled error in delete account endpoint")
         return json({"error": "Internal server error"}, status=500)
