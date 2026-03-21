@@ -2,6 +2,8 @@
 User models for authentication and user management.
 """
 
+from typing import Optional
+
 from pydantic import BaseModel, Field, field_validator
 import re
 
@@ -44,12 +46,6 @@ class UserLogin(BaseModel):
     password: str
 
 
-class RefreshTokenRequest(BaseModel):
-    """Request model for refresh token rotation."""
-
-    refresh_token: str = Field(..., min_length=1)
-
-
 class UserProfile(BaseModel):
     """Response model for user profile."""
 
@@ -80,24 +76,28 @@ class UserSettings(BaseModel):
 
 
 class UserAuthResponse(BaseModel):
-    """Response model for authentication endpoints."""
+    """Response model for authentication endpoints.
+
+    The refresh token is no longer included in the response body; it is delivered
+    as an HttpOnly cookie by the auth endpoints.
+    """
 
     access_token: str
-    refresh_token: str
     token_type: str = "Bearer"
     expires_in: int = 900
-    refresh_expires_in: int = 2592000
     user: UserProfile
+    message: Optional[str] = None
 
 
 class RefreshTokenResponse(BaseModel):
-    """Response model for refresh token rotation."""
+    """Response model for refresh token rotation.
+
+    The rotated refresh token is delivered as an HttpOnly cookie, not in the body.
+    """
 
     access_token: str
-    refresh_token: str
     token_type: str = "Bearer"
     expires_in: int = 900
-    refresh_expires_in: int = 2592000
 
 
 class ChangePasswordResponse(RefreshTokenResponse):

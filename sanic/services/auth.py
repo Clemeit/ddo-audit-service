@@ -274,7 +274,6 @@ def _build_token_response(
     username: str,
     session_id: str,
     auth_version: int,
-    refresh_token: Optional[str] = None,
     user: Optional[dict] = None,
     message: Optional[str] = None,
 ) -> dict:
@@ -289,9 +288,6 @@ def _build_token_response(
         "expires_in": ACCESS_TOKEN_EXPIRATION_SECONDS,
     }
 
-    if refresh_token is not None:
-        response_data["refresh_token"] = refresh_token
-        response_data["refresh_expires_in"] = REFRESH_TOKEN_EXPIRATION_SECONDS
     if user is not None:
         response_data["user"] = user
     if message is not None:

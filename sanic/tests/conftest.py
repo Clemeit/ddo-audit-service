@@ -55,6 +55,7 @@ def make_request():
         body=None,
         ctx=None,
         ip="127.0.0.1",
+        cookies=None,
     ):
         if headers is None:
             headers = {}
@@ -62,6 +63,8 @@ def make_request():
             body = b"" if json_body is None else json.dumps(json_body).encode("utf-8")
         if ctx is None:
             ctx = SimpleNamespace()
+        if cookies is None:
+            cookies = {}
 
         return SimpleNamespace(
             method=method,
@@ -71,6 +74,7 @@ def make_request():
             body=body,
             ctx=ctx,
             ip=ip,
+            cookies=cookies,
         )
 
     return _make_request
