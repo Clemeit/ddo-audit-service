@@ -76,8 +76,6 @@ jobs:
           CHARACTER_ACTIVITY_SEED_MISSING=${{ vars.CHARACTER_ACTIVITY_SEED_MISSING }}
           CHARACTER_ACTIVITY_SEED_LIMIT=${{ vars.CHARACTER_ACTIVITY_SEED_LIMIT }}
           WORKER_LOG_LEVEL=${{ vars.WORKER_LOG_LEVEL }}
-          COOKIE_SECURE=${{ vars.COOKIE_SECURE }}
-          COOKIE_SAME_SITE=${{ vars.COOKIE_SAME_SITE }}
           EOF
 
       - name: Create prerender_token.conf file
@@ -212,8 +210,6 @@ jobs:
           CHARACTER_ACTIVITY_SEED_MISSING=${{ vars.CHARACTER_ACTIVITY_SEED_MISSING }}
           CHARACTER_ACTIVITY_SEED_LIMIT=${{ vars.CHARACTER_ACTIVITY_SEED_LIMIT }}
           WORKER_LOG_LEVEL=${{ vars.WORKER_LOG_LEVEL }}
-          COOKIE_SECURE=${{ vars.COOKIE_SECURE }}
-          COOKIE_SAME_SITE=${{ vars.COOKIE_SAME_SITE }}
           EOF
 
       - name: Create prerender_token.conf file

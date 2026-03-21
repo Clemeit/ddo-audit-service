@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from models.user import (
     ChangePassword,
     ChangePasswordResponse,
+    RefreshTokenRequest,
     RefreshTokenResponse,
     UserAuthResponse,
     UserLogin,
@@ -64,6 +65,13 @@ def test_user_login_missing_required_fields(payload):
         UserLogin(**payload)
 
 
+def test_refresh_token_request_validation():
+    assert RefreshTokenRequest(refresh_token="token-1").refresh_token == "token-1"
+
+    with pytest.raises(ValidationError):
+        RefreshTokenRequest(refresh_token="")
+
+
 def test_change_password_valid_and_invalid():
     model = ChangePassword(old_password="old-pass", new_password="NewPass!9")
     assert model.model_dump() == {
@@ -89,33 +97,39 @@ def test_user_settings_default_and_type_validation():
 def test_auth_response_defaults_and_model_dump():
     profile = UserProfile(id=7, username="user7", created_at="2026-03-15T12:00:00Z")
 
-    # refresh_token and refresh_expires_in are no longer in the response body;
-    # the refresh token is delivered as an HttpOnly cookie.
     auth_response = UserAuthResponse(
         access_token="access",
+        refresh_token="refresh",
         user=profile,
     )
     refresh_response = RefreshTokenResponse(
         access_token="access2",
+        refresh_token="refresh2",
     )
     password_response = ChangePasswordResponse(
         access_token="access3",
+        refresh_token="refresh3",
         message="Password changed",
     )
 
     assert auth_response.token_type == "Bearer"
     assert auth_response.expires_in == 900
+    assert auth_response.refresh_expires_in == 2592000
     assert auth_response.model_dump()["user"]["username"] == "user7"
 
     assert refresh_response.model_dump() == {
         "access_token": "access2",
+        "refresh_token": "refresh2",
         "token_type": "Bearer",
         "expires_in": 900,
+        "refresh_expires_in": 2592000,
     }
 
     assert password_response.model_dump() == {
         "access_token": "access3",
+        "refresh_token": "refresh3",
         "token_type": "Bearer",
         "expires_in": 900,
+        "refresh_expires_in": 2592000,
         "message": "Password changed",
     }

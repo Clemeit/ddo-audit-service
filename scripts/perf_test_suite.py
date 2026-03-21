@@ -158,7 +158,7 @@ class ScenarioTester:
 
 
 def _run_refresh_scenario(args) -> dict | None:
-    """Special handler: refresh rotates the token cookie, so run sequentially."""
+    """Special handler: refresh rotates the token, so run sequentially."""
     if not args.refresh_token:
         print("  SKIP (needs --refresh-token)")
         return None
@@ -177,9 +177,7 @@ def _run_refresh_scenario(args) -> dict | None:
         start = time.time()
         try:
             resp = session.post(
-                url,
-                cookies={"refresh_token": current_token},
-                timeout=args.timeout,
+                url, json={"refresh_token": current_token}, timeout=args.timeout
             )
             elapsed = time.time() - start
             result = RequestResult(
@@ -191,7 +189,8 @@ def _run_refresh_scenario(args) -> dict | None:
             results.append(result)
 
             if result.success:
-                new_token = resp.cookies.get("refresh_token")
+                data = resp.json().get("data", {})
+                new_token = data.get("refresh_token")
                 if new_token:
                     current_token = new_token
                 else:

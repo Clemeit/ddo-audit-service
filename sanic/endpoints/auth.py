@@ -8,13 +8,8 @@ from sanic.request import Request
 from pydantic import ValidationError
 import logging
 
-from models.user import UserLogin, UserRegister
+from models.user import RefreshTokenRequest, UserLogin, UserRegister
 import services.auth as auth_service
-from utils.auth_cookies import (
-    REFRESH_COOKIE_NAME,
-    clear_refresh_cookie,
-    set_refresh_cookie,
-)
 from utils.access_log import get_client_ip
 
 
@@ -44,8 +39,10 @@ async def register(request: Request):
         {
             "data": {
                 "access_token": "string",
+                "refresh_token": "string",
                 "token_type": "Bearer",
                 "expires_in": 900,
+                "refresh_expires_in": 2592000,
                 "user": {
                     "id": int,
                     "username": "string",
@@ -53,8 +50,6 @@ async def register(request: Request):
                 }
             }
         }
-
-    The refresh token is delivered via an HttpOnly cookie, not in the response body.
     """
     try:
         # Parse and validate request body
@@ -83,14 +78,10 @@ async def register(request: Request):
             )
             return json({"error": "Unable to register account"}, status=500)
 
-        # Move the refresh token to an HttpOnly cookie; strip it from the JSON body.
-        refresh_token = user_data.pop("refresh_token", None)
-        user_data.pop("refresh_expires_in", None)
-
-        response = json({"data": user_data}, status=201)
-        if refresh_token:
-            set_refresh_cookie(response, refresh_token)
-        return response
+        return json(
+            {"data": user_data},
+            status=201,
+        )
 
     except ValidationError as e:
         errors = e.errors()
@@ -106,7 +97,7 @@ async def register(request: Request):
 @auth_blueprint.post("/login")
 async def login(request: Request):
     """
-    Authenticate a user and return an access token.
+    Authenticate a user and return an access/refresh token pair.
 
     Method: POST
     Route: /auth/login
@@ -121,8 +112,10 @@ async def login(request: Request):
         {
             "data": {
                 "access_token": "string",
+                "refresh_token": "string",
                 "token_type": "Bearer",
                 "expires_in": 900,
+                "refresh_expires_in": 2592000,
                 "user": {
                     "id": int,
                     "username": "string",
@@ -130,8 +123,6 @@ async def login(request: Request):
                 }
             }
         }
-
-    The refresh token is delivered via an HttpOnly cookie, not in the response body.
     """
     try:
         # Parse and validate request body
@@ -157,14 +148,10 @@ async def login(request: Request):
             logger.error("Login request failed due to internal error: %s", error_msg)
             return json({"error": "Unable to complete login"}, status=500)
 
-        # Move the refresh token to an HttpOnly cookie; strip it from the JSON body.
-        refresh_token = user_data.pop("refresh_token", None)
-        user_data.pop("refresh_expires_in", None)
-
-        response = json({"data": user_data}, status=200)
-        if refresh_token:
-            set_refresh_cookie(response, refresh_token)
-        return response
+        return json(
+            {"data": user_data},
+            status=200,
+        )
 
     except ValidationError as e:
         errors = e.errors()
@@ -179,40 +166,31 @@ async def login(request: Request):
 
 @auth_blueprint.post("/refresh")
 async def refresh(request: Request):
-    """
-    Issue a new access token by reading the refresh token from an HttpOnly cookie.
-
-    The request body is ignored. The rotated refresh token is returned via a new
-    HttpOnly cookie, not in the response body.
-    """
+    """Rotate a refresh token and return a fresh access/refresh token pair."""
     try:
-        raw_token = request.cookies.get(REFRESH_COOKIE_NAME)
-        if not raw_token:
-            response = json({"error": "Invalid refresh token"}, status=401)
-            clear_refresh_cookie(response)
-            return response
+        body = request.json
+        if body is None:
+            return json({"error": "Invalid or missing JSON body"}, status=400)
+        refresh_request = RefreshTokenRequest(**body)
 
         success, token_data, error_msg = await auth_service.async_refresh_session(
-            raw_token
+            refresh_request.refresh_token
         )
         if not success:
             if error_msg == auth_service.AUTH_ERROR_INVALID_REFRESH_TOKEN:
-                response = json({"error": "Invalid refresh token"}, status=401)
-                clear_refresh_cookie(response)
-                return response
+                return json({"error": "Invalid refresh token"}, status=401)
 
             logger.error("Refresh request failed due to internal error: %s", error_msg)
             return json({"error": "Unable to refresh session"}, status=500)
 
-        # Rotate the refresh token via cookie; strip it from the JSON body.
-        new_refresh_token = token_data.pop("refresh_token", None)
-        token_data.pop("refresh_expires_in", None)
+        return json({"data": token_data}, status=200)
 
-        response = json({"data": token_data}, status=200)
-        if new_refresh_token:
-            set_refresh_cookie(response, new_refresh_token)
-        return response
-
+    except ValidationError as e:
+        errors = e.errors()
+        error_msgs = [f"{err['loc'][0]}: {err['msg']}" for err in errors]
+        return json({"error": ", ".join(error_msgs)}, status=400)
+    except TypeError:
+        return json({"error": "Invalid request body format"}, status=400)
     except Exception:
         logger.exception("Unhandled error in refresh endpoint")
         return json({"error": "Internal server error"}, status=500)
@@ -220,7 +198,7 @@ async def refresh(request: Request):
 
 @auth_blueprint.post("/logout")
 async def logout(request: Request):
-    """Revoke the current authenticated session and clear the refresh cookie."""
+    """Revoke the current authenticated session."""
     try:
         session_id = getattr(request.ctx, "session_id", None)
         if not session_id:
@@ -229,9 +207,7 @@ async def logout(request: Request):
         if not await auth_service.async_logout_session(session_id):
             return json({"error": "Failed to log out"}, status=500)
 
-        response = json({"data": {"message": "Logged out successfully"}}, status=200)
-        clear_refresh_cookie(response)
-        return response
+        return json({"data": {"message": "Logged out successfully"}}, status=200)
     except Exception:
         logger.exception("Unhandled error in logout endpoint")
         return json({"error": "Internal server error"}, status=500)
@@ -252,11 +228,7 @@ async def delete_account(request: Request):
 
             return json({"error": "Failed to delete account"}, status=500)
 
-        response = json(
-            {"data": {"message": "Account deleted successfully"}}, status=200
-        )
-        clear_refresh_cookie(response)
-        return response
+        return json({"data": {"message": "Account deleted successfully"}}, status=200)
     except Exception:
         logger.exception("Unhandled error in delete account endpoint")
         return json({"error": "Internal server error"}, status=500)
