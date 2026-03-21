@@ -140,7 +140,10 @@ def test_register_success_forwards_client_metadata(
     assert response.status == 201
     data = response_json(response)["data"]
     assert data["access_token"] == "access"
-    assert data["refresh_token"] == "refresh"
+    # Refresh token must NOT appear in the JSON body — it is delivered as a cookie.
+    assert "refresh_token" not in data
+    assert "refresh_expires_in" not in data
+    assert "refresh_token" in response.cookies
     assert captured["created_ip"] == "203.0.113.2"
     assert captured["created_user_agent"] == "pytest-agent"
 
@@ -235,18 +238,26 @@ def test_login_success_returns_200(monkeypatch, make_request, run_async, respons
     response = run_async(auth_endpoints.login(request))
 
     assert response.status == 200
-    assert response_json(response)["data"]["access_token"] == "access"
+    data = response_json(response)["data"]
+    assert data["access_token"] == "access"
+    # Refresh token must NOT appear in the JSON body — it is delivered as a cookie.
+    assert "refresh_token" not in data
+    assert "refresh_expires_in" not in data
+    assert "refresh_token" in response.cookies
 
 
-def test_refresh_returns_400_when_json_body_missing(
+def test_refresh_returns_401_when_cookie_missing(
     make_request, run_async, response_json
 ):
-    request = make_request(method="POST", path="/v1/auth/refresh", json_body=None)
+    """Refresh endpoint requires the refresh token cookie; missing → 401."""
+    request = make_request(method="POST", path="/v1/auth/refresh")
 
     response = run_async(auth_endpoints.refresh(request))
 
-    assert response.status == 400
-    assert response_json(response)["error"] == "Invalid or missing JSON body"
+    assert response.status == 401
+    assert response_json(response)["error"] == "Invalid refresh token"
+    # Cookie should be cleared (expired) in the response.
+    assert "refresh_token" in response.cookies
 
 
 def test_refresh_returns_401_for_invalid_refresh_token(
@@ -266,13 +277,15 @@ def test_refresh_returns_401_for_invalid_refresh_token(
     request = make_request(
         method="POST",
         path="/v1/auth/refresh",
-        json_body={"refresh_token": "bad"},
+        cookies={"refresh_token": "bad"},
     )
 
     response = run_async(auth_endpoints.refresh(request))
 
     assert response.status == 401
     assert response_json(response)["error"] == "Invalid refresh token"
+    # Cookie should be cleared (expired) on invalid token.
+    assert "refresh_token" in response.cookies
 
 
 def test_refresh_returns_500_for_internal_failure(
@@ -286,7 +299,7 @@ def test_refresh_returns_500_for_internal_failure(
     request = make_request(
         method="POST",
         path="/v1/auth/refresh",
-        json_body={"refresh_token": "any-token"},
+        cookies={"refresh_token": "any-token"},
     )
 
     response = run_async(auth_endpoints.refresh(request))
@@ -318,13 +331,18 @@ def test_refresh_success_returns_200(
     request = make_request(
         method="POST",
         path="/v1/auth/refresh",
-        json_body={"refresh_token": "refresh-old"},
+        cookies={"refresh_token": "refresh-old"},
     )
 
     response = run_async(auth_endpoints.refresh(request))
 
     assert response.status == 200
-    assert response_json(response)["data"]["refresh_token"] == "refresh-new"
+    data = response_json(response)["data"]
+    assert data["access_token"] == "access-new"
+    # Refresh token must NOT appear in the JSON body — it is rotated via cookie.
+    assert "refresh_token" not in data
+    assert "refresh_expires_in" not in data
+    assert "refresh_token" in response.cookies
 
 
 def test_logout_returns_401_without_session_id(make_request, run_async, response_json):
@@ -376,6 +394,8 @@ def test_logout_success_returns_200(
 
     assert response.status == 200
     assert response_json(response)["data"]["message"] == "Logged out successfully"
+    # Refresh cookie should be cleared (expired Set-Cookie) in the response.
+    assert "refresh_token" in response.cookies
 
 
 def test_delete_account_returns_401_without_user_id(
