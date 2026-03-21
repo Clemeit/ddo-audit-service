@@ -46,12 +46,6 @@ class UserLogin(BaseModel):
     password: str
 
 
-class RefreshTokenRequest(BaseModel):
-    """Request model for refresh token rotation (legacy; token is now read from cookie)."""
-
-    refresh_token: Optional[str] = None
-
-
 class UserProfile(BaseModel):
     """Response model for user profile."""
 

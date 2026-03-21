@@ -4,7 +4,6 @@ from pydantic import ValidationError
 from models.user import (
     ChangePassword,
     ChangePasswordResponse,
-    RefreshTokenRequest,
     RefreshTokenResponse,
     UserAuthResponse,
     UserLogin,
@@ -63,13 +62,6 @@ def test_user_login_and_profile_models():
 def test_user_login_missing_required_fields(payload):
     with pytest.raises(ValidationError):
         UserLogin(**payload)
-
-
-def test_refresh_token_request_validation():
-    # refresh_token is now optional (token is delivered via HttpOnly cookie).
-    assert RefreshTokenRequest(refresh_token="token-1").refresh_token == "token-1"
-    assert RefreshTokenRequest().refresh_token is None
-    assert RefreshTokenRequest(refresh_token=None).refresh_token is None
 
 
 def test_change_password_valid_and_invalid():
