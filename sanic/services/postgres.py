@@ -1098,8 +1098,6 @@ def add_or_update_characters(characters: list[dict]):
                     f"({len(batch)} characters)"
                 )
 
-        logger.info(f"Successfully added/updated {len(characters)} characters")
-
     except Exception as e:
         logger.error(f"Failed to add/update characters: {e}")
         raise
@@ -5101,8 +5099,6 @@ async def async_add_or_update_characters(characters: list[dict]):
                     f"Processed batch {i//batch_size + 1} of characters "
                     f"({len(batch)} characters)"
                 )
-
-        logger.info(f"Successfully added/updated {len(characters)} characters")
 
     except Exception as e:
         logger.error(f"Failed to add/update characters: {e}")
