@@ -300,3 +300,37 @@ def test_checkpoint_save_and_load_round_trip(monkeypatch):
     restored = quest_worker.get_quest_worker_checkpoint()
 
     assert restored == (checkpoint_ts, 456)
+
+
+def test_clamp_future_checkpoint_resets_to_window_and_zeroes_character_id(monkeypatch):
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 1, 2, 0, 0, tzinfo=timezone.utc)
+
+    monkeypatch.setattr(quest_worker, "datetime", _FrozenDateTime)
+
+    future_ts = datetime(2026, 1, 3, 0, 0, tzinfo=timezone.utc)
+    clamped_ts, clamped_char_id = quest_worker.clamp_future_checkpoint(
+        future_ts,
+        999,
+        24,
+    )
+
+    assert clamped_ts == datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+    assert clamped_char_id == 0
+
+
+def test_clamp_future_checkpoint_keeps_valid_checkpoint(monkeypatch):
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 1, 2, 0, 0, tzinfo=timezone.utc)
+
+    monkeypatch.setattr(quest_worker, "datetime", _FrozenDateTime)
+
+    ts = datetime(2026, 1, 1, 23, 0, tzinfo=timezone.utc)
+    same_ts, same_char_id = quest_worker.clamp_future_checkpoint(ts, 123, 24)
+
+    assert same_ts == ts
+    assert same_char_id == 123

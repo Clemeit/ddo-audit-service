@@ -426,6 +426,30 @@ def format_duration(seconds: float) -> str:
         return f"{hours:.1f}h"
 
 
+def clamp_future_checkpoint(
+    timestamp: datetime,
+    max_character_id: int,
+    time_window_hours: int,
+) -> Tuple[datetime, int]:
+    """Clamp future checkpoints back to a safe processing window.
+
+    If Redis contains a checkpoint in the future, the worker can become stuck
+    processing empty windows forever. In that case, rewind to now - window and
+    reset max_character_id to 0.
+    """
+    now = datetime.now(timezone.utc)
+    if timestamp <= now:
+        return timestamp, max_character_id
+
+    safe_timestamp = now - timedelta(hours=time_window_hours)
+    logger.warning(
+        "Quest worker checkpoint is in the future (%s); resetting to %s",
+        timestamp.isoformat(),
+        safe_timestamp.isoformat(),
+    )
+    return safe_timestamp, 0
+
+
 def run_worker():
     """Main worker loop - scheduled batch processing."""
     time_window_hours = 24
@@ -485,6 +509,14 @@ def run_worker():
     else:
         # Warm start: resume from checkpoint
         last_timestamp, max_character_id_at_timestamp = checkpoint
+        (
+            last_timestamp,
+            max_character_id_at_timestamp,
+        ) = clamp_future_checkpoint(
+            last_timestamp,
+            max_character_id_at_timestamp,
+            time_window_hours,
+        )
         logger.info(
             f"Found checkpoint, resuming from timestamp: {last_timestamp.isoformat()} "
             f"(max_char_id={max_character_id_at_timestamp})"
@@ -547,10 +579,12 @@ def run_worker():
                     f"Total runtime: {format_duration(total_runtime)}. "
                     f"Sleeping for {format_duration(idle_sleep)} before next check..."
                 )
+                now_utc = datetime.now(timezone.utc)
                 last_timestamp = max(
-                    datetime.now(timezone.utc) - timedelta(hours=time_window_hours),
+                    now_utc - timedelta(hours=time_window_hours),
                     last_timestamp,
                 )
+                last_timestamp = min(last_timestamp, now_utc)
                 max_character_id_at_timestamp = 0
                 time.sleep(idle_sleep)
 
@@ -567,10 +601,15 @@ def run_worker():
             )
 
             # Update checkpoint in Redis with composite (timestamp, max_character_id)
-            set_quest_worker_checkpoint(new_last_timestamp, new_max_character_id)
+            effective_timestamp, effective_max_character_id = clamp_future_checkpoint(
+                new_last_timestamp,
+                new_max_character_id,
+                time_window_hours,
+            )
+            set_quest_worker_checkpoint(effective_timestamp, effective_max_character_id)
 
             # Calculate checkpoint age for monitoring
-            checkpoint_age = datetime.now(timezone.utc) - new_last_timestamp
+            checkpoint_age = datetime.now(timezone.utc) - effective_timestamp
 
             # Build progress log message
             log_parts = [
@@ -586,11 +625,11 @@ def run_worker():
 
             logger.info(" | ".join(log_parts))
 
-            last_timestamp = new_last_timestamp
-            max_character_id_at_timestamp = new_max_character_id
+            last_timestamp = effective_timestamp
+            max_character_id_at_timestamp = effective_max_character_id
 
             # Check if we've caught up to current time
-            if datetime.now(timezone.utc) - new_last_timestamp <= timedelta(
+            if datetime.now(timezone.utc) - effective_timestamp <= timedelta(
                 hours=time_window_hours
             ):
                 # We've caught up to current time
