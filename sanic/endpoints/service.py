@@ -78,7 +78,7 @@ async def get_config(request):
     200, {"application/json": {"description": "Configuration value for the given key"}}
 )
 @openapi.response(404, description="Key not found")
-async def get_config_By_key(request, key: str):
+async def get_config_by_key(request, key: str):
     """
     Method: GET
 
@@ -91,6 +91,8 @@ async def get_config_By_key(request, key: str):
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
+    if config is None:
+        return json({"message": "Key not found"}, status=404)
     return json({"data": config})
 
 

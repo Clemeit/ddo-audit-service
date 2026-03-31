@@ -103,6 +103,7 @@ async def get_user_settings_one_time(request, user_id: str):
 @openapi.secured("BearerAuth")
 @openapi.response(200, {"application/json": {"description": "User profile data"}})
 @openapi.response(401, description="Unauthorized")
+@openapi.response(404, description="User not found")
 async def get_user_profile(request: Request):
     """
     Get authenticated user's profile.

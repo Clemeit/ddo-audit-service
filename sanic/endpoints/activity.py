@@ -26,6 +26,12 @@ class VerificationError(Exception):
 @activity_blueprint.get("/<character_id:int>/<activity_type:str>")
 @openapi.summary("Get character activity by type")
 @openapi.parameter(
+    "Authorization",
+    str,
+    location="header",
+    description="Access token used to authorize the request (non-JWT bearer format specific to this API).",
+)
+@openapi.parameter(
     "start_date", str, location="query", description="Start date filter (YYYY-MM-DD)"
 )
 @openapi.parameter(
@@ -39,6 +45,7 @@ class VerificationError(Exception):
 )
 @openapi.response(400, description="Invalid activity type or date format")
 @openapi.response(401, description="Unauthorized - access token required")
+@openapi.response(403, description="Forbidden - character not verified")
 async def get_activity_by_character_id_and_activity_type(
     request: Request, character_id: int, activity_type: str
 ):

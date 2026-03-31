@@ -9,7 +9,7 @@ from sanic_ext import openapi
 from pydantic import ValidationError
 import logging
 
-from models.user import UserLogin, UserRegister, UserAuthResponse, RefreshTokenResponse
+from models.user import UserLogin, UserRegister
 import services.auth as auth_service
 from utils.auth_cookies import (
     REFRESH_COOKIE_NAME,
@@ -30,7 +30,14 @@ def _get_client_metadata(request: Request) -> tuple[str, str]:
 @auth_blueprint.post("/register")
 @openapi.summary("Register a new user account")
 @openapi.body({"application/json": UserRegister})
-@openapi.response(201, {"application/json": UserAuthResponse})
+@openapi.response(
+    201,
+    {
+        "application/json": {
+            "description": "Access token, token type, expiry, and user info"
+        }
+    },
+)
 @openapi.response(400, description="Validation error or username already taken")
 async def register(request: Request):
     """
@@ -111,7 +118,14 @@ async def register(request: Request):
 @auth_blueprint.post("/login")
 @openapi.summary("Authenticate and receive an access token")
 @openapi.body({"application/json": UserLogin})
-@openapi.response(200, {"application/json": UserAuthResponse})
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "description": "Access token, token type, expiry, and user info"
+        }
+    },
+)
 @openapi.response(401, description="Invalid username or password")
 async def login(request: Request):
     """
@@ -188,7 +202,9 @@ async def login(request: Request):
 
 @auth_blueprint.post("/refresh")
 @openapi.summary("Refresh access token using HttpOnly refresh cookie")
-@openapi.response(200, {"application/json": RefreshTokenResponse})
+@openapi.response(
+    200, {"application/json": {"description": "New access token and token type"}}
+)
 @openapi.response(401, description="Missing or invalid refresh token")
 async def refresh(request: Request):
     """
