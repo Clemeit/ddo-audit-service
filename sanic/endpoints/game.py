@@ -9,6 +9,7 @@ from models.redis import ServerInfo
 from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
+from sanic_ext import openapi
 
 from utils.validation import is_server_name_valid
 from utils.log import logMessage
@@ -18,6 +19,15 @@ game_blueprint = Blueprint("game", url_prefix="/game", version=1)
 
 # ===== Client-facing endpoints =====
 @game_blueprint.get("/server-info")
+@openapi.summary("Get current game server info")
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "description": "Server info for all worlds from Redis cache"
+        }
+    },
+)
 async def get_game_info(request):
     """
     Method: GET
@@ -36,6 +46,11 @@ async def get_game_info(request):
 
 
 @game_blueprint.get("/server-info/<server_name:str>")
+@openapi.summary("Get game server info for a specific server")
+@openapi.response(
+    200, {"application/json": {"description": "Server info for the specified world"}}
+)
+@openapi.response(400, description="Invalid server name")
 async def get_server_info_by_server(request, server_name):
     """
     Method: GET
@@ -61,6 +76,7 @@ async def get_server_info_by_server(request, server_name):
 
 # ======= Internal endpoints ========
 @game_blueprint.patch("/server-info")
+@openapi.exclude()
 async def patch_game_info(request: Request):
     """
     Method: PATCH

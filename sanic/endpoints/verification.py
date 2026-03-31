@@ -8,8 +8,8 @@ import uuid
 
 from sanic import Blueprint
 from sanic.response import json
+from sanic_ext import openapi
 
-from models.verification import VerificationChallengeApiResponse
 from business.verification import get_challenge_word_for_character_by_character_id
 
 verification_blueprint = Blueprint(
@@ -18,6 +18,15 @@ verification_blueprint = Blueprint(
 
 
 @verification_blueprint.get("/<character_id:int>")
+@openapi.summary("Get character verification challenge")
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "description": "Verification challenge status and access token"
+        }
+    },
+)
 async def get_verification_challenge(request, character_id: int):
     """
     Method: GET

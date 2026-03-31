@@ -9,6 +9,7 @@ from sanic import Blueprint
 from sanic.response import json, empty
 from models.service import News, PageMessage, FeedbackRequest, LogRequest
 from sanic.request import Request
+from sanic_ext import openapi
 
 import uuid
 
@@ -29,6 +30,10 @@ def _clamp_int(value, default: int, *, min_value: int, max_value: int) -> int:
 
 # ===== Client-facing endpoints =====
 @service_blueprint.get("/health")
+@openapi.summary("Service health check")
+@openapi.response(
+    200, {"application/json": {"description": "Postgres and Redis health status"}}
+)
 async def get_health(request):
     """
     Method: GET
@@ -47,6 +52,10 @@ async def get_health(request):
 
 
 @service_blueprint.get("/config")
+@openapi.summary("Get service configuration")
+@openapi.response(
+    200, {"application/json": {"description": "All configuration key-value pairs"}}
+)
 async def get_config(request):
     """
     Method: GET
@@ -64,7 +73,12 @@ async def get_config(request):
 
 
 @service_blueprint.get("/config/<key:str>")
-async def get_config_By_key(request, key: str):
+@openapi.summary("Get config value by key")
+@openapi.response(
+    200, {"application/json": {"description": "Configuration value for the given key"}}
+)
+@openapi.response(404, description="Key not found")
+async def get_config_by_key(request, key: str):
     """
     Method: GET
 
@@ -77,10 +91,14 @@ async def get_config_By_key(request, key: str):
     except Exception as e:
         return json({"message": str(e)}, status=500)
 
+    if config is None:
+        return json({"message": "Key not found"}, status=404)
     return json({"data": config})
 
 
 @service_blueprint.get("/news")
+@openapi.summary("Get service news")
+@openapi.response(200, {"application/json": {"description": "List of news items"}})
 async def get_news(request):
     """
     Method: GET
@@ -98,6 +116,10 @@ async def get_news(request):
 
 
 @service_blueprint.get("/page_messages")
+@openapi.summary("Get all page messages")
+@openapi.response(
+    200, {"application/json": {"description": "List of page messages for all pages"}}
+)
 async def get_page_messages(request):
     """
     Method: GET
@@ -118,6 +140,11 @@ async def get_page_messages(request):
 
 
 @service_blueprint.get("/page_messages/<page_name:str>")
+@openapi.summary("Get page messages for a specific page")
+@openapi.response(
+    200,
+    {"application/json": {"description": "List of page messages for the given page"}},
+)
 async def get_page_message_by_page(request, page_name: str):
     """
     Method: GET
@@ -135,6 +162,12 @@ async def get_page_message_by_page(request, page_name: str):
 
 
 @service_blueprint.post("/feedback")
+@openapi.summary("Submit user feedback")
+@openapi.body({"application/json": FeedbackRequest})
+@openapi.response(
+    200, {"application/json": {"description": "Ticket ID for the submitted feedback"}}
+)
+@openapi.response(400, description="Malformed request body")
 async def post_feedback(request):
     try:
         feedback = FeedbackRequest.model_validate(request.json)
@@ -158,6 +191,10 @@ async def post_feedback(request):
 
 
 @service_blueprint.post("/log")
+@openapi.summary("Submit a client-side log event")
+@openapi.body({"application/json": LogRequest})
+@openapi.response(204, description="Log accepted")
+@openapi.response(400, description="Malformed request body")
 async def post_log(request: Request):
     try:
         log = LogRequest.model_validate(request.json)
@@ -183,6 +220,7 @@ async def post_log(request: Request):
 
 
 @service_blueprint.post("/traffic/top_ips")
+@openapi.exclude()
 async def post_traffic_top_ips(request: Request):
     """Protected endpoint: returns top IPs over a recent window.
 
@@ -213,6 +251,7 @@ async def post_traffic_top_ips(request: Request):
 
 
 @service_blueprint.post("/traffic/top_routes")
+@openapi.exclude()
 async def post_traffic_top_routes(request: Request):
     """Protected endpoint: returns top routes over a recent window.
 
@@ -247,6 +286,7 @@ async def post_traffic_top_routes(request: Request):
 
 # ======= Internal endpoints ========
 @service_blueprint.post("/news")
+@openapi.exclude()
 async def post_news(request: Request):
     """
     Method: POST
@@ -265,6 +305,7 @@ async def post_news(request: Request):
 
 
 @service_blueprint.delete("/news/<news_id:int>")
+@openapi.exclude()
 async def delete_news(request: Request, news_id: int):
     """
     Method: DELETE
@@ -282,6 +323,7 @@ async def delete_news(request: Request, news_id: int):
 
 
 @service_blueprint.post("/page_messages")
+@openapi.exclude()
 async def post_page_message(request: Request):
     """
     Method: POST
@@ -300,6 +342,7 @@ async def post_page_message(request: Request):
 
 
 @service_blueprint.delete("/cache/<key:str>")
+@openapi.exclude()
 async def delete_cache_key(request: Request, key: str):
     """
     Method: DELETE

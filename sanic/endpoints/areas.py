@@ -7,6 +7,7 @@ import services.postgres as postgres_client
 from sanic import Blueprint
 from sanic.response import json
 from sanic.request import Request
+from sanic_ext import openapi
 from utils.areas import get_areas
 
 from models.area import Area
@@ -15,6 +16,21 @@ area_blueprint = Blueprint("areas", url_prefix="/areas", version=1)
 
 
 @area_blueprint.get("")
+@openapi.summary("Get all areas")
+@openapi.parameter(
+    "force",
+    str,
+    location="query",
+    description="Set to 'true' to bypass cache and fetch from database",
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "description": "List of all areas with source and timestamp"
+        }
+    },
+)
 async def get_all_areas(request: Request):
     """
     Method: GET
@@ -35,6 +51,9 @@ async def get_all_areas(request: Request):
 
 
 @area_blueprint.get("/<area_name:str>")
+@openapi.summary("Get area by name")
+@openapi.response(200, {"application/json": {"description": "Area data"}})
+@openapi.response(404, description="Area not found")
 async def get_area_by_name(
     request: Request,
 ):
@@ -56,6 +75,9 @@ async def get_area_by_name(
 
 
 @area_blueprint.get("/<area_id:int>")
+@openapi.summary("Get area by ID")
+@openapi.response(200, {"application/json": {"description": "Area data"}})
+@openapi.response(404, description="Area not found")
 async def get_area_by_id(request: Request, area_id: int):
     """
     Method: GET
@@ -75,6 +97,7 @@ async def get_area_by_id(request: Request, area_id: int):
 
 
 @area_blueprint.post("")
+@openapi.exclude()
 async def update_areas(request: Request):
     """
     Method: POST
