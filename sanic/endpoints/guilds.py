@@ -9,6 +9,7 @@ from urllib.parse import unquote
 from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
+from sanic_ext import openapi
 
 from constants.guilds import GUILD_NAME_MAX_LENGTH, GUILD_PAGE_LENGTH
 import utils.guilds as guild_utils
@@ -20,6 +21,11 @@ guild_blueprint = Blueprint("guild", url_prefix="/guilds", version=1)
 
 # ===== Client-facing endpoints =====
 @guild_blueprint.get("/by-name/<guild_name:str>")
+@openapi.summary("Get guilds by name (all servers)")
+@openapi.response(
+    200, {"application/json": {"description": "List of guilds matching the name"}}
+)
+@openapi.response(400, description="Invalid guild name")
 async def get_guilds_by_name_deprecated(request: Request, guild_name: str):
     """
     Method: GET
@@ -50,6 +56,19 @@ async def get_guilds_by_name_deprecated(request: Request, guild_name: str):
 
 
 @guild_blueprint.get("")
+@openapi.summary("Get all guilds (paginated, filterable)")
+@openapi.parameter(
+    "page", int, location="query", description="Page number (default: 1)"
+)
+@openapi.parameter(
+    "name", str, location="query", description="Filter by guild name (partial match)"
+)
+@openapi.parameter(
+    "server", str, location="query", description="Filter by server name (partial match)"
+)
+@openapi.response(
+    200, {"application/json": {"description": "Paginated list of guilds"}}
+)
 async def get_all_guilds(request: Request):
     """
     Method: GET
@@ -95,6 +114,24 @@ async def get_all_guilds(request: Request):
 
 
 @guild_blueprint.get("/<server_name:str>/<guild_name:str>")
+@openapi.summary("Get guild by server and name")
+@openapi.parameter(
+    "page",
+    int,
+    location="query",
+    description="Page number for member history (default: 1)",
+)
+@openapi.parameter(
+    "page_size",
+    int,
+    location="query",
+    description="Members per page (default: 50, max: 200)",
+)
+@openapi.response(
+    200, {"application/json": {"description": "Guild data with online characters"}}
+)
+@openapi.response(400, description="Invalid server or guild name")
+@openapi.response(404, description="Guild not found")
 async def get_guild_by_server_name_and_guild_name(
     request: Request, server_name: str, guild_name: str
 ):

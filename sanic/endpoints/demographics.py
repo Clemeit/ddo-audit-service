@@ -5,6 +5,7 @@ Demographics endpoints.
 from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
+from sanic_ext import openapi
 
 import utils.demographics as demographics_utils
 from utils.demographics import ReportLookback
@@ -15,6 +16,15 @@ demographics_blueprint = Blueprint(
 
 
 @demographics_blueprint.get("/race/<period>")
+@openapi.summary("Get race demographics")
+@openapi.parameter(
+    "activity_level",
+    str,
+    location="query",
+    description="Filter by activity level: all, active, inactive (default: all)",
+)
+@openapi.response(200, {"application/json": {"description": "Race distribution data"}})
+@openapi.response(400, description="Invalid period or activity_level")
 async def get_population_race(request: Request, period: str):
     """
     Method: GET
@@ -70,6 +80,17 @@ async def get_population_race(request: Request, period: str):
 
 
 @demographics_blueprint.get("/gender/<period>")
+@openapi.summary("Get gender demographics")
+@openapi.parameter(
+    "activity_level",
+    str,
+    location="query",
+    description="Filter by activity level: all, active, inactive (default: all)",
+)
+@openapi.response(
+    200, {"application/json": {"description": "Gender distribution data"}}
+)
+@openapi.response(400, description="Invalid period or activity_level")
 async def get_population_gender(request: Request, period: str):
     """
     Method: GET

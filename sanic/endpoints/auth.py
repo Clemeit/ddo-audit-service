@@ -5,10 +5,11 @@ Authentication endpoints for registration, login, refresh, and logout.
 from sanic import Blueprint
 from sanic.response import json
 from sanic.request import Request
+from sanic_ext import openapi
 from pydantic import ValidationError
 import logging
 
-from models.user import UserLogin, UserRegister
+from models.user import UserLogin, UserRegister, UserAuthResponse, RefreshTokenResponse
 import services.auth as auth_service
 from utils.auth_cookies import (
     REFRESH_COOKIE_NAME,
@@ -27,6 +28,10 @@ def _get_client_metadata(request: Request) -> tuple[str, str]:
 
 
 @auth_blueprint.post("/register")
+@openapi.summary("Register a new user account")
+@openapi.body({"application/json": UserRegister})
+@openapi.response(201, {"application/json": UserAuthResponse})
+@openapi.response(400, description="Validation error or username already taken")
 async def register(request: Request):
     """
     Register a new user account.
@@ -104,6 +109,10 @@ async def register(request: Request):
 
 
 @auth_blueprint.post("/login")
+@openapi.summary("Authenticate and receive an access token")
+@openapi.body({"application/json": UserLogin})
+@openapi.response(200, {"application/json": UserAuthResponse})
+@openapi.response(401, description="Invalid username or password")
 async def login(request: Request):
     """
     Authenticate a user and return an access token.
@@ -178,6 +187,9 @@ async def login(request: Request):
 
 
 @auth_blueprint.post("/refresh")
+@openapi.summary("Refresh access token using HttpOnly refresh cookie")
+@openapi.response(200, {"application/json": RefreshTokenResponse})
+@openapi.response(401, description="Missing or invalid refresh token")
 async def refresh(request: Request):
     """
     Issue a new access token by reading the refresh token from an HttpOnly cookie.
@@ -219,6 +231,10 @@ async def refresh(request: Request):
 
 
 @auth_blueprint.post("/logout")
+@openapi.summary("Logout and revoke current session")
+@openapi.secured("BearerAuth")
+@openapi.response(200, {"application/json": {"description": "Logged out successfully"}})
+@openapi.response(401, description="Unauthorized")
 async def logout(request: Request):
     """Revoke the current authenticated session and clear the refresh cookie."""
     try:
@@ -238,6 +254,13 @@ async def logout(request: Request):
 
 
 @auth_blueprint.delete("/account")
+@openapi.summary("Delete authenticated user account")
+@openapi.secured("BearerAuth")
+@openapi.response(
+    200, {"application/json": {"description": "Account deleted successfully"}}
+)
+@openapi.response(401, description="Unauthorized")
+@openapi.response(404, description="User not found")
 async def delete_account(request: Request):
     """Delete the authenticated user's account and related records."""
     try:

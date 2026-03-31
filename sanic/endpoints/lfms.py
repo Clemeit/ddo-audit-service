@@ -10,6 +10,7 @@ from utils.validation import is_server_name_valid
 from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
+from sanic_ext import openapi
 from business.lfms import handle_incoming_lfms
 
 from utils.log import logMessage
@@ -19,6 +20,10 @@ lfm_blueprint = Blueprint("lfm", url_prefix="/lfms", version=1)
 
 # ===== Client-facing endpoints =====
 @lfm_blueprint.get("")
+@openapi.summary("Get all LFM posts from all servers")
+@openapi.response(
+    200, {"application/json": {"description": "All LFM posts keyed by server name"}}
+)
 async def get_all_lfms(request: Request):
     """
     Method: GET
@@ -34,6 +39,8 @@ async def get_all_lfms(request: Request):
 
 
 @lfm_blueprint.get("/summary")
+@openapi.summary("Get LFM post count per server")
+@openapi.response(200, {"application/json": {"description": "LFM count per server"}})
 async def get_lfm_summary(request: Request):
     """
     Method: GET
@@ -49,6 +56,11 @@ async def get_lfm_summary(request: Request):
 
 
 @lfm_blueprint.get("/<server_name:str>")
+@openapi.summary("Get LFM posts by server")
+@openapi.response(
+    200, {"application/json": {"description": "LFM posts on the specified server"}}
+)
+@openapi.response(400, description="Invalid server name")
 async def get_lfms_by_server(request: Request, server_name: str):
     """
     Method: GET
@@ -71,6 +83,7 @@ async def get_lfms_by_server(request: Request, server_name: str):
 
 # ======= Internal endpoints ========
 @lfm_blueprint.post("")
+@openapi.exclude()
 async def set_lfms(request: Request):
     """
     Method: POST
@@ -109,6 +122,7 @@ async def set_lfms(request: Request):
 
 
 @lfm_blueprint.patch("")
+@openapi.exclude()
 async def update_lfms(request: Request):
     """
     Method: PATCH

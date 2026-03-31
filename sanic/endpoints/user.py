@@ -9,6 +9,7 @@ import services.auth as auth_service
 from sanic import Blueprint
 from sanic.response import json
 from sanic.request import Request
+from sanic_ext import openapi
 from pydantic import ValidationError
 
 import secrets
@@ -23,6 +24,16 @@ user_blueprint = Blueprint("user", url_prefix="/user", version=1)
 
 # ===== One-time settings endpoints (backward compatibility) =====
 @user_blueprint.post("/settings")
+@openapi.summary("Store one-time settings and receive a retrieval ID")
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "description": "6-character uppercase ID for retrieving settings"
+        }
+    },
+)
+@openapi.response(413, description="Request body too large (max 25 KB)")
 async def post_user_settings(request):
     """
     Method: POST
@@ -63,6 +74,9 @@ async def post_user_settings(request):
 
 
 @user_blueprint.get("/settings/<user_id:str>")
+@openapi.summary("Retrieve one-time settings by ID")
+@openapi.response(200, {"application/json": {"description": "Stored settings object"}})
+@openapi.response(404, description="Settings not found or already retrieved")
 async def get_user_settings_one_time(request, user_id: str):
     """
     Method: GET
@@ -85,6 +99,10 @@ async def get_user_settings_one_time(request, user_id: str):
 
 # ===== Authenticated user endpoints =====
 @user_blueprint.get("/profile")
+@openapi.summary("Get authenticated user profile")
+@openapi.secured("BearerAuth")
+@openapi.response(200, {"application/json": {"description": "User profile data"}})
+@openapi.response(401, description="Unauthorized")
 async def get_user_profile(request: Request):
     """
     Get authenticated user's profile.
@@ -119,6 +137,19 @@ async def get_user_profile(request: Request):
 
 
 @user_blueprint.put("/profile/password")
+@openapi.summary("Change authenticated user's password")
+@openapi.secured("BearerAuth")
+@openapi.body({"application/json": ChangePassword})
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "description": "New access token; rotated refresh token delivered via cookie"
+        }
+    },
+)
+@openapi.response(400, description="Validation error or incorrect old password")
+@openapi.response(401, description="Unauthorized")
 async def change_user_password(request: Request):
     """
     Change authenticated user's password.
@@ -186,6 +217,13 @@ async def change_user_password(request: Request):
 
 
 @user_blueprint.get("/settings/persistent")
+@openapi.summary("Get authenticated user's persistent settings")
+@openapi.secured("BearerAuth")
+@openapi.response(
+    200, {"application/json": {"description": "Persistent settings object"}}
+)
+@openapi.response(401, description="Unauthorized")
+@openapi.response(404, description="Settings not found")
 async def get_persistent_settings(request: Request):
     """
     Get authenticated user's persistent settings from database.
@@ -220,6 +258,19 @@ async def get_persistent_settings(request: Request):
 
 
 @user_blueprint.put("/settings/persistent")
+@openapi.summary("Replace authenticated user's persistent settings")
+@openapi.secured("BearerAuth")
+@openapi.body(
+    {
+        "application/json": {
+            "description": "Settings object",
+            "example": {"settings": {}},
+        }
+    }
+)
+@openapi.response(200, {"application/json": {"description": "Updated settings"}})
+@openapi.response(400, description="Invalid request body")
+@openapi.response(401, description="Unauthorized")
 async def update_persistent_settings(request: Request):
     """
     Update authenticated user's persistent settings in database.
@@ -272,6 +323,19 @@ async def update_persistent_settings(request: Request):
 
 
 @user_blueprint.patch("/settings/persistent")
+@openapi.summary("Partially update authenticated user's persistent settings")
+@openapi.secured("BearerAuth")
+@openapi.body(
+    {
+        "application/json": {
+            "description": "Partial settings object to merge",
+            "example": {"settings": {}},
+        }
+    }
+)
+@openapi.response(200, {"application/json": {"description": "Merged settings"}})
+@openapi.response(400, description="Invalid request body")
+@openapi.response(401, description="Unauthorized")
 async def patch_persistent_settings(request: Request):
     """
     Partially update authenticated user's persistent settings in database.
@@ -326,6 +390,11 @@ async def patch_persistent_settings(request: Request):
 
 
 @user_blueprint.delete("/settings/persistent")
+@openapi.summary("Delete authenticated user's persistent settings")
+@openapi.secured("BearerAuth")
+@openapi.response(200, {"application/json": {"description": "Deletion confirmed"}})
+@openapi.response(401, description="Unauthorized")
+@openapi.response(404, description="Settings not found")
 async def delete_persistent_settings(request: Request):
     """
     Delete authenticated user's persistent settings row from database.

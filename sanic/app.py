@@ -39,6 +39,7 @@ from middleware.rate_limit import rate_limit_middleware
 
 from sanic import Sanic, json
 from sanic.request import Request
+from sanic_ext import Extend
 
 API_KEY = os.getenv("API_KEY", "")
 APP_HOST = os.getenv("APP_HOST", "0.0.0.0")
@@ -46,6 +47,12 @@ APP_PORT = int(os.getenv("APP_PORT", "8000"))
 
 app = Sanic("ddo-audit-server")
 app.config.REQUEST_MAX_SIZE = 500 * 1024 * 1024  # 500 MB
+app.config.API_TITLE = "DDO Audit API"
+app.config.API_VERSION = "1.0"
+app.config.API_DESCRIPTION = "Public API for the DDO Audit service, providing real-time and historical data for Dungeons & Dragons Online."
+app.config.OAS_UI_DEFAULT = "swagger"
+app.config.OAS_UI_REDOC = True
+extend = Extend(app)
 
 # Emit JSON access logs to stdout. (If the app is run under a process manager that
 # already configures logging handlers, we won't override it.)
@@ -72,6 +79,13 @@ app.blueprint(
         user_blueprint,
         auth_blueprint,
     ]
+)
+
+extend.openapi.add_security_scheme(
+    "BearerAuth",
+    "http",
+    scheme="bearer",
+    bearer_format="JWT",
 )
 
 start_game_info_polling, stop_game_info_polling = get_game_info_scheduler()

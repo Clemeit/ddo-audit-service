@@ -5,6 +5,7 @@ Population endpoints.
 from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
+from sanic_ext import openapi
 
 import utils.population as population_utils
 
@@ -12,6 +13,13 @@ population_blueprint = Blueprint("population", url_prefix="/population", version
 
 
 @population_blueprint.get("/timeseries/<period>")
+@openapi.summary("Get population time-series data")
+@openapi.response(
+    200, {"application/json": {"description": "Character and LFM counts over time"}}
+)
+@openapi.response(
+    400, description="Invalid period. Supported: day, week, month, quarter, year"
+)
 async def get_population_timeseries(request: Request, period: str):
     """
     Method: GET
@@ -51,6 +59,14 @@ async def get_population_timeseries(request: Request, period: str):
 
 
 @population_blueprint.get("/totals/<period>")
+@openapi.summary("Get summed population totals")
+@openapi.response(
+    200,
+    {"application/json": {"description": "Summed population totals for the period"}},
+)
+@openapi.response(
+    400, description="Invalid period. Supported: day, week, month, quarter, year"
+)
 async def get_population_totals(request: Request, period: str):
     """
     Method: GET
@@ -89,6 +105,18 @@ async def get_population_totals(request: Request, period: str):
 
 
 @population_blueprint.get("/unique/<period>")
+@openapi.summary("Get unique character and guild count breakdown")
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "description": "Unique character and guild data for the period"
+        }
+    },
+)
+@openapi.response(
+    400, description="Invalid period. Supported: day, week, month, quarter, year"
+)
 async def get_unique_breakdown(request: Request, period: str):
     """
     Method: GET
@@ -126,6 +154,12 @@ async def get_unique_breakdown(request: Request, period: str):
 
 
 @population_blueprint.get("/stats/<period>")
+@openapi.summary("Get character activity stats")
+@openapi.response(
+    200,
+    {"application/json": {"description": "Character activity stats for the period"}},
+)
+@openapi.response(400, description="Invalid period. Supported: quarter")
 async def get_stats_breakdown(request: Request, period: str):
     """
     Method: GET

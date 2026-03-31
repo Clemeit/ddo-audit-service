@@ -14,6 +14,7 @@ from business.characters import (
 from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
+from sanic_ext import openapi
 from urllib.parse import unquote
 
 from utils.log import logMessage
@@ -27,6 +28,11 @@ character_blueprint = Blueprint("character", url_prefix="/characters", version=1
 
 # ===== Client-facing endpoints =====
 @character_blueprint.get("")
+@openapi.summary("Get all online characters")
+@openapi.response(
+    200,
+    {"application/json": {"description": "All online characters keyed by server name"}},
+)
 async def get_all_characters(request: Request):
     """
     Method: GET
@@ -42,6 +48,10 @@ async def get_all_characters(request: Request):
 
 
 @character_blueprint.get("/summary")
+@openapi.summary("Get online character count per server")
+@openapi.response(
+    200, {"application/json": {"description": "Character count per server"}}
+)
 async def get_online_character_summary(request: Request):
     """
     Method: GET
@@ -58,6 +68,10 @@ async def get_online_character_summary(request: Request):
 
 
 @character_blueprint.get("/ids")
+@openapi.summary("Get all online character IDs")
+@openapi.response(
+    200, {"application/json": {"description": "List of all online character IDs"}}
+)
 async def get_online_character_ids(request: Request):
     """
     Method: GET
@@ -74,6 +88,12 @@ async def get_online_character_ids(request: Request):
 
 
 @character_blueprint.get("/by-server-and-guild-name/<server_name:str>/<guild_name:str>")
+@openapi.summary("Get online characters by server and guild")
+@openapi.response(
+    200,
+    {"application/json": {"description": "Online characters in the specified guild"}},
+)
+@openapi.response(400, description="Invalid server or guild name")
 async def get_online_characters_by_guild_name(
     request: Request, server_name: str, guild_name: str
 ):
@@ -113,6 +133,12 @@ async def get_online_characters_by_guild_name(
 
 
 @character_blueprint.get("/by-group-id/<group_id:int>")
+@openapi.summary("Get online characters by group ID")
+@openapi.response(
+    200,
+    {"application/json": {"description": "Online characters in the specified group"}},
+)
+@openapi.response(400, description="Invalid group ID")
 async def get_online_characters_by_group_id(request: Request, group_id: int):
     """
     Method: GET
@@ -131,6 +157,12 @@ async def get_online_characters_by_group_id(request: Request, group_id: int):
 
 
 @character_blueprint.get("/<server_name:str>")
+@openapi.summary("Get online characters by server")
+@openapi.response(
+    200,
+    {"application/json": {"description": "Online characters on the specified server"}},
+)
+@openapi.response(400, description="Invalid server name")
 async def get_characters_by_server(request: Request, server_name: str):
     """
     Method: GET
@@ -151,6 +183,16 @@ async def get_characters_by_server(request: Request, server_name: str):
 
 
 @character_blueprint.get("/<character_id:int>")
+@openapi.summary("Get character by ID")
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "description": "Character data with source (cache or database)"
+        }
+    },
+)
+@openapi.response(404, description="Character not found")
 async def get_character_by_id(request: Request, character_id: int):
     """
     Method: GET
@@ -179,6 +221,16 @@ async def get_character_by_id(request: Request, character_id: int):
 
 
 @character_blueprint.get("/ids/<character_ids:str>")
+@openapi.summary("Get characters by IDs (comma-separated, max 100)")
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "description": "Characters keyed by ID, with is_online flag"
+        }
+    },
+)
+@openapi.response(400, description="Invalid character IDs or too many requested")
 async def get_characters_by_ids(request: Request, character_ids: str):
     """
     Method: GET
@@ -228,6 +280,17 @@ async def get_characters_by_ids(request: Request, character_ids: str):
 
 
 @character_blueprint.get("/<server_name:str>/<character_name:str>")
+@openapi.summary("Get character by server and name")
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "description": "Character data. Use server_name='any' to search all servers."
+        }
+    },
+)
+@openapi.response(400, description="Invalid server or character name")
+@openapi.response(404, description="Character not found")
 async def get_character_by_server_name_and_character_name(
     request: Request, server_name: str, character_name: str
 ):
@@ -273,6 +336,11 @@ async def get_character_by_server_name_and_character_name(
 
 
 @character_blueprint.get("/playstyle-score/<character_id:int>")
+@openapi.summary("Get character active playstyle score")
+@openapi.response(
+    200, {"application/json": {"description": "Active playstyle score (0.0 – 1.0)"}}
+)
+@openapi.response(404, description="Character not found or insufficient activity data")
 async def get_character_playstyle_score(request: Request, character_id: int):
     """
     Method: GET
@@ -350,6 +418,7 @@ async def get_characters_by_character_name(character_name: str):
 
 # ======= Internal endpoints ========
 @character_blueprint.post("")
+@openapi.exclude()
 async def set_characters(request: Request):
     """
     Method: POST
@@ -388,6 +457,7 @@ async def set_characters(request: Request):
 
 
 @character_blueprint.patch("")
+@openapi.exclude()
 async def update_characters(request: Request):
     """
     Method: PATCH

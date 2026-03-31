@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from sanic import Blueprint
 from sanic.response import json
 from sanic.request import Request
+from sanic_ext import openapi
 from utils.areas import get_valid_area_ids
 from utils.quests import get_quests, get_quests_with_metrics
 from utils.quest_metrics_calc import get_quest_metrics_single
@@ -18,6 +19,11 @@ quest_blueprint = Blueprint("quests", url_prefix="/quests", version=1)
 
 
 @quest_blueprint.get("/<quest_name:str>")
+@openapi.summary("Get quest by name")
+@openapi.response(
+    200, {"application/json": {"description": "Quest data", "example": {"data": {}}}}
+)
+@openapi.response(404, description="Quest not found")
 async def get_quest_by_name(request: Request, quest_name: str):
     """
     Method: GET
@@ -37,6 +43,9 @@ async def get_quest_by_name(request: Request, quest_name: str):
 
 
 @quest_blueprint.get("/<quest_id:int>")
+@openapi.summary("Get quest by ID")
+@openapi.response(200, {"application/json": {"description": "Quest data"}})
+@openapi.response(404, description="Quest not found")
 async def get_quest_by_id(request: Request, quest_id: int):
     """
     Method: GET
@@ -56,6 +65,14 @@ async def get_quest_by_id(request: Request, quest_id: int):
 
 
 @quest_blueprint.get("")
+@openapi.summary("Get all quests")
+@openapi.parameter(
+    "force",
+    str,
+    location="query",
+    description="Set to 'true' to bypass cache and fetch from database",
+)
+@openapi.response(200, {"application/json": {"description": "List of all quests"}})
 async def get_all_quests(request: Request):
     """
     Method: GET
@@ -76,6 +93,31 @@ async def get_all_quests(request: Request):
 
 
 @quest_blueprint.get("/analytics")
+@openapi.summary("Get quests with metrics (paginated)")
+@openapi.parameter(
+    "page", int, location="query", description="1-based page number (default: 1)"
+)
+@openapi.parameter(
+    "page_size",
+    int,
+    location="query",
+    description="Items per page (default: 50, max: 200)",
+)
+@openapi.parameter(
+    "sort_by",
+    str,
+    location="query",
+    description="Field to sort by: id, name, heroic_normal_cr, epic_normal_cr, length, updated_at, heroic_xp_per_minute_relative, epic_xp_per_minute_relative, heroic_popularity_relative, epic_popularity_relative, total_sessions",
+)
+@openapi.parameter(
+    "sort_dir",
+    str,
+    location="query",
+    description="Sort direction: asc | desc (default: asc)",
+)
+@openapi.response(
+    200, {"application/json": {"description": "Paginated list of quests with metrics"}}
+)
 async def get_all_quests_with_analytics(request: Request):
     """
     Method: GET
@@ -206,6 +248,7 @@ async def get_all_quests_with_analytics(request: Request):
 
 
 @quest_blueprint.post("")
+@openapi.exclude()
 async def update_quests(request: Request):
     """
     Method: POST
@@ -275,6 +318,17 @@ quest_blueprint_v2 = Blueprint("quests_v2", url_prefix="/quests", version=2)
 
 
 @quest_blueprint_v2.get("/<quest_id:int>/analytics")
+@openapi.summary("Get analytics for a single quest")
+@openapi.parameter(
+    "refresh",
+    str,
+    location="query",
+    description="Set to 'true' to force recalculation of metrics",
+)
+@openapi.response(
+    200, {"application/json": {"description": "Quest metrics and analytics data"}}
+)
+@openapi.response(404, description="Quest not found or insufficient data")
 async def get_quest_analytics(request: Request, quest_id: int):
     """
     Method: GET
@@ -372,6 +426,21 @@ async def get_quest_analytics(request: Request, quest_id: int):
 
 
 @quest_blueprint_v2.get("")
+@openapi.summary("Get all quests with flattened metrics (v2)")
+@openapi.parameter(
+    "force",
+    str,
+    location="query",
+    description="Set to 'true' to bypass cache and fetch from database",
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "description": "List of quests with flattened metric fields, source, and timestamp"
+        }
+    },
+)
 async def get_all_quests_v2(request: Request):
     """
     Method: GET
