@@ -7,8 +7,8 @@ ENV NPM_CONFIG_PROGRESS=true
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
-# Install Chrome and dependencies
-RUN apt-get update && apt-get install -y \
+# Install Chrome and dependencies with retries for transient mirror/network failures
+RUN apt-get -o Acquire::Retries=5 update && apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
     wget \
     gnupg \
     ca-certificates \
@@ -32,8 +32,8 @@ RUN apt-get update && apt-get install -y \
     libxshmfence1 \
     && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable \
+    && apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install -y --no-install-recommends google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory

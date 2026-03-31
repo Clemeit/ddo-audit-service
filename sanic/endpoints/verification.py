@@ -8,6 +8,7 @@ import uuid
 
 from sanic import Blueprint
 from sanic.response import json
+from models.verification import VerificationChallengeApiResponse
 from sanic_ext import openapi
 
 from business.verification import get_challenge_word_for_character_by_character_id
