@@ -23,11 +23,11 @@ from utils.activity import calculate_active_playstyle_score
 from constants.server import MAX_CHARACTER_LOOKUP_IDS
 
 
-character_blueprint = Blueprint("character", url_prefix="/characters", version=1)
+characters_blueprint = Blueprint("characters", url_prefix="/characters", version=1)
 
 
 # ===== Client-facing endpoints =====
-@character_blueprint.get("")
+@characters_blueprint.get("")
 @openapi.summary("Get all online characters")
 @openapi.response(
     200,
@@ -47,7 +47,7 @@ async def get_all_characters(request: Request):
         return json({"message": str(e)}, status=500)
 
 
-@character_blueprint.get("/summary")
+@characters_blueprint.get("/summary")
 @openapi.summary("Get online character count per server")
 @openapi.response(
     200, {"application/json": {"description": "Character count per server"}}
@@ -67,7 +67,7 @@ async def get_online_character_summary(request: Request):
         return json({"message": str(e)}, status=500)
 
 
-@character_blueprint.get("/ids")
+@characters_blueprint.get("/ids")
 @openapi.summary("Get all online character IDs")
 @openapi.response(
     200, {"application/json": {"description": "List of all online character IDs"}}
@@ -87,7 +87,9 @@ async def get_online_character_ids(request: Request):
         return json({"message": str(e)}, status=500)
 
 
-@character_blueprint.get("/by-server-and-guild-name/<server_name:str>/<guild_name:str>")
+@characters_blueprint.get(
+    "/by-server-and-guild-name/<server_name:str>/<guild_name:str>"
+)
 @openapi.summary("Get online characters by server and guild")
 @openapi.response(
     200,
@@ -132,7 +134,7 @@ async def get_online_characters_by_guild_name(
         return json({"message": str(e)}, status=500)
 
 
-@character_blueprint.get("/by-group-id/<group_id:int>")
+@characters_blueprint.get("/by-group-id/<group_id:int>")
 @openapi.summary("Get online characters by group ID")
 @openapi.response(
     200,
@@ -156,7 +158,7 @@ async def get_online_characters_by_group_id(request: Request, group_id: int):
         return json({"message": str(e)}, status=500)
 
 
-@character_blueprint.get("/<server_name:str>")
+@characters_blueprint.get("/<server_name:str>")
 @openapi.summary("Get online characters by server")
 @openapi.response(
     200,
@@ -182,7 +184,7 @@ async def get_characters_by_server(request: Request, server_name: str):
         return json({"message": str(e)}, status=500)
 
 
-@character_blueprint.get("/<character_id:int>")
+@characters_blueprint.get("/<character_id:int>")
 @openapi.summary("Get character by ID")
 @openapi.response(
     200,
@@ -220,7 +222,7 @@ async def get_character_by_id(request: Request, character_id: int):
     return json({"data": character, "source": source})
 
 
-@character_blueprint.get("/ids/<character_ids:str>")
+@characters_blueprint.get("/ids/<character_ids:str>")
 @openapi.summary("Get characters by IDs (comma-separated, max 100)")
 @openapi.response(
     200,
@@ -279,7 +281,7 @@ async def get_characters_by_ids(request: Request, character_ids: str):
     return json({"data": discovered_characters})
 
 
-@character_blueprint.get("/<server_name:str>/<character_name:str>")
+@characters_blueprint.get("/<server_name:str>/<character_name:str>")
 @openapi.summary("Get character by server and name")
 @openapi.response(
     200,
@@ -335,7 +337,7 @@ async def get_character_by_server_name_and_character_name(
     return json({"data": found_character, "source": source})
 
 
-@character_blueprint.get("/playstyle-score/<character_id:int>")
+@characters_blueprint.get("/playstyle-score/<character_id:int>")
 @openapi.summary("Get character active playstyle score")
 @openapi.response(
     200, {"application/json": {"description": "Active playstyle score (0.0 – 1.0)"}}
@@ -417,7 +419,7 @@ async def get_characters_by_character_name(character_name: str):
 
 
 # ======= Internal endpoints ========
-@character_blueprint.post("")
+@characters_blueprint.post("")
 @openapi.exclude()
 async def set_characters(request: Request):
     """
@@ -456,7 +458,7 @@ async def set_characters(request: Request):
     return json({"message": "success"})
 
 
-@character_blueprint.patch("")
+@characters_blueprint.patch("")
 @openapi.exclude()
 async def update_characters(request: Request):
     """

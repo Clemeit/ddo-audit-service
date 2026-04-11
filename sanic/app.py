@@ -3,7 +3,7 @@ import logging
 import services.redis as redis_client
 
 from endpoints.activity import activity_blueprint
-from endpoints.characters import character_blueprint
+from endpoints.characters import characters_blueprint
 from endpoints.game import game_blueprint
 from endpoints.population import population_blueprint
 from endpoints.health import health_blueprint
@@ -52,6 +52,11 @@ app.config.API_VERSION = "1.0"
 app.config.API_DESCRIPTION = "Public API for the DDO Audit service, providing real-time and historical data for Dungeons & Dragons Online."
 app.config.OAS_UI_DEFAULT = "swagger"
 app.config.OAS_UI_REDOC = True
+app.config.SWAGGER_UI_CONFIGURATION = {
+    "apisSorter": "alpha",
+    "operationsSorter": "alpha",
+    "docExpansion": "list",  # collapse all endpoint groups by default
+}
 extend = Extend(app)
 
 # Emit JSON access logs to stdout. (If the app is run under a process manager that
@@ -63,7 +68,7 @@ access_logger = logging.getLogger("access")
 
 app.blueprint(
     [
-        character_blueprint,
+        characters_blueprint,
         lfm_blueprint,
         activity_blueprint,
         health_blueprint,
