@@ -50,7 +50,6 @@ from services.redis import (  # type: ignore
 )
 from models.quest_session import QuestSession  # type: ignore
 
-
 logger = logging.getLogger("quest_session_worker")
 logging.basicConfig(
     level=os.getenv("WORKER_LOG_LEVEL", "INFO"),
@@ -62,6 +61,13 @@ QUEST_AREA_TO_ID: Dict[int, int] = {}
 QUEST_ID_TO_AREA: Dict[int, int] = {}
 # Quest IDs to exclude due to non-unique area mappings
 EXCLUDED_QUEST_IDS: set = set()
+# Character IDs to exclude from session tracking entirely
+# Set via QUEST_WORKER_EXCLUDED_CHARACTER_IDS env var (comma-separated integers)
+EXCLUDED_CHARACTER_IDS: set = set(
+    int(x.strip())
+    for x in os.getenv("QUEST_WORKER_EXCLUDED_CHARACTER_IDS", "").split(",")
+    if x.strip().lstrip("-").isdigit()
+)
 
 
 def env_int(name: str, default: int) -> int:
@@ -341,6 +347,10 @@ def process_batch(
     filtered_session_count = 0
 
     for character_id, char_activities in by_character.items():
+        # Skip excluded characters entirely
+        if character_id in EXCLUDED_CHARACTER_IDS:
+            continue
+
         # Sort chronologically (should already be sorted, but ensure it)
         char_activities.sort(key=lambda x: x[0])
 
