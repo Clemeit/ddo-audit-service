@@ -69,9 +69,18 @@ def iter_sse_events(response: requests.Response):
 
 
 def apply_snapshot(state: dict[str, Any], raw_data: str) -> None:
-    """Replace the entire local state with the snapshot payload."""
+    """Replace the entire local state with the snapshot payload.
+
+    Handles both the raw ID→entity mapping (v1-style) and the v2 envelope
+    format ``{type, seq, epoch, server, sent_at, data}`` by unwrapping the
+    inner ``data`` field when the envelope is detected.
+    """
     state.clear()
-    for k, v in json.loads(raw_data).items():
+    parsed = json.loads(raw_data)
+    # v2 envelope: top-level keys include "type" and "data"
+    if isinstance(parsed, dict) and "type" in parsed and "data" in parsed:
+        parsed = parsed["data"]
+    for k, v in parsed.items():
         state[str(k)] = v
 
 
@@ -167,7 +176,8 @@ def compare(
     if deep:
         common = v2_ids & v1_ids
         field_drift_count = 0
-        for id_ in sorted(common, key=lambda x: int(x) if x.isdigit() else x):
+        sorted_common = sorted(common, key=lambda x: int(x) if x.isdigit() else x)
+        for loop_idx, id_ in enumerate(sorted_common):
             v2_entity = drop_nulls(v2_state[id_])
             v1_entity = drop_nulls(v1_data[str(id_)])
             field_diffs: list[str] = []
@@ -181,7 +191,7 @@ def compare(
                 # Show first 5 differing fields per entity to keep output readable
                 diffs.append(f"  ID {id_}: {'; '.join(field_diffs[:5])}")
                 if field_drift_count >= 10:
-                    remaining = len(common) - list(sorted(common)).index(id_) - 1
+                    remaining = len(sorted_common) - loop_idx - 1
                     if remaining > 0:
                         diffs.append(
                             f"  … (field diffs truncated, {remaining} more IDs not shown)"
