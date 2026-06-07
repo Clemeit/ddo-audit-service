@@ -62,7 +62,9 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
                 if updates or removals:
                     delta = {"updates": updates, "removals": removals}
                     sse_message = sse_service.format_sse("delta", json.dumps(delta))
-                    sse_service.broadcast(sse_service.lfm_queues, server_name, sse_message)
+                    sse_service.broadcast(
+                        sse_service.lfm_queues, server_name, sse_message
+                    )
 
 
 def get_lfm_activity(

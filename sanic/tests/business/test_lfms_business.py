@@ -3,7 +3,6 @@ from models.api import LfmRequestApiModel, LfmRequestType
 from models.character import Character
 from models.lfm import Lfm, LfmActivity, LfmActivityEvent, LfmActivityType
 
-
 _MISSING = object()
 
 
@@ -341,7 +340,9 @@ def _sse_broadcast_setup_lfms(monkeypatch, *, sse_server="cormyr", previous_cach
     monkeypatch.setattr(
         lfms_business,
         "hydrate_lfms_with_activity",
-        lambda incoming, _activity: {k: {**v, "activity": []} for k, v in incoming.items()},
+        lambda incoming, _activity: {
+            k: {**v, "activity": []} for k, v in incoming.items()
+        },
     )
     monkeypatch.setattr(
         lfms_business.redis_client,
@@ -363,7 +364,8 @@ def _sse_broadcast_setup_lfms(monkeypatch, *, sse_server="cormyr", previous_cach
         "broadcast",
         lambda registry, server_name, message: broadcast_calls.append(
             {"registry": registry, "server_name": server_name, "message": message}
-        ) or 0,
+        )
+        or 0,
     )
     return broadcast_calls
 
@@ -401,13 +403,17 @@ def test_handle_incoming_lfms_broadcasts_delta_for_sse_server(monkeypatch):
     assert broadcast_calls[0]["server_name"] == "cormyr"
     assert "event: delta" in broadcast_calls[0]["message"]
     import json as _json
+
     payload = _json.loads(broadcast_calls[0]["message"].split("data: ", 1)[1].strip())
-    assert set(payload["removals"]) == {1}   # 99 filtered out — not on this server
+    assert set(payload["removals"]) == {1}  # 99 filtered out — not on this server
 
 
 def test_handle_incoming_lfms_delta_removals_filtered_to_server(monkeypatch):
     # When deleted_ids spans multiple servers, each server only sees its own IDs.
-    previous_cache = {10: _lfm(10, server_name="cormyr"), 20: _lfm(20, server_name="cormyr")}
+    previous_cache = {
+        10: _lfm(10, server_name="cormyr"),
+        20: _lfm(20, server_name="cormyr"),
+    }
     broadcast_calls = _sse_broadcast_setup_lfms(
         monkeypatch, sse_server="cormyr", previous_cache=previous_cache
     )
@@ -420,6 +426,7 @@ def test_handle_incoming_lfms_delta_removals_filtered_to_server(monkeypatch):
 
     assert len(broadcast_calls) == 1
     import json as _json
+
     payload = _json.loads(broadcast_calls[0]["message"].split("data: ", 1)[1].strip())
     assert set(payload["removals"]) == {10, 20}
 
@@ -442,8 +449,8 @@ def test_handle_incoming_lfms_skips_broadcast_for_empty_delta(monkeypatch):
     broadcast_calls = _sse_broadcast_setup_lfms(monkeypatch, sse_server="cormyr")
 
     request_body = LfmRequestApiModel(
-        lfms=[],        # no incoming LFMs
-        deleted_ids=[], # no deletions
+        lfms=[],  # no incoming LFMs
+        deleted_ids=[],  # no deletions
     )
     lfms_business.handle_incoming_lfms(request_body, LfmRequestType.update)
 

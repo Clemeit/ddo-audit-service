@@ -99,15 +99,19 @@ async def handle_incoming_characters(
                 sse_message = sse_service.format_sse(
                     "snapshot", json.dumps(incoming_characters)
                 )
-                sse_service.broadcast(sse_service.character_queues, server_name, sse_message)
+                sse_service.broadcast(
+                    sse_service.character_queues, server_name, sse_message
+                )
             elif type == CharacterRequestType.update:
                 updates = list(incoming_characters.values())
                 removals = list(character_ids_we_can_save)
                 if updates or removals:
                     delta = {"updates": updates, "removals": removals}
                     sse_message = sse_service.format_sse("delta", json.dumps(delta))
-                    sse_service.broadcast(sse_service.character_queues, server_name, sse_message)
-        
+                    sse_service.broadcast(
+                        sse_service.character_queues, server_name, sse_message
+                    )
+
     # redis_client.save_snapshot_of_characters(str(uuid.uuid7()))
 
     # persist on characters that logged off to the database
