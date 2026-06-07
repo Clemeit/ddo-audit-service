@@ -825,6 +825,18 @@ def update_characters_by_server_name(
         )
 
 
+def save_snapshot_of_character_entry(uuid: str):
+    """Save a full snapshot of the character entry under unique uuid."""
+    with get_redis_client() as client:
+        redis_key = f"character_snapshot:{uuid}"
+        client.json().set(
+            name=redis_key,
+            path="$",
+            obj=get_all_characters()
+        )
+        client.expire(redis_key, 60)
+
+
 def delete_characters_by_id_and_server_name(character_ids: list[int], server_name: str):
     """Delete characters by ID and server name"""
     if not character_ids:

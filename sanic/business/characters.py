@@ -1,3 +1,5 @@
+import uuid
+
 import services.postgres as postgres_client
 import services.redis as redis_client
 from constants.activity import CharacterActivityType
@@ -15,7 +17,7 @@ async def handle_incoming_characters(
     type: CharacterRequestType,
 ):
     # useful stuff
-    deleted_ids = set(request_body.deleted_ids)
+    deleted_ids = set(request_body.deleted_ids or [])
 
     # set up the main dicts
     characters_by_server_name: dict[str, ServerCharacterData] = {
@@ -26,15 +28,16 @@ async def handle_incoming_characters(
     characters_to_persist_to_db: list[dict] = []
 
     # organize the characters into their servers
-    for character in request_body.characters:
-        server_name_lower = character.server_name.lower()
-        if not server_name_lower in SERVER_NAMES_LOWERCASE:
-            continue
+    if request_body.characters is not None:
+        for character in request_body.characters:
+            server_name_lower = (character.server_name or "").lower()
+            if not server_name_lower in SERVER_NAMES_LOWERCASE:
+                continue
 
-        character.last_update = get_current_datetime_string()
-        characters_by_server_name[server_name_lower].characters[
-            character.id
-        ] = character
+            character.last_update = get_current_datetime_string()
+            characters_by_server_name[server_name_lower].characters[
+                character.id
+            ] = character
 
     # go through each server...
     for server_name, server_character_data in characters_by_server_name.items():
@@ -85,8 +88,10 @@ async def handle_incoming_characters(
                 incoming_characters, server_name
             )
             redis_client.delete_characters_by_id_and_server_name(
-                character_ids_we_can_save, server_name
+                list(character_ids_we_can_save), server_name
             )
+        
+        redis_client.save_snapshot_of_character_entry(str(uuid.uuid7()))
 
     # persist on characters that logged off to the database
     await persist_deleted_characters_to_db(characters_to_persist_to_db)
