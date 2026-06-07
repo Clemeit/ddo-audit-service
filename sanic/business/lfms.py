@@ -51,9 +51,14 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
                     "snapshot", json.dumps(hydrated_lfms)
                 )
             elif type == LfmRequestType.update:
+                # Only include IDs that were actually on this server so we don't
+                # send spurious removals from other servers to subscribed clients.
+                server_deleted_ids = deleted_ids.intersection(
+                    set(previous_lfms_data.keys())
+                )
                 delta = {
                     "updates": list(hydrated_lfms.values()),
-                    "removals": list(deleted_ids),
+                    "removals": list(server_deleted_ids),
                 }
                 sse_message = sse_service.format_sse("delta", json.dumps(delta))
             sse_service.broadcast(sse_service.lfm_queues, server_name, sse_message)

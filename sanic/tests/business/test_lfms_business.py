@@ -318,9 +318,11 @@ def test_handle_incoming_lfms_update_calls_update_and_delete(monkeypatch):
 # ===== SSE broadcast tests =====
 
 
-def _sse_broadcast_setup_lfms(monkeypatch, *, sse_server="cormyr"):
+def _sse_broadcast_setup_lfms(monkeypatch, *, sse_server="cormyr", previous_cache=None):
     """Shared redis/activity mocks for LFM SSE broadcast tests."""
     broadcast_calls = []
+    if previous_cache is None:
+        previous_cache = {}
     monkeypatch.setattr(lfms_business, "SERVER_NAMES_LOWERCASE", [sse_server])
     monkeypatch.setattr(lfms_business, "SSE_SERVER_NAMES_LOWERCASE", ["cormyr"])
     monkeypatch.setattr(
@@ -329,7 +331,7 @@ def _sse_broadcast_setup_lfms(monkeypatch, *, sse_server="cormyr"):
     monkeypatch.setattr(
         lfms_business.redis_client,
         "get_lfms_by_server_name",
-        lambda _server_name: {},
+        lambda _server_name: previous_cache,
     )
     monkeypatch.setattr(
         lfms_business,
@@ -382,17 +384,44 @@ def test_handle_incoming_lfms_broadcasts_snapshot_for_sse_server(monkeypatch):
 
 
 def test_handle_incoming_lfms_broadcasts_delta_for_sse_server(monkeypatch):
-    broadcast_calls = _sse_broadcast_setup_lfms(monkeypatch, sse_server="cormyr")
+    # LFM 1 was on this server previously; LFM 99 was on a different server.
+    # Only LFM 1 should appear in the SSE delta removals.
+    previous_cache = {1: _lfm(1, server_name="cormyr")}
+    broadcast_calls = _sse_broadcast_setup_lfms(
+        monkeypatch, sse_server="cormyr", previous_cache=previous_cache
+    )
 
     request_body = LfmRequestApiModel(
-        lfms=[_lfm(1, server_name="cormyr", comment="looking")],
-        deleted_ids=[],
+        lfms=[_lfm(2, server_name="cormyr", comment="looking")],
+        deleted_ids=[1, 99],  # 99 is from another server
     )
     lfms_business.handle_incoming_lfms(request_body, LfmRequestType.update)
 
     assert len(broadcast_calls) == 1
     assert broadcast_calls[0]["server_name"] == "cormyr"
     assert "event: delta" in broadcast_calls[0]["message"]
+    import json as _json
+    payload = _json.loads(broadcast_calls[0]["message"].split("data: ", 1)[1].strip())
+    assert set(payload["removals"]) == {1}   # 99 filtered out — not on this server
+
+
+def test_handle_incoming_lfms_delta_removals_filtered_to_server(monkeypatch):
+    # When deleted_ids spans multiple servers, each server only sees its own IDs.
+    previous_cache = {10: _lfm(10, server_name="cormyr"), 20: _lfm(20, server_name="cormyr")}
+    broadcast_calls = _sse_broadcast_setup_lfms(
+        monkeypatch, sse_server="cormyr", previous_cache=previous_cache
+    )
+
+    request_body = LfmRequestApiModel(
+        lfms=[],
+        deleted_ids=[10, 20, 30, 40],  # 30 and 40 are from other servers
+    )
+    lfms_business.handle_incoming_lfms(request_body, LfmRequestType.update)
+
+    assert len(broadcast_calls) == 1
+    import json as _json
+    payload = _json.loads(broadcast_calls[0]["message"].split("data: ", 1)[1].strip())
+    assert set(payload["removals"]) == {10, 20}
 
 
 def test_handle_incoming_lfms_skips_broadcast_for_non_sse_server(monkeypatch):
