@@ -458,6 +458,7 @@ async def character_stream(request: Request, server_name: str):
         await response.send(sse_service.format_sse("close", "{}"))
     finally:
         sse_service.unregister(sse_service.character_queues, server_name.lower(), queue)
+    return response
 # ===================================
 
 

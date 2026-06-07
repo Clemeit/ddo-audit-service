@@ -313,3 +313,96 @@ def test_handle_incoming_lfms_update_calls_update_and_delete(monkeypatch):
     assert update_calls == [(expected_hydrated, "alpha")]
     assert delete_calls == [({100, 200}, "alpha")]
     assert set_calls == []
+
+
+# ===== SSE broadcast tests =====
+
+
+def _sse_broadcast_setup_lfms(monkeypatch, *, sse_server="cormyr"):
+    """Shared redis/activity mocks for LFM SSE broadcast tests."""
+    broadcast_calls = []
+    monkeypatch.setattr(lfms_business, "SERVER_NAMES_LOWERCASE", [sse_server])
+    monkeypatch.setattr(lfms_business, "SSE_SERVER_NAMES_LOWERCASE", ["cormyr"])
+    monkeypatch.setattr(
+        lfms_business, "get_current_datetime_string", lambda: "2026-06-07T00:00:00Z"
+    )
+    monkeypatch.setattr(
+        lfms_business.redis_client,
+        "get_lfms_by_server_name",
+        lambda _server_name: {},
+    )
+    monkeypatch.setattr(
+        lfms_business,
+        "get_lfm_activity",
+        lambda _previous, _current: {},
+    )
+    monkeypatch.setattr(
+        lfms_business,
+        "hydrate_lfms_with_activity",
+        lambda incoming, _activity: {k: {**v, "activity": []} for k, v in incoming.items()},
+    )
+    monkeypatch.setattr(
+        lfms_business.redis_client,
+        "set_lfms_by_server_name",
+        lambda _payload, _server: None,
+    )
+    monkeypatch.setattr(
+        lfms_business.redis_client,
+        "update_lfms_by_server_name",
+        lambda _payload, _server: None,
+    )
+    monkeypatch.setattr(
+        lfms_business.redis_client,
+        "delete_lfms_by_id_and_server_name",
+        lambda _ids, _server: None,
+    )
+    monkeypatch.setattr(
+        lfms_business.sse_service,
+        "broadcast",
+        lambda registry, server_name, message: broadcast_calls.append(
+            {"registry": registry, "server_name": server_name, "message": message}
+        ) or 0,
+    )
+    return broadcast_calls
+
+
+def test_handle_incoming_lfms_broadcasts_snapshot_for_sse_server(monkeypatch):
+    broadcast_calls = _sse_broadcast_setup_lfms(monkeypatch, sse_server="cormyr")
+
+    request_body = LfmRequestApiModel(
+        lfms=[_lfm(1, server_name="cormyr", comment="looking")],
+        deleted_ids=[],
+    )
+    lfms_business.handle_incoming_lfms(request_body, LfmRequestType.set)
+
+    assert len(broadcast_calls) == 1
+    assert broadcast_calls[0]["server_name"] == "cormyr"
+    assert "event: snapshot" in broadcast_calls[0]["message"]
+    assert "delta" not in broadcast_calls[0]["message"]
+
+
+def test_handle_incoming_lfms_broadcasts_delta_for_sse_server(monkeypatch):
+    broadcast_calls = _sse_broadcast_setup_lfms(monkeypatch, sse_server="cormyr")
+
+    request_body = LfmRequestApiModel(
+        lfms=[_lfm(1, server_name="cormyr", comment="looking")],
+        deleted_ids=[],
+    )
+    lfms_business.handle_incoming_lfms(request_body, LfmRequestType.update)
+
+    assert len(broadcast_calls) == 1
+    assert broadcast_calls[0]["server_name"] == "cormyr"
+    assert "event: delta" in broadcast_calls[0]["message"]
+
+
+def test_handle_incoming_lfms_skips_broadcast_for_non_sse_server(monkeypatch):
+    broadcast_calls = _sse_broadcast_setup_lfms(monkeypatch, sse_server="alpha")
+
+    request_body = LfmRequestApiModel(
+        lfms=[_lfm(1, server_name="alpha", comment="looking")],
+        deleted_ids=[],
+    )
+    lfms_business.handle_incoming_lfms(request_body, LfmRequestType.set)
+
+    # "alpha" is in SERVER_NAMES_LOWERCASE but NOT in SSE_SERVER_NAMES_LOWERCASE
+    assert broadcast_calls == []

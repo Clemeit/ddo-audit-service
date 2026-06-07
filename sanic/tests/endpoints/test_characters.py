@@ -286,3 +286,70 @@ def test_update_characters_returns_500_when_business_layer_fails(
 
     assert response.status == 500
     assert response_json(response)["message"] == "processing failed"
+
+
+# ===== v2 SSE stream tests =====
+
+
+def test_character_stream_rejects_invalid_server(
+    monkeypatch, make_request, run_async, response_json
+):
+    monkeypatch.setattr(
+        character_endpoints, "SSE_SERVER_NAMES_LOWERCASE", ["cormyr"]
+    )
+
+    request = make_request(path="/v2/characters/stream/argonnessen")
+    response = run_async(
+        character_endpoints.character_stream(request, "argonnessen")
+    )
+
+    assert response.status == 400
+    assert response_json(response)["message"] == "Invalid server name"
+
+
+def test_character_stream_sends_snapshot_then_close(
+    monkeypatch, make_request, run_async
+):
+    import asyncio
+
+    monkeypatch.setattr(character_endpoints, "SSE_MAX_AGE_SECONDS", 0)
+    monkeypatch.setattr(
+        character_endpoints, "SSE_SERVER_NAMES_LOWERCASE", ["cormyr"]
+    )
+    monkeypatch.setattr(
+        character_endpoints.redis_client,
+        "get_characters_by_server_name_as_dict",
+        lambda _server_name: {1: {"name": "Alice"}},
+    )
+
+    mock_queue = asyncio.Queue()
+    monkeypatch.setattr(
+        character_endpoints.sse_service, "register", lambda _reg, _name: mock_queue
+    )
+    monkeypatch.setattr(
+        character_endpoints.sse_service, "unregister", lambda _reg, _name, _q: None
+    )
+
+    class _MockResponse:
+        def __init__(self):
+            self.headers = {}
+            self.sent = []
+
+        async def send(self, data):
+            self.sent.append(data)
+
+    mock_response = _MockResponse()
+
+    async def _respond(*args, **kwargs):
+        return mock_response
+
+    request = make_request(path="/v2/characters/stream/cormyr")
+    request.respond = _respond
+
+    result = run_async(character_endpoints.character_stream(request, "cormyr"))
+
+    assert result is mock_response
+    assert len(mock_response.sent) == 2
+    assert mock_response.sent[0].startswith("event: snapshot\n")
+    assert "Alice" in mock_response.sent[0]
+    assert mock_response.sent[1].startswith("event: close\n")
