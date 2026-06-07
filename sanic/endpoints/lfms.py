@@ -2,6 +2,7 @@
 LFM endpoints.
 """
 
+import json as stdlib_json
 import services.redis as redis_client
 from services.betterstack import lfm_collections_heartbeat
 from models.api import LfmRequestApiModel, LfmRequestType
@@ -161,4 +162,45 @@ async def update_lfms(request: Request):
     return json({"message": "success"})
 
 
+# ===================================
+
+
+# ============== v2 ================
+import asyncio
+from time import monotonic
+from constants.server import SSE_SERVER_NAMES_LOWERCASE
+import services.sse as sse_service
+
+lfm_blueprint_v2 = Blueprint("lfms_v2", url_prefix="/lfms", version=2)
+
+SSE_MAX_AGE_SECONDS = 60 * 60 * 24  # 24 hours
+SSE_KEEPALIVE_INTERVAL = 30          # seconds
+
+
+@lfm_blueprint_v2.get("/stream/<server_name:str>")
+async def lfm_stream(request: Request, server_name: str):
+    if server_name.lower() not in SSE_SERVER_NAMES_LOWERCASE:
+        return json({"message": "Invalid server name"}, status=400)
+
+    response = await request.respond(content_type="text/event-stream")
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+
+    queue = sse_service.register(sse_service.lfm_queues, server_name.lower())
+    deadline = monotonic() + SSE_MAX_AGE_SECONDS
+
+    try:
+        snapshot_data = redis_client.get_lfms_by_server_name_as_dict(server_name)
+        await response.send(sse_service.format_sse("snapshot", stdlib_json.dumps(snapshot_data)))
+
+        while monotonic() < deadline:
+            try:
+                msg = await asyncio.wait_for(queue.get(), timeout=SSE_KEEPALIVE_INTERVAL)
+                await response.send(msg)
+            except asyncio.TimeoutError:
+                await response.send(": keepalive\n\n")
+
+        await response.send(sse_service.format_sse("close", "{}"))
+    finally:
+        sse_service.unregister(sse_service.lfm_queues, server_name.lower(), queue)
 # ===================================

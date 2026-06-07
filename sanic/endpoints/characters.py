@@ -2,6 +2,7 @@
 Character endpoints.
 """
 
+import json as stdlib_json
 import services.postgres as postgres_client
 import services.redis as redis_client
 from services.betterstack import character_collections_heartbeat
@@ -418,6 +419,45 @@ async def get_characters_by_character_name(character_name: str):
 # ===================================
 
 
+# ============== v2 ================
+import asyncio
+from time import monotonic
+from constants.server import SSE_SERVER_NAMES_LOWERCASE
+import services.sse as sse_service
+
+characters_blueprint_v2 = Blueprint("characters_v2", url_prefix="/characters", version=2)
+
+SSE_MAX_AGE_SECONDS = 60 * 60 * 24  # 24 hours
+SSE_KEEPALIVE_INTERVAL = 30          # seconds
+
+
+@characters_blueprint_v2.get("/stream/<server_name:str>")
+async def character_stream(request: Request, server_name: str):
+    if server_name.lower() not in SSE_SERVER_NAMES_LOWERCASE:
+        return json({"message": "Invalid server name"}, status=400)
+
+    response = await request.respond(content_type="text/event-stream")
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+
+    queue = sse_service.register(sse_service.character_queues, server_name.lower())
+    deadline = monotonic() + SSE_MAX_AGE_SECONDS
+
+    try:
+        snapshot_data = redis_client.get_characters_by_server_name_as_dict(server_name)
+        await response.send(sse_service.format_sse("snapshot", stdlib_json.dumps(snapshot_data)))
+
+        while monotonic() < deadline:
+            try:
+                msg = await asyncio.wait_for(queue.get(), timeout=SSE_KEEPALIVE_INTERVAL)
+                await response.send(msg)
+            except asyncio.TimeoutError:
+                await response.send(": keepalive\n\n")
+
+        await response.send(sse_service.format_sse("close", "{}"))
+    finally:
+        sse_service.unregister(sse_service.character_queues, server_name.lower(), queue)
+# ===================================
 # ======= Internal endpoints ========
 @characters_blueprint.post("")
 @openapi.exclude()

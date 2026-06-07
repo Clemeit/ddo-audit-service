@@ -3,11 +3,11 @@ import logging
 import services.redis as redis_client
 
 from endpoints.activity import activity_blueprint
-from endpoints.characters import characters_blueprint
+from endpoints.characters import characters_blueprint, characters_blueprint_v2
 from endpoints.game import game_blueprint
 from endpoints.population import population_blueprint
 from endpoints.health import health_blueprint
-from endpoints.lfms import lfm_blueprint
+from endpoints.lfms import lfm_blueprint, lfm_blueprint_v2
 from endpoints.service import service_blueprint
 from endpoints.verification import verification_blueprint
 from endpoints.quests import quest_blueprint, quest_blueprint_v2
@@ -69,7 +69,9 @@ access_logger = logging.getLogger("access")
 app.blueprint(
     [
         characters_blueprint,
+        characters_blueprint_v2,
         lfm_blueprint,
+        lfm_blueprint_v2,
         activity_blueprint,
         health_blueprint,
         game_blueprint,
