@@ -489,3 +489,157 @@ def test_handle_incoming_characters_update_combines_multiple_server_changes(
     assert {character["id"] for character in persisted_deleted_calls[0]} == {1, 3}
     assert len(persisted_activity_calls) == 1
     assert {event["character_id"] for event in persisted_activity_calls[0]} == {2, 4}
+
+
+# ===== SSE broadcast tests =====
+
+
+def _sse_broadcast_setup(monkeypatch, _run_async, *, _request_type):
+    """Shared setup for SSE broadcast tests. Returns broadcast_calls."""
+    broadcast_calls = []
+    monkeypatch.setattr(characters_business, "SERVER_NAMES_LOWERCASE", ["cormyr"])
+    monkeypatch.setattr(characters_business, "SSE_SERVER_NAMES_LOWERCASE", ["cormyr"])
+    monkeypatch.setattr(
+        characters_business, "get_current_datetime_string", lambda: "2026-06-07T00:00:00Z"
+    )
+    monkeypatch.setattr(
+        characters_business.redis_client,
+        "get_characters_by_server_name_as_dict",
+        lambda _server_name: {},
+    )
+    monkeypatch.setattr(
+        characters_business.redis_client,
+        "set_characters_by_server_name",
+        lambda _payload, _server: None,
+    )
+    monkeypatch.setattr(
+        characters_business.redis_client,
+        "update_characters_by_server_name",
+        lambda _payload, _server: None,
+    )
+    monkeypatch.setattr(
+        characters_business.redis_client,
+        "delete_characters_by_id_and_server_name",
+        lambda _ids, _server: None,
+    )
+    monkeypatch.setattr(
+        characters_business,
+        "aggregate_character_activity_for_server",
+        lambda *_args, **_kw: [],
+    )
+    monkeypatch.setattr(
+        characters_business,
+        "persist_deleted_characters_to_db",
+        _amock(lambda _chars: None),
+    )
+    monkeypatch.setattr(
+        characters_business,
+        "persist_character_activity_to_db",
+        _amock(lambda _events: None),
+    )
+    monkeypatch.setattr(
+        characters_business.sse_service,
+        "broadcast",
+        lambda registry, server_name, message: broadcast_calls.append(
+            {"registry": registry, "server_name": server_name, "message": message}
+        ) or 0,
+    )
+    return broadcast_calls
+
+
+def test_handle_incoming_characters_broadcasts_snapshot_for_sse_server(
+    monkeypatch, run_async
+):
+    broadcast_calls = _sse_broadcast_setup(
+        monkeypatch, run_async, request_type=CharacterRequestType.set
+    )
+
+    request_body = CharacterRequestApiModel(
+        characters=[_character(1, server_name="Cormyr", name="Hero")],
+        deleted_ids=[],
+    )
+    run_async(
+        characters_business.handle_incoming_characters(
+            request_body, CharacterRequestType.set
+        )
+    )
+
+    assert len(broadcast_calls) == 1
+    assert broadcast_calls[0]["server_name"] == "cormyr"
+    assert "event: snapshot" in broadcast_calls[0]["message"]
+    assert "delta" not in broadcast_calls[0]["message"]
+
+
+def test_handle_incoming_characters_broadcasts_delta_for_sse_server(
+    monkeypatch, run_async
+):
+    broadcast_calls = _sse_broadcast_setup(
+        monkeypatch, run_async, request_type=CharacterRequestType.update
+    )
+
+    request_body = CharacterRequestApiModel(
+        characters=[_character(1, server_name="Cormyr", name="Hero")],
+        deleted_ids=[],
+    )
+    run_async(
+        characters_business.handle_incoming_characters(
+            request_body, CharacterRequestType.update
+        )
+    )
+
+    assert len(broadcast_calls) == 1
+    assert broadcast_calls[0]["server_name"] == "cormyr"
+    assert "event: delta" in broadcast_calls[0]["message"]
+
+
+def test_handle_incoming_characters_skips_broadcast_for_non_sse_server(
+    monkeypatch, run_async
+):
+    broadcast_calls = []
+    monkeypatch.setattr(characters_business, "SERVER_NAMES_LOWERCASE", ["alpha"])
+    monkeypatch.setattr(characters_business, "SSE_SERVER_NAMES_LOWERCASE", ["cormyr"])
+    monkeypatch.setattr(
+        characters_business, "get_current_datetime_string", lambda: "2026-06-07T00:00:00Z"
+    )
+    monkeypatch.setattr(
+        characters_business.redis_client,
+        "get_characters_by_server_name_as_dict",
+        lambda _server_name: {},
+    )
+    monkeypatch.setattr(
+        characters_business.redis_client,
+        "set_characters_by_server_name",
+        lambda _payload, _server: None,
+    )
+    monkeypatch.setattr(
+        characters_business,
+        "aggregate_character_activity_for_server",
+        lambda *_args, **_kw: [],
+    )
+    monkeypatch.setattr(
+        characters_business,
+        "persist_deleted_characters_to_db",
+        _amock(lambda _chars: None),
+    )
+    monkeypatch.setattr(
+        characters_business,
+        "persist_character_activity_to_db",
+        _amock(lambda _events: None),
+    )
+    monkeypatch.setattr(
+        characters_business.sse_service,
+        "broadcast",
+        lambda *_args: broadcast_calls.append(True) or 0,
+    )
+
+    request_body = CharacterRequestApiModel(
+        characters=[_character(1, server_name="Alpha", name="Hero")],
+        deleted_ids=[],
+    )
+    run_async(
+        characters_business.handle_incoming_characters(
+            request_body, CharacterRequestType.set
+        )
+    )
+
+    assert broadcast_calls == []

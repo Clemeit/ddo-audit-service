@@ -2,8 +2,13 @@
 Character endpoints.
 """
 
+import asyncio
+import json as stdlib_json
+from time import monotonic
+
 import services.postgres as postgres_client
 import services.redis as redis_client
+import services.sse as sse_service
 from services.betterstack import character_collections_heartbeat
 from models.api import CharacterRequestApiModel, CharacterRequestType
 from utils.validation import is_server_name_valid, is_character_name_valid
@@ -20,7 +25,7 @@ from urllib.parse import unquote
 from utils.log import logMessage
 import utils.guilds as guild_utils
 from utils.activity import calculate_active_playstyle_score
-from constants.server import MAX_CHARACTER_LOOKUP_IDS
+from constants.server import MAX_CHARACTER_LOOKUP_IDS, SSE_SERVER_NAMES_LOWERCASE
 
 
 characters_blueprint = Blueprint("characters", url_prefix="/characters", version=1)
@@ -415,6 +420,45 @@ async def get_characters_by_character_name(character_name: str):
     return json({"data": found_characters})
 
 
+# ===================================
+
+
+# ============== v2 ================
+characters_blueprint_v2 = Blueprint("characters_v2", url_prefix="/characters", version=2)
+
+SSE_MAX_AGE_SECONDS = 60 * 60 * 24  # 24 hours
+SSE_KEEPALIVE_INTERVAL = 30          # seconds
+
+
+@characters_blueprint_v2.get("/stream/<server_name:str>")
+async def character_stream(request: Request, server_name: str):
+    if server_name.lower() not in SSE_SERVER_NAMES_LOWERCASE:
+        return json({"message": "Invalid server name"}, status=400)
+
+    response = await request.respond(content_type="text/event-stream")
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+
+    queue = sse_service.register(sse_service.character_queues, server_name.lower())
+    deadline = monotonic() + SSE_MAX_AGE_SECONDS
+
+    try:
+        snapshot_data = redis_client.get_characters_by_server_name_as_dict(server_name)
+        await response.send(sse_service.format_sse("snapshot", stdlib_json.dumps(snapshot_data)))
+
+        while monotonic() < deadline:
+            try:
+                msg = await asyncio.wait_for(queue.get(), timeout=SSE_KEEPALIVE_INTERVAL)
+                await response.send(msg)
+            except asyncio.TimeoutError:
+                if queue not in sse_service.character_queues.get(server_name.lower(), set()):
+                    break
+                await response.send(": keepalive\n\n")
+
+        await response.send(sse_service.format_sse("close", "{}"))
+    finally:
+        sse_service.unregister(sse_service.character_queues, server_name.lower(), queue)
+    return response
 # ===================================
 
 

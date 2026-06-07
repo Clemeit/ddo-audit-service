@@ -1,9 +1,11 @@
+import json
 import uuid
 
 import services.postgres as postgres_client
 import services.redis as redis_client
+import services.sse as sse_service
 from constants.activity import CharacterActivityType
-from constants.server import SERVER_NAMES_LOWERCASE
+from constants.server import SERVER_NAMES_LOWERCASE, SSE_SERVER_NAMES_LOWERCASE
 from models.api import CharacterRequestApiModel, CharacterRequestType
 from models.character import CharacterActivity
 from models.redis import ServerCharacterData
@@ -90,6 +92,20 @@ async def handle_incoming_characters(
             redis_client.delete_characters_by_id_and_server_name(
                 list(character_ids_we_can_save), server_name
             )
+
+        # broadcast SSE events for supported servers
+        if server_name in SSE_SERVER_NAMES_LOWERCASE:
+            if type == CharacterRequestType.set:
+                sse_message = sse_service.format_sse(
+                    "snapshot", json.dumps(incoming_characters)
+                )
+            elif type == CharacterRequestType.update:
+                delta = {
+                    "updates": list(incoming_characters.values()),
+                    "removals": list(character_ids_we_can_save),
+                }
+                sse_message = sse_service.format_sse("delta", json.dumps(delta))
+            sse_service.broadcast(sse_service.character_queues, server_name, sse_message)
         
     # redis_client.save_snapshot_of_characters(str(uuid.uuid7()))
 
