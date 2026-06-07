@@ -655,7 +655,7 @@ def test_handle_incoming_characters_skips_broadcast_for_empty_delta(
 ):
     # When updates and removals are both empty, no delta should be broadcast.
     broadcast_calls = _sse_broadcast_setup(
-        monkeypatch, run_async, request_type=CharacterRequestType.update
+        monkeypatch, run_async, _request_type=CharacterRequestType.update
     )
 
     request_body = CharacterRequestApiModel(
