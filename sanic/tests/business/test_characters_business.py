@@ -494,8 +494,8 @@ def test_handle_incoming_characters_update_combines_multiple_server_changes(
 # ===== SSE broadcast tests =====
 
 
-def _sse_broadcast_setup(monkeypatch, run_async, *, request_type):
-    """Shared setup for SSE broadcast tests. Returns (broadcast_calls, run_async result)."""
+def _sse_broadcast_setup(monkeypatch, _run_async, *, _request_type):
+    """Shared setup for SSE broadcast tests. Returns broadcast_calls."""
     broadcast_calls = []
     monkeypatch.setattr(characters_business, "SERVER_NAMES_LOWERCASE", ["cormyr"])
     monkeypatch.setattr(characters_business, "SSE_SERVER_NAMES_LOWERCASE", ["cormyr"])
