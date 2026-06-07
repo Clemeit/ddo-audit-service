@@ -91,7 +91,7 @@ async def handle_incoming_characters(
                 list(character_ids_we_can_save), server_name
             )
         
-        redis_client.save_snapshot_of_character_entry(str(uuid.uuid7()))
+    # redis_client.save_snapshot_of_characters(str(uuid.uuid7()))
 
     # persist on characters that logged off to the database
     await persist_deleted_characters_to_db(characters_to_persist_to_db)
