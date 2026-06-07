@@ -435,3 +435,16 @@ def test_handle_incoming_lfms_skips_broadcast_for_non_sse_server(monkeypatch):
 
     # "alpha" is in SERVER_NAMES_LOWERCASE but NOT in SSE_SERVER_NAMES_LOWERCASE
     assert broadcast_calls == []
+
+
+def test_handle_incoming_lfms_skips_broadcast_for_empty_delta(monkeypatch):
+    # When updates and removals are both empty, no delta should be broadcast.
+    broadcast_calls = _sse_broadcast_setup_lfms(monkeypatch, sse_server="cormyr")
+
+    request_body = LfmRequestApiModel(
+        lfms=[],        # no incoming LFMs
+        deleted_ids=[], # no deletions
+    )
+    lfms_business.handle_incoming_lfms(request_body, LfmRequestType.update)
+
+    assert broadcast_calls == []

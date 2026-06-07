@@ -643,3 +643,22 @@ def test_handle_incoming_characters_skips_broadcast_for_non_sse_server(
     )
 
     assert broadcast_calls == []
+
+
+def test_handle_incoming_characters_skips_broadcast_for_empty_delta(monkeypatch, run_async):
+    # When updates and removals are both empty, no delta should be broadcast.
+    broadcast_calls = _sse_broadcast_setup(
+        monkeypatch, run_async, request_type=CharacterRequestType.update
+    )
+
+    request_body = CharacterRequestApiModel(
+        characters=[],   # no incoming characters
+        deleted_ids=[],  # no deletions
+    )
+    run_async(
+        characters_business.handle_incoming_characters(
+            request_body, CharacterRequestType.update
+        )
+    )
+
+    assert broadcast_calls == []
