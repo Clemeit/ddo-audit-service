@@ -1,5 +1,3 @@
-import json
-
 import services.redis as redis_client
 import services.sse as sse_service
 from constants.server import SERVER_NAMES_LOWERCASE, SSE_SERVER_NAMES_LOWERCASE
@@ -47,10 +45,12 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
         # broadcast SSE events for supported servers
         if server_name in SSE_SERVER_NAMES_LOWERCASE:
             if type == LfmRequestType.set:
-                sse_message = sse_service.format_sse(
-                    "snapshot", json.dumps(hydrated_lfms)
+                sse_service.broadcast_snapshot(
+                    "lfms",
+                    sse_service.lfm_queues,
+                    server_name,
+                    hydrated_lfms,
                 )
-                sse_service.broadcast(sse_service.lfm_queues, server_name, sse_message)
             elif type == LfmRequestType.update:
                 # Only include IDs that were actually on this server so we don't
                 # send spurious removals from other servers to subscribed clients.
@@ -59,12 +59,13 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
                 )
                 updates = list(hydrated_lfms.values())
                 removals = list(server_deleted_ids)
-                if updates or removals:
-                    delta = {"updates": updates, "removals": removals}
-                    sse_message = sse_service.format_sse("delta", json.dumps(delta))
-                    sse_service.broadcast(
-                        sse_service.lfm_queues, server_name, sse_message
-                    )
+                sse_service.broadcast_delta(
+                    "lfms",
+                    sse_service.lfm_queues,
+                    server_name,
+                    updates,
+                    removals,
+                )
 
 
 def get_lfm_activity(

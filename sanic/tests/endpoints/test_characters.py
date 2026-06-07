@@ -350,6 +350,6 @@ def test_character_stream_sends_snapshot_then_close(
 
     assert result is mock_response
     assert len(mock_response.sent) == 2
-    assert mock_response.sent[0].startswith("event: snapshot\n")
+    assert "event: snapshot" in mock_response.sent[0]
     assert "Alice" in mock_response.sent[0]
-    assert mock_response.sent[1].startswith("event: close\n")
+    assert "event: close" in mock_response.sent[1]

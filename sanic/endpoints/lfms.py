@@ -3,7 +3,6 @@ LFM endpoints.
 """
 
 import asyncio
-import json as stdlib_json
 from time import monotonic
 
 import services.redis as redis_client
@@ -189,9 +188,12 @@ async def lfm_stream(request: Request, server_name: str):
     queue = sse_service.register(sse_service.lfm_queues, server_name.lower())
     deadline = monotonic() + SSE_MAX_AGE_SECONDS
 
+    if request.headers.get("Last-Event-ID"):
+        sse_service.record_reconnect()
+
     try:
         snapshot_data = redis_client.get_lfms_by_server_name_as_dict(server_name)
-        await response.send(sse_service.format_sse("snapshot", stdlib_json.dumps(snapshot_data)))
+        await response.send(sse_service.make_snapshot_envelope("lfms", server_name.lower(), snapshot_data))
 
         while monotonic() < deadline:
             try:

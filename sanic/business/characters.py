@@ -1,4 +1,3 @@
-import json
 import uuid
 
 import services.postgres as postgres_client
@@ -96,21 +95,22 @@ async def handle_incoming_characters(
         # broadcast SSE events for supported servers
         if server_name in SSE_SERVER_NAMES_LOWERCASE:
             if type == CharacterRequestType.set:
-                sse_message = sse_service.format_sse(
-                    "snapshot", json.dumps(incoming_characters)
-                )
-                sse_service.broadcast(
-                    sse_service.character_queues, server_name, sse_message
+                sse_service.broadcast_snapshot(
+                    "characters",
+                    sse_service.character_queues,
+                    server_name,
+                    incoming_characters,
                 )
             elif type == CharacterRequestType.update:
                 updates = list(incoming_characters.values())
                 removals = list(character_ids_we_can_save)
-                if updates or removals:
-                    delta = {"updates": updates, "removals": removals}
-                    sse_message = sse_service.format_sse("delta", json.dumps(delta))
-                    sse_service.broadcast(
-                        sse_service.character_queues, server_name, sse_message
-                    )
+                sse_service.broadcast_delta(
+                    "characters",
+                    sse_service.character_queues,
+                    server_name,
+                    updates,
+                    removals,
+                )
 
     # redis_client.save_snapshot_of_characters(str(uuid.uuid7()))
 
