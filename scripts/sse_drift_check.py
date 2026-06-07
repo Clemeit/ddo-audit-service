@@ -110,11 +110,20 @@ def drop_nulls(value: Any) -> Any:
 
 
 def estimate_sse_event_bytes(event_name: str, raw_data: str) -> int:
-    """Approximate bytes transferred for an SSE frame on the wire."""
+    """Approximate bytes transferred for an SSE frame on the wire.
+
+    Handles multi-line data: iter_sse_events joins multiple ``data:`` lines
+    with ``\n``, so we must emit one ``data:`` prefix per line when computing
+    the byte count.
+    """
     if event_name == "__keepalive__":
         # Preserve any leading space in comment payload.
         return len(f":{raw_data}\n\n".encode("utf-8"))
-    return len(f"event: {event_name}\ndata: {raw_data}\n\n".encode("utf-8"))
+    data_lines = raw_data.split("\n")
+    frame = f"event: {event_name}\n" + "".join(
+        f"data: {line}\n" for line in data_lines
+    ) + "\n"
+    return len(frame.encode("utf-8"))
 
 
 def format_bytes(num_bytes: int) -> str:

@@ -16,6 +16,11 @@ def test_format_sse_works_for_delta_event():
     assert result == "event: delta\ndata: {}\n\n"
 
 
+def test_format_sse_with_event_id_prepends_id_field():
+    result = sse_service.format_sse("snapshot", "{}", event_id="42")
+    assert result == "id: 42\nevent: snapshot\ndata: {}\n\n"
+
+
 def test_register_adds_queue_to_registry():
     registry: dict[str, set[asyncio.Queue]] = {"cormyr": set()}
     queue = sse_service.register(registry, "cormyr")
@@ -151,7 +156,9 @@ def test_make_snapshot_envelope_returns_sse_snapshot_event():
     msg = sse_service.make_snapshot_envelope(
         "characters", "cormyr", {"1": {"name": "Hero"}}
     )
-    assert msg.startswith("event: snapshot\ndata: ")
+    assert msg.startswith("id: ")
+    assert "event: snapshot" in msg
+    assert "data: " in msg
     assert msg.endswith("\n\n")
 
 
@@ -191,7 +198,8 @@ def test_broadcast_snapshot_sends_snapshot_event_to_queue():
     sse_service.broadcast_snapshot("characters", registry, "cormyr", {"1": {}})
 
     msg = q.get_nowait()
-    assert msg.startswith("event: snapshot\ndata: ")
+    assert msg.startswith("id: ")
+    assert "event: snapshot" in msg
     payload = json.loads(msg.split("data: ", 1)[1].strip())
     assert payload["type"] == "snapshot"
     assert payload["seq"] == 1
@@ -230,7 +238,8 @@ def test_broadcast_delta_sends_delta_event_to_queue():
     sse_service.broadcast_delta("characters", registry, "cormyr", [{"id": 1}], [2])
 
     msg = q.get_nowait()
-    assert msg.startswith("event: delta\ndata: ")
+    assert msg.startswith("id: ")
+    assert "event: delta" in msg
     payload = json.loads(msg.split("data: ", 1)[1].strip())
     assert payload["type"] == "delta"
     assert payload["seq"] == 1

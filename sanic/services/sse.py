@@ -74,8 +74,15 @@ def _increment_seq(stream_type: str, server_name: str) -> int:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 
-def format_sse(event: str, data: str) -> str:
-    return f"event: {event}\ndata: {data}\n\n"
+def format_sse(event: str, data: str, event_id: str | None = None) -> str:
+    """Format an SSE frame.
+
+    When *event_id* is provided an ``id:`` field is prepended so that
+    browser ``EventSource`` clients automatically send ``Last-Event-ID``
+    on reconnect, enabling seq-based gap detection.
+    """
+    id_line = f"id: {event_id}\n" if event_id is not None else ""
+    return f"{id_line}event: {event}\ndata: {data}\n\n"
 
 
 def make_snapshot_envelope(
@@ -94,7 +101,7 @@ def make_snapshot_envelope(
         "sent_at": _now_iso(),
         "data": data,
     }
-    return format_sse("snapshot", json.dumps(envelope))
+    return format_sse("snapshot", json.dumps(envelope), event_id=str(envelope["seq"]))
 
 
 def register(
@@ -145,7 +152,7 @@ def broadcast_snapshot(
         "sent_at": _now_iso(),
         "data": data,
     }
-    msg = format_sse("snapshot", json.dumps(envelope))
+    msg = format_sse("snapshot", json.dumps(envelope), event_id=str(seq))
     count = broadcast(queues, server_name, msg)
     _metrics["sse_snapshot_sent_total"] += count
     logger.debug(
@@ -186,7 +193,7 @@ def broadcast_delta(
         "updates": updates,
         "removals": removals,
     }
-    msg = format_sse("delta", json.dumps(envelope))
+    msg = format_sse("delta", json.dumps(envelope), event_id=str(seq))
     count = broadcast(queues, server_name, msg)
     _metrics["sse_delta_sent_total"] += count
     logger.debug(
