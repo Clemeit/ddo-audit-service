@@ -382,7 +382,7 @@ def test_handle_incoming_characters_update_persists_deleted_and_activity(
     assert set(update_payload.keys()) == {2}
     assert update_payload[2]["last_update"] == now
 
-    assert delete_calls == [({1}, "alpha")]
+    assert delete_calls == [([1], "alpha")]
     assert set_calls == []
     assert persisted_deleted_calls == [[previous_characters[1]]]
     assert persisted_activity_calls == [expected_activity]
@@ -483,8 +483,8 @@ def test_handle_incoming_characters_update_combines_multiple_server_changes(
     )
 
     assert len(update_calls) == 2
-    assert ({1}, "alpha") in delete_calls
-    assert ({3}, "beta") in delete_calls
+    assert ([1], "alpha") in delete_calls
+    assert ([3], "beta") in delete_calls
     assert len(persisted_deleted_calls) == 1
     assert {character["id"] for character in persisted_deleted_calls[0]} == {1, 3}
     assert len(persisted_activity_calls) == 1
@@ -494,7 +494,7 @@ def test_handle_incoming_characters_update_combines_multiple_server_changes(
 # ===== SSE broadcast tests =====
 
 
-def _sse_broadcast_setup(monkeypatch, _run_async, *, _request_type):
+def _sse_broadcast_setup(monkeypatch, _run_async, *, request_type):
     """Shared setup for SSE broadcast tests. Returns broadcast_calls."""
     broadcast_calls = []
     monkeypatch.setattr(characters_business, "SERVER_NAMES_LOWERCASE", ["cormyr"])
