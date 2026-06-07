@@ -500,7 +500,9 @@ def _sse_broadcast_setup(monkeypatch, _run_async, *, _request_type):
     monkeypatch.setattr(characters_business, "SERVER_NAMES_LOWERCASE", ["cormyr"])
     monkeypatch.setattr(characters_business, "SSE_SERVER_NAMES_LOWERCASE", ["cormyr"])
     monkeypatch.setattr(
-        characters_business, "get_current_datetime_string", lambda: "2026-06-07T00:00:00Z"
+        characters_business,
+        "get_current_datetime_string",
+        lambda: "2026-06-07T00:00:00Z",
     )
     monkeypatch.setattr(
         characters_business.redis_client,
@@ -542,7 +544,8 @@ def _sse_broadcast_setup(monkeypatch, _run_async, *, _request_type):
         "broadcast",
         lambda registry, server_name, message: broadcast_calls.append(
             {"registry": registry, "server_name": server_name, "message": message}
-        ) or 0,
+        )
+        or 0,
     )
     return broadcast_calls
 
@@ -599,7 +602,9 @@ def test_handle_incoming_characters_skips_broadcast_for_non_sse_server(
     monkeypatch.setattr(characters_business, "SERVER_NAMES_LOWERCASE", ["alpha"])
     monkeypatch.setattr(characters_business, "SSE_SERVER_NAMES_LOWERCASE", ["cormyr"])
     monkeypatch.setattr(
-        characters_business, "get_current_datetime_string", lambda: "2026-06-07T00:00:00Z"
+        characters_business,
+        "get_current_datetime_string",
+        lambda: "2026-06-07T00:00:00Z",
     )
     monkeypatch.setattr(
         characters_business.redis_client,
@@ -639,6 +644,27 @@ def test_handle_incoming_characters_skips_broadcast_for_non_sse_server(
     run_async(
         characters_business.handle_incoming_characters(
             request_body, CharacterRequestType.set
+        )
+    )
+
+    assert broadcast_calls == []
+
+
+def test_handle_incoming_characters_skips_broadcast_for_empty_delta(
+    monkeypatch, run_async
+):
+    # When updates and removals are both empty, no delta should be broadcast.
+    broadcast_calls = _sse_broadcast_setup(
+        monkeypatch, run_async, _request_type=CharacterRequestType.update
+    )
+
+    request_body = CharacterRequestApiModel(
+        characters=[],  # no incoming characters
+        deleted_ids=[],  # no deletions
+    )
+    run_async(
+        characters_business.handle_incoming_characters(
+            request_body, CharacterRequestType.update
         )
     )
 
