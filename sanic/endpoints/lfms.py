@@ -2,8 +2,12 @@
 LFM endpoints.
 """
 
+import asyncio
 import json as stdlib_json
+from time import monotonic
+
 import services.redis as redis_client
+import services.sse as sse_service
 from services.betterstack import lfm_collections_heartbeat
 from models.api import LfmRequestApiModel, LfmRequestType
 from utils.validation import is_server_name_valid
@@ -15,6 +19,7 @@ from sanic_ext import openapi
 from business.lfms import handle_incoming_lfms
 
 from utils.log import logMessage
+from constants.server import SSE_SERVER_NAMES_LOWERCASE
 
 lfm_blueprint = Blueprint("lfm", url_prefix="/lfms", version=1)
 
@@ -166,11 +171,6 @@ async def update_lfms(request: Request):
 
 
 # ============== v2 ================
-import asyncio
-from time import monotonic
-from constants.server import SSE_SERVER_NAMES_LOWERCASE
-import services.sse as sse_service
-
 lfm_blueprint_v2 = Blueprint("lfms_v2", url_prefix="/lfms", version=2)
 
 SSE_MAX_AGE_SECONDS = 60 * 60 * 24  # 24 hours
@@ -198,6 +198,8 @@ async def lfm_stream(request: Request, server_name: str):
                 msg = await asyncio.wait_for(queue.get(), timeout=SSE_KEEPALIVE_INTERVAL)
                 await response.send(msg)
             except asyncio.TimeoutError:
+                if queue not in sse_service.lfm_queues.get(server_name.lower(), set()):
+                    break
                 await response.send(": keepalive\n\n")
 
         await response.send(sse_service.format_sse("close", "{}"))

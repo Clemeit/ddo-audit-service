@@ -2,9 +2,13 @@
 Character endpoints.
 """
 
+import asyncio
 import json as stdlib_json
+from time import monotonic
+
 import services.postgres as postgres_client
 import services.redis as redis_client
+import services.sse as sse_service
 from services.betterstack import character_collections_heartbeat
 from models.api import CharacterRequestApiModel, CharacterRequestType
 from utils.validation import is_server_name_valid, is_character_name_valid
@@ -21,7 +25,7 @@ from urllib.parse import unquote
 from utils.log import logMessage
 import utils.guilds as guild_utils
 from utils.activity import calculate_active_playstyle_score
-from constants.server import MAX_CHARACTER_LOOKUP_IDS
+from constants.server import MAX_CHARACTER_LOOKUP_IDS, SSE_SERVER_NAMES_LOWERCASE
 
 
 characters_blueprint = Blueprint("characters", url_prefix="/characters", version=1)
@@ -420,11 +424,6 @@ async def get_characters_by_character_name(character_name: str):
 
 
 # ============== v2 ================
-import asyncio
-from time import monotonic
-from constants.server import SSE_SERVER_NAMES_LOWERCASE
-import services.sse as sse_service
-
 characters_blueprint_v2 = Blueprint("characters_v2", url_prefix="/characters", version=2)
 
 SSE_MAX_AGE_SECONDS = 60 * 60 * 24  # 24 hours
@@ -452,12 +451,16 @@ async def character_stream(request: Request, server_name: str):
                 msg = await asyncio.wait_for(queue.get(), timeout=SSE_KEEPALIVE_INTERVAL)
                 await response.send(msg)
             except asyncio.TimeoutError:
+                if queue not in sse_service.character_queues.get(server_name.lower(), set()):
+                    break
                 await response.send(": keepalive\n\n")
 
         await response.send(sse_service.format_sse("close", "{}"))
     finally:
         sse_service.unregister(sse_service.character_queues, server_name.lower(), queue)
 # ===================================
+
+
 # ======= Internal endpoints ========
 @characters_blueprint.post("")
 @openapi.exclude()
