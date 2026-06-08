@@ -85,9 +85,7 @@ def format_sse(event: str, data: str, event_id: str | None = None) -> str:
     return f"{id_line}event: {event}\ndata: {data}\n\n"
 
 
-def make_snapshot_envelope(
-    stream_type: str, server_name: str, data: dict
-) -> str:
+def make_snapshot_envelope(stream_type: str, server_name: str, data: dict) -> str:
     """Build an SSE snapshot event for a newly-connected client.
 
     Uses the *current* seq (without incrementing) so the client knows which

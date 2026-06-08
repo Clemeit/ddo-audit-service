@@ -108,9 +108,7 @@ def test_lfm_stream_rejects_invalid_server(
     assert response_json(response)["message"] == "Invalid server name"
 
 
-def test_lfm_stream_sends_snapshot_then_close(
-    monkeypatch, make_request, run_async
-):
+def test_lfm_stream_sends_snapshot_then_close(monkeypatch, make_request, run_async):
     import asyncio
 
     monkeypatch.setattr(lfm_endpoints, "SSE_MAX_AGE_SECONDS", 0)
@@ -152,6 +150,7 @@ def test_lfm_stream_sends_snapshot_then_close(
     assert "event: snapshot" in mock_response.sent[0]
     assert "GroupLead" in mock_response.sent[0]
     assert "event: close" in mock_response.sent[1]
+
 
 def test_update_lfms_returns_500_when_business_layer_fails(
     monkeypatch, make_request, run_async, response_json

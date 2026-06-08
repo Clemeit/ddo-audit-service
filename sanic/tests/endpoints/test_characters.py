@@ -294,14 +294,10 @@ def test_update_characters_returns_500_when_business_layer_fails(
 def test_character_stream_rejects_invalid_server(
     monkeypatch, make_request, run_async, response_json
 ):
-    monkeypatch.setattr(
-        character_endpoints, "SSE_SERVER_NAMES_LOWERCASE", ["cormyr"]
-    )
+    monkeypatch.setattr(character_endpoints, "SSE_SERVER_NAMES_LOWERCASE", ["cormyr"])
 
     request = make_request(path="/v2/characters/stream/argonnessen")
-    response = run_async(
-        character_endpoints.character_stream(request, "argonnessen")
-    )
+    response = run_async(character_endpoints.character_stream(request, "argonnessen"))
 
     assert response.status == 400
     assert response_json(response)["message"] == "Invalid server name"
@@ -313,9 +309,7 @@ def test_character_stream_sends_snapshot_then_close(
     import asyncio
 
     monkeypatch.setattr(character_endpoints, "SSE_MAX_AGE_SECONDS", 0)
-    monkeypatch.setattr(
-        character_endpoints, "SSE_SERVER_NAMES_LOWERCASE", ["cormyr"]
-    )
+    monkeypatch.setattr(character_endpoints, "SSE_SERVER_NAMES_LOWERCASE", ["cormyr"])
     monkeypatch.setattr(
         character_endpoints.redis_client,
         "get_characters_by_server_name_as_dict",
