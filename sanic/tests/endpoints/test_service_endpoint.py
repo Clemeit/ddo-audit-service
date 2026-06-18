@@ -256,3 +256,58 @@ def test_delete_cache_key_returns_500_when_expire_fails(
         response_json(response)["message"]
         == "A failure occurred expiring the Redis key."
     )
+
+
+# ── /v1/service/metrics ───────────────────────────────────────────────────────
+
+
+def test_get_sse_metrics_returns_200_with_data(
+    monkeypatch, make_request, run_async, response_json
+):
+    monkeypatch.setattr(
+        service_endpoints.sse_service,
+        "get_metrics",
+        lambda: {
+            "sse_snapshot_sent_total": 10,
+            "sse_delta_sent_total": 50,
+            "sse_clients_connected": 3,
+            "sse_disconnect_total": 2,
+            "sse_disconnect_error_total": 1,
+            "sse_send_latency_ms_avg": 5,
+            "streams": {
+                "characters": {"clients_connected": 2, "disconnect_total": 1, "disconnect_error_total": 0},
+                "lfms": {"clients_connected": 1, "disconnect_total": 1, "disconnect_error_total": 1},
+            },
+        },
+    )
+    request = make_request(path="/v1/service/metrics")
+    response = run_async(service_endpoints.get_sse_metrics(request))
+
+    assert response.status == 200
+    data = response_json(response)["data"]
+    assert data["sse_clients_connected"] == 3
+    assert data["sse_disconnect_total"] == 2
+    assert data["sse_send_latency_ms_avg"] == 5
+
+
+def test_get_sse_metrics_includes_streams_breakdown(
+    monkeypatch, make_request, run_async, response_json
+):
+    monkeypatch.setattr(
+        service_endpoints.sse_service,
+        "get_metrics",
+        lambda: {
+            "sse_clients_connected": 5,
+            "streams": {
+                "characters": {"clients_connected": 4, "disconnect_total": 0, "disconnect_error_total": 0},
+                "lfms": {"clients_connected": 1, "disconnect_total": 0, "disconnect_error_total": 0},
+            },
+        },
+    )
+    request = make_request(path="/v1/service/metrics")
+    response = run_async(service_endpoints.get_sse_metrics(request))
+
+    data = response_json(response)["data"]
+    assert "streams" in data
+    assert data["streams"]["characters"]["clients_connected"] == 4
+    assert data["streams"]["lfms"]["clients_connected"] == 1

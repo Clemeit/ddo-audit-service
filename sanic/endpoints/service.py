@@ -4,6 +4,7 @@ Service endpoints.
 
 import services.postgres as postgres_client
 import services.redis as redis_client
+import services.sse as sse_service
 
 from sanic import Blueprint
 from sanic.response import json, empty
@@ -29,6 +30,21 @@ def _clamp_int(value, default: int, *, min_value: int, max_value: int) -> int:
 
 
 # ===== Client-facing endpoints =====
+@service_blueprint.get("/metrics")
+@openapi.exclude()
+async def get_sse_metrics(request: Request):
+    """
+    Method: GET
+
+    Route: /service/metrics
+
+    Description: Get current SSE stream performance metrics. All counters are
+    cumulative since process start and reset on restart. Use two samples
+    taken at different times to compute rates.
+    """
+    return json({"data": sse_service.get_metrics()})
+
+
 @service_blueprint.get("/health")
 @openapi.summary("Service health check")
 @openapi.response(

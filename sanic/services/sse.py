@@ -3,6 +3,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
+from time import monotonic_ns
 
 from constants.server import SSE_SERVER_NAMES_LOWERCASE
 
@@ -25,6 +26,14 @@ _metrics: dict[str, int] = {
     "sse_delta_suppressed_noop_total": 0,
     "sse_queue_evictions_total": 0,
     "sse_reconnects_total": 0,
+    # Disconnect tracking (per-stream)
+    "sse_characters_disconnect_total": 0,
+    "sse_characters_disconnect_error_total": 0,
+    "sse_lfms_disconnect_total": 0,
+    "sse_lfms_disconnect_error_total": 0,
+    # Send latency (aggregate across both streams)
+    "sse_send_latency_ms_total": 0,
+    "sse_send_latency_samples": 0,
 }
 
 # ── Client registries ─────────────────────────────────────────────────────────
@@ -36,20 +45,65 @@ lfm_queues: dict[str, set[asyncio.Queue]] = {
 }
 
 
-def get_metrics() -> dict[str, int]:
+def get_metrics() -> dict:
     """Return current SSE metrics.
 
-    ``sse_clients_connected`` is computed dynamically from the live queue sets.
+    Aggregate and per-stream values are computed dynamically from the live
+    queue sets and in-process counters. ``sse_send_latency_ms_avg`` is
+    zero-safe (returns 0 when no broadcasts have occurred yet).
     """
-    connected = sum(len(qs) for qs in character_queues.values()) + sum(
-        len(qs) for qs in lfm_queues.values()
-    )
-    return {**_metrics, "sse_clients_connected": connected}
+    char_connected = sum(len(qs) for qs in character_queues.values())
+    lfm_connected = sum(len(qs) for qs in lfm_queues.values())
+    samples = _metrics["sse_send_latency_samples"]
+    avg_latency = _metrics["sse_send_latency_ms_total"] // samples if samples > 0 else 0
+    return {
+        **_metrics,
+        # Aggregate computed fields
+        "sse_clients_connected": char_connected + lfm_connected,
+        "sse_disconnect_total": (
+            _metrics["sse_characters_disconnect_total"]
+            + _metrics["sse_lfms_disconnect_total"]
+        ),
+        "sse_disconnect_error_total": (
+            _metrics["sse_characters_disconnect_error_total"]
+            + _metrics["sse_lfms_disconnect_error_total"]
+        ),
+        "sse_send_latency_ms_avg": avg_latency,
+        # Per-stream breakdown
+        "streams": {
+            "characters": {
+                "clients_connected": char_connected,
+                "disconnect_total": _metrics["sse_characters_disconnect_total"],
+                "disconnect_error_total": _metrics["sse_characters_disconnect_error_total"],
+            },
+            "lfms": {
+                "clients_connected": lfm_connected,
+                "disconnect_total": _metrics["sse_lfms_disconnect_total"],
+                "disconnect_error_total": _metrics["sse_lfms_disconnect_error_total"],
+            },
+        },
+    }
 
 
 def record_reconnect() -> None:
     """Increment the reconnect counter (call when Last-Event-ID header is present)."""
     _metrics["sse_reconnects_total"] += 1
+
+
+def record_disconnect(stream_type: str, *, error: bool = False) -> None:
+    """Increment disconnect counters for the given stream type.
+
+    Call with ``error=False`` on a clean stream exit (deadline or close),
+    and ``error=True`` when an exception interrupts the stream.
+    """
+    if stream_type == "characters":
+        _metrics["sse_characters_disconnect_total"] += 1
+        if error:
+            _metrics["sse_characters_disconnect_error_total"] += 1
+    elif stream_type == "lfms":
+        _metrics["sse_lfms_disconnect_total"] += 1
+        if error:
+            _metrics["sse_lfms_disconnect_error_total"] += 1
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -123,6 +177,7 @@ def broadcast(
     server_name: str,
     sse_message: str,
 ) -> int:
+    start_ns = monotonic_ns()
     notified = 0
     for q in set(registry[server_name]):
         try:
@@ -131,6 +186,8 @@ def broadcast(
         except asyncio.QueueFull:
             unregister(registry, server_name, q)
             _metrics["sse_queue_evictions_total"] += 1
+    _metrics["sse_send_latency_ms_total"] += (monotonic_ns() - start_ns) // 1_000_000
+    _metrics["sse_send_latency_samples"] += 1
     return notified
 
 
