@@ -205,6 +205,15 @@ async def lfm_stream(request: Request, server_name: str):
                 await response.send(": keepalive\n\n")
 
         await response.send(sse_service.format_sse("close", "{}"))
+    except asyncio.CancelledError:
+        # Treat task cancellation (e.g., client disconnect) as a clean disconnect.
+        sse_service.record_disconnect("lfms", error=False)
+        raise
+    except Exception:
+        sse_service.record_disconnect("lfms", error=True)
+        raise
+    else:
+        sse_service.record_disconnect("lfms", error=False)
     finally:
         sse_service.unregister(sse_service.lfm_queues, server_name.lower(), queue)
     return response

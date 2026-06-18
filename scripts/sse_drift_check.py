@@ -120,9 +120,11 @@ def estimate_sse_event_bytes(event_name: str, raw_data: str) -> int:
         # Preserve any leading space in comment payload.
         return len(f":{raw_data}\n\n".encode("utf-8"))
     data_lines = raw_data.split("\n")
-    frame = f"event: {event_name}\n" + "".join(
-        f"data: {line}\n" for line in data_lines
-    ) + "\n"
+    frame = (
+        f"event: {event_name}\n"
+        + "".join(f"data: {line}\n" for line in data_lines)
+        + "\n"
+    )
     return len(frame.encode("utf-8"))
 
 
@@ -135,6 +137,24 @@ def format_bytes(num_bytes: int) -> str:
         size /= 1024
         unit_idx += 1
     return f"{size:.2f} {units[unit_idx]}"
+
+
+def format_transfer_summary(
+    latest_v2_bytes: int,
+    latest_v1_bytes: int,
+    total_v2_bytes: int,
+    total_v1_bytes: int,
+    drift_count: int,
+) -> str:
+    """Build a compact transfer summary with latest and cumulative sizes."""
+    reduction_pct = get_reduction_percent(total_v1_bytes, total_v2_bytes)
+    return (
+        f"last v2={format_bytes(latest_v2_bytes)} "
+        f"v1={format_bytes(latest_v1_bytes)} | "
+        f"total v2={format_bytes(total_v2_bytes)} "
+        f"v1={format_bytes(total_v1_bytes)} "
+        f"reduction={reduction_pct:.2f}% drift={drift_count}"
+    )
 
 
 def get_reduction_percent(v1_bytes: int, v2_bytes: int) -> float:
@@ -270,15 +290,19 @@ def run(args: argparse.Namespace) -> None:
                 for event_name, raw_data in iter_sse_events(resp):
                     event_count += 1
                     ts = time.strftime("%H:%M:%S")
-                    total_v2_bytes += estimate_sse_event_bytes(event_name, raw_data)
+                    latest_v2_bytes = estimate_sse_event_bytes(event_name, raw_data)
+                    total_v2_bytes += latest_v2_bytes
 
                     if event_name == "__keepalive__":
-                        reduction_pct = get_reduction_percent(
-                            total_v1_bytes, total_v2_bytes
+                        transfer_summary = format_transfer_summary(
+                            latest_v2_bytes=latest_v2_bytes,
+                            latest_v1_bytes=0,
+                            total_v2_bytes=total_v2_bytes,
+                            total_v1_bytes=total_v1_bytes,
+                            drift_count=drift_count,
                         )
                         print(
-                            f"[{ts}] keepalive              | transfer v2={format_bytes(total_v2_bytes)} "
-                            f"v1={format_bytes(total_v1_bytes)} reduction={reduction_pct:.2f}%"
+                            f"[{ts}] keepalive              | transfer {transfer_summary}"
                         )
                         continue
 
@@ -304,12 +328,12 @@ def run(args: argparse.Namespace) -> None:
                     # Poll v1 immediately after updating local state
                     v1_data, v1_response_size = poll_v1(poll_session, v1_url)
                     total_v1_bytes += v1_response_size
-                    reduction_pct = get_reduction_percent(
-                        total_v1_bytes, total_v2_bytes
-                    )
-                    transfer_summary = (
-                        f"transfer v2={format_bytes(total_v2_bytes)} "
-                        f"v1={format_bytes(total_v1_bytes)} reduction={reduction_pct:.2f}%"
+                    transfer_summary = format_transfer_summary(
+                        latest_v2_bytes=latest_v2_bytes,
+                        latest_v1_bytes=v1_response_size,
+                        total_v2_bytes=total_v2_bytes,
+                        total_v1_bytes=total_v1_bytes,
+                        drift_count=drift_count,
                     )
                     if v1_data is None:
                         print(f"[{ts}] {label}  | poll failed | {transfer_summary}")
@@ -318,15 +342,22 @@ def run(args: argparse.Namespace) -> None:
                     diffs = compare(v2_state, v1_data, args.deep)
                     if diffs:
                         drift_count += 1
+                        transfer_summary = format_transfer_summary(
+                            latest_v2_bytes=latest_v2_bytes,
+                            latest_v1_bytes=v1_response_size,
+                            total_v2_bytes=total_v2_bytes,
+                            total_v1_bytes=total_v1_bytes,
+                            drift_count=drift_count,
+                        )
                         print(
                             f"[{ts}] {label}  | DRIFT (v1={len(v1_data)}) "
-                            f"[total drift events: {drift_count}] | {transfer_summary}"
+                            f"| transfer {transfer_summary}"
                         )
                         for d in diffs:
                             print(d)
                     else:
                         print(
-                            f"[{ts}] {label}  | OK (v1={len(v1_data):>5}) | {transfer_summary}"
+                            f"[{ts}] {label}  | OK (v1={len(v1_data):>5}) | transfer {transfer_summary}"
                         )
 
         except KeyboardInterrupt:

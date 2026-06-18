@@ -391,3 +391,83 @@ def test_epoch_present_in_make_snapshot_envelope():
     msg = sse_service.make_snapshot_envelope("characters", "cormyr", {})
     payload = json.loads(msg.split("data: ", 1)[1].strip())
     assert payload["epoch"] == sse_service.STREAM_EPOCH
+
+
+# ── record_disconnect tests ───────────────────────────────────────────────────
+
+
+def test_record_disconnect_characters_increments_counter():
+    before = sse_service._metrics["sse_characters_disconnect_total"]
+    sse_service.record_disconnect("characters")
+    assert sse_service._metrics["sse_characters_disconnect_total"] == before + 1
+
+
+def test_record_disconnect_characters_error_increments_both_counters():
+    before_total = sse_service._metrics["sse_characters_disconnect_total"]
+    before_error = sse_service._metrics["sse_characters_disconnect_error_total"]
+    sse_service.record_disconnect("characters", error=True)
+    assert sse_service._metrics["sse_characters_disconnect_total"] == before_total + 1
+    assert sse_service._metrics["sse_characters_disconnect_error_total"] == before_error + 1
+
+
+def test_record_disconnect_lfms_increments_counter():
+    before = sse_service._metrics["sse_lfms_disconnect_total"]
+    sse_service.record_disconnect("lfms")
+    assert sse_service._metrics["sse_lfms_disconnect_total"] == before + 1
+
+
+def test_record_disconnect_lfms_error_increments_both_counters():
+    before_total = sse_service._metrics["sse_lfms_disconnect_total"]
+    before_error = sse_service._metrics["sse_lfms_disconnect_error_total"]
+    sse_service.record_disconnect("lfms", error=True)
+    assert sse_service._metrics["sse_lfms_disconnect_total"] == before_total + 1
+    assert sse_service._metrics["sse_lfms_disconnect_error_total"] == before_error + 1
+
+
+def test_record_disconnect_unknown_stream_type_is_noop():
+    before = dict(sse_service._metrics)
+    sse_service.record_disconnect("unknown")
+    assert sse_service._metrics == before
+
+
+# ── get_metrics per-stream and computed fields ────────────────────────────────
+
+
+def test_get_metrics_returns_streams_key_with_per_stream_breakdown():
+    metrics = sse_service.get_metrics()
+    assert "streams" in metrics
+    assert "characters" in metrics["streams"]
+    assert "lfms" in metrics["streams"]
+    for stream in ("characters", "lfms"):
+        assert "clients_connected" in metrics["streams"][stream]
+        assert "disconnect_total" in metrics["streams"][stream]
+        assert "disconnect_error_total" in metrics["streams"][stream]
+
+
+def test_get_metrics_aggregate_disconnect_total_is_sum_of_streams():
+    char = sse_service._metrics["sse_characters_disconnect_total"]
+    lfm = sse_service._metrics["sse_lfms_disconnect_total"]
+    metrics = sse_service.get_metrics()
+    assert metrics["sse_disconnect_total"] == char + lfm
+
+
+def test_get_metrics_send_latency_avg_is_zero_when_no_samples(monkeypatch):
+    monkeypatch.setitem(sse_service._metrics, "sse_send_latency_samples", 0)
+    monkeypatch.setitem(sse_service._metrics, "sse_send_latency_ms_total", 0)
+    metrics = sse_service.get_metrics()
+    assert metrics["sse_send_latency_ms_avg"] == 0
+
+
+def test_get_metrics_send_latency_avg_computed_correctly(monkeypatch):
+    monkeypatch.setitem(sse_service._metrics, "sse_send_latency_ms_total", 300)
+    monkeypatch.setitem(sse_service._metrics, "sse_send_latency_samples", 30)
+    metrics = sse_service.get_metrics()
+    assert metrics["sse_send_latency_ms_avg"] == 10
+
+
+def test_broadcast_records_send_latency_sample():
+    registry: dict[str, set[asyncio.Queue]] = {"cormyr": set()}
+    sse_service.register(registry, "cormyr")
+    before = sse_service._metrics["sse_send_latency_samples"]
+    sse_service.broadcast(registry, "cormyr", "event: test\ndata: {}\n\n")
+    assert sse_service._metrics["sse_send_latency_samples"] == before + 1
