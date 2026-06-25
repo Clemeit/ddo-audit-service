@@ -34,6 +34,8 @@ _metrics: dict[str, int] = {
     # Send latency (aggregate across both streams)
     "sse_send_latency_ms_total": 0,
     "sse_send_latency_samples": 0,
+    # Last send latency
+    "sse_last_send_latency_us": 0,
 }
 
 # ── Client registries ─────────────────────────────────────────────────────────
@@ -74,7 +76,9 @@ def get_metrics() -> dict:
             "characters": {
                 "clients_connected": char_connected,
                 "disconnect_total": _metrics["sse_characters_disconnect_total"],
-                "disconnect_error_total": _metrics["sse_characters_disconnect_error_total"],
+                "disconnect_error_total": _metrics[
+                    "sse_characters_disconnect_error_total"
+                ],
             },
             "lfms": {
                 "clients_connected": lfm_connected,
@@ -186,8 +190,10 @@ def broadcast(
         except asyncio.QueueFull:
             unregister(registry, server_name, q)
             _metrics["sse_queue_evictions_total"] += 1
-    _metrics["sse_send_latency_ms_total"] += (monotonic_ns() - start_ns) // 1_000_000
+    elapsed_ns = monotonic_ns() - start_ns
+    _metrics["sse_send_latency_ms_total"] += elapsed_ns // 1_000_000
     _metrics["sse_send_latency_samples"] += 1
+    _metrics["sse_last_send_latency_us"] = elapsed_ns // 1_000
     return notified
 
 
