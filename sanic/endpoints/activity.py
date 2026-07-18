@@ -282,9 +282,9 @@ async def get_raid_activity_by_character_ids(request: Request):
         if not character_ids:
             return json({"data": []})
 
-        if len(character_ids) > 30:
+        if len(character_ids) > 50:
             return json(
-                {"message": "Too many character IDs provided. Maximum is 30"},
+                {"message": "Too many character IDs provided. Maximum is 50"},
                 status=400,
             )
 
