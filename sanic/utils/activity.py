@@ -3,7 +3,7 @@ from typing import List, Optional, Any
 from collections import Counter
 
 # Tunable constants
-_MAX_LEVEL = 34
+_MAX_LEVEL = 36
 _SUSPICIOUS_LEVELS = {1, 4, 7, 15}
 _DEFAULT_BANK_LOCATION_IDS = [1879058850, 1879063720, 1879065023]
 
