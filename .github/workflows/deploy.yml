@@ -20,7 +20,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build Docker image with Compose
-        run: docker compose build --no-cache --fix-missing
+        run: docker compose build --build-arg CACHE_BUST=$(date +%Y%m%d)
 
       - name: Push Docker image with Compose
         run: docker compose push
