@@ -13,6 +13,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Diagnostic Network Check
+        run: |
+          curl -I https://registry-1.docker.io/v2/
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
