@@ -78,6 +78,16 @@ async def handle_incoming_characters(
             )
         )
 
+        for character_id, character_data in incoming_characters.items():
+            login_time = None
+            if character_id in previous_character_ids:
+                previous_login_time = previous_characters[character_id]["login_time"]
+                if previous_login_time:
+                    login_time = previous_login_time
+            character_data["login_time"] = (
+                login_time if login_time else get_current_datetime_string()
+            )
+
         # update the redis cache for this server
         if type == CharacterRequestType.set:
             # if it's a set operation, just override the cache completely
