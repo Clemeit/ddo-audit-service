@@ -41,6 +41,7 @@ class Character(BaseModel):
     last_save: Optional[str] = (
         None  # the last time the character was persisted in the database
     )
+    login_time: Optional[str] = None
 
 
 class CharacterActivity(BaseModel):
