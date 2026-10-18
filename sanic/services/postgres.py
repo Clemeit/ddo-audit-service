@@ -1018,6 +1018,7 @@ def add_or_update_characters(characters: list[dict]):
                 "is_recruiting",
                 "is_online",
                 "last_save",
+                "login_time",
             ]
 
             # Process characters in batches for better performance
@@ -5011,6 +5012,7 @@ async def async_add_or_update_characters(characters: list[dict]):
                 "is_recruiting",
                 "is_online",
                 "last_save",
+                "login_time",
             ]
 
             batch_size = 1000
@@ -5088,7 +5090,7 @@ async def async_add_or_update_characters(characters: list[dict]):
                                 if isinstance(char[f], (dict, list))
                                 else char[f]
                             )
-                            for f in character_fields
+                            for f in safe_fields
                         )
                         for char in chars
                     ]
