@@ -19,8 +19,9 @@ This repository serves as the backend service for DDO Audit.
 ### Setup
 
 - Add certbot
-- Run certbot certonly --dry-run --webroot -w /var/www/ddoaudit.com/acme-challenge --cert-name ddoaudit.com -d ddoaudit.com,www.ddoaudit.com,api.ddoaudit.com,pgadmin.ddoaudit.com,playeraudit.com,www.playeraudit.com
+- Run certbot certonly --dry-run --webroot -w /var/www/ddoaudit.com/acme-challenge --cert-name ddoaudit.com -d ddoaudit.com,www.ddoaudit.com,api.ddoaudit.com,pgadmin.ddoaudit.com,gear.ddoaudit.com,playeraudit.com,www.playeraudit.com
+  - To add a name to the existing certificate, run the same command with `--expand` and the full list.
 - Set certbot to auto renew
-- Open etc/letsencrypt/renewal/me.com.conf and under [renewalparams] add: renew_hook = docker exec -it html-nginx-1 nginx reload
-  - This will automatically reload nginx whenever new certs are generated
+- Add a deploy hook so nginx picks up renewed certs: create /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh containing `#!/bin/sh` and `docker exec ddoaudit-nginx-1 nginx -s reload`, then `chmod +x` it
+  - certbot runs it after every successful renewal
 - Install docker and docker-compose with apt. See [https://docs.docker.com/engine/install/ubuntu/] walkthrough.
