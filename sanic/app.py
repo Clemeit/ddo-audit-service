@@ -9,6 +9,7 @@ from endpoints.population import population_blueprint
 from endpoints.health import health_blueprint
 from endpoints.lfms import lfm_blueprint, lfm_blueprint_v2
 from endpoints.service import service_blueprint
+from endpoints.shard_exchange import shard_exchange_blueprint
 from endpoints.verification import verification_blueprint
 from endpoints.quests import quest_blueprint, quest_blueprint_v2
 from endpoints.areas import area_blueprint
@@ -77,6 +78,7 @@ app.blueprint(
         game_blueprint,
         population_blueprint,
         service_blueprint,
+        shard_exchange_blueprint,
         verification_blueprint,
         quest_blueprint,
         quest_blueprint_v2,
