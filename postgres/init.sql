@@ -393,3 +393,145 @@ CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id_revoked_at
 
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at
     ON public."auth_sessions" (expires_at);
+
+-- Shard Exchange (the in-game auction house) scans uploaded by DDO Audit Collections.
+-- Keep in sync with postgres/migrations/2026-11-shard-exchange.sql, which applies the same DDL to an existing database.
+
+CREATE TABLE IF NOT EXISTS public."shard_exchange_scans"
+(
+    scan_id uuid NOT NULL,
+    server text NOT NULL,
+    started_at timestamp with time zone NOT NULL,
+    finished_at timestamp with time zone NOT NULL,
+    pages integer NOT NULL DEFAULT 0,
+    listing_count integer NOT NULL DEFAULT 0,
+    complete boolean NOT NULL,
+    received_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    PRIMARY KEY (scan_id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."shard_exchange_scans"
+    OWNER to pgadmin;
+
+CREATE INDEX IF NOT EXISTS idx_shard_exchange_scans_server_finished
+    ON public."shard_exchange_scans" (server, finished_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_shard_exchange_scans_finished
+    ON public."shard_exchange_scans" (finished_at);
+
+-- Auction IDs are not proven unique, so both IDs are in the key.
+-- NULL means not known or not applicable (quantity: the item does not stack; min_level: none of its own;
+-- bidder_id: no bid; posted_at / expires_at: not known).
+CREATE TABLE IF NOT EXISTS public."shard_exchange_listings"
+(
+    server text NOT NULL,
+    auction_id bigint NOT NULL,
+    item_id bigint NOT NULL,
+    did bigint NOT NULL,
+    quantity bigint,
+    min_level integer,
+    bound boolean NOT NULL DEFAULT false,
+    min_bid bigint NOT NULL DEFAULT 0,
+    bid bigint NOT NULL DEFAULT 0,
+    buyout bigint NOT NULL DEFAULT 0,
+    bidder_id bigint,
+    poster_id bigint,
+    posted_at timestamp with time zone,
+    expires_at timestamp with time zone,
+    duration_s integer,
+    item_props jsonb NOT NULL DEFAULT '{}'::jsonb,
+    first_seen_at timestamp with time zone NOT NULL,
+    last_seen_at timestamp with time zone NOT NULL,
+    first_scan_id uuid NOT NULL,
+    last_scan_id uuid NOT NULL,
+    ended_at timestamp with time zone,
+    end_reason text,
+    PRIMARY KEY (server, auction_id, item_id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."shard_exchange_listings"
+    OWNER to pgadmin;
+
+CREATE INDEX IF NOT EXISTS idx_shard_exchange_listings_active
+    ON public."shard_exchange_listings" (server) WHERE ended_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_shard_exchange_listings_did
+    ON public."shard_exchange_listings" (did, server);
+
+CREATE INDEX IF NOT EXISTS idx_shard_exchange_listings_ended
+    ON public."shard_exchange_listings" (ended_at) WHERE ended_at IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS public."shard_exchange_bids"
+(
+    "time" timestamp with time zone NOT NULL,
+    server text NOT NULL,
+    auction_id bigint NOT NULL,
+    item_id bigint NOT NULL,
+    did bigint NOT NULL,
+    bid bigint NOT NULL,
+    bidder_id bigint
+);
+
+SELECT create_hypertable('shard_exchange_bids', 'time', if_not_exists => TRUE);
+
+SELECT add_retention_policy('shard_exchange_bids', INTERVAL '180 days', if_not_exists => TRUE);
+
+CREATE INDEX IF NOT EXISTS idx_shard_exchange_bids_listing
+    ON public."shard_exchange_bids" (server, auction_id, item_id, "time" DESC);
+
+ALTER TABLE IF EXISTS public."shard_exchange_bids"
+    OWNER to pgadmin;
+
+-- One row per complete scan per item. Prices are in shards per unit (price / stack size).
+-- Items with random loot share one did but differ in value, so a did's statistics blend them;
+-- shard_exchange_listings.item_props has what is needed to tell them apart.
+CREATE TABLE IF NOT EXISTS public."shard_exchange_price_history"
+(
+    "time" timestamp with time zone NOT NULL,
+    server text NOT NULL,
+    did bigint NOT NULL,
+    listing_count integer NOT NULL,
+    unit_count bigint NOT NULL,
+    buyout_listing_count integer NOT NULL,
+    min_buyout_unit numeric,
+    median_buyout_unit numeric,
+    max_buyout_unit numeric,
+    min_bid_unit numeric,
+    UNIQUE (server, did, "time")
+);
+
+SELECT create_hypertable('shard_exchange_price_history', 'time', if_not_exists => TRUE);
+
+SELECT add_retention_policy('shard_exchange_price_history', INTERVAL '180 days', if_not_exists => TRUE);
+
+CREATE INDEX IF NOT EXISTS idx_shard_exchange_price_history_did
+    ON public."shard_exchange_price_history" (did, server, "time" DESC);
+
+ALTER TABLE IF EXISTS public."shard_exchange_price_history"
+    OWNER to pgadmin;
+
+-- Item names by type ID (did), so the Shard Exchange price history can be found and shown by name.
+-- Filled through POST /v1/shard-exchange/items.
+CREATE TABLE IF NOT EXISTS public."item_names"
+(
+    did bigint NOT NULL,
+    name text NOT NULL,
+    updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    PRIMARY KEY (did)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."item_names"
+    OWNER to pgadmin;
+
+CREATE INDEX IF NOT EXISTS idx_item_names_name_lower
+    ON public."item_names" (lower(name) text_pattern_ops);
+
+-- Finds the data ID of an item instance seen in a listing.
+CREATE INDEX IF NOT EXISTS idx_shard_exchange_listings_item
+    ON public."shard_exchange_listings" (item_id);
