@@ -327,10 +327,10 @@ def test_item_names_are_added_and_renamed():
     did = 900_000 + int(uuid4().hex[:4], 16)
 
     async def test(pg):
-        assert await async_upsert_item_names([(did, "Old Name")]) == 1
+        assert await async_upsert_item_names([(did, "Old Name", None, None)]) == 1
         assert await async_get_item_name(did) == "Old Name"
-        assert await async_upsert_item_names([(did, "Old Name")]) == 0  # unchanged: nothing written
-        assert await async_upsert_item_names([(did, "New Name")]) == 1
+        assert await async_upsert_item_names([(did, "Old Name", None, None)]) == 0  # unchanged: nothing written
+        assert await async_upsert_item_names([(did, "New Name", None, None)]) == 1
         assert await async_get_item_name(did) == "New Name"
         assert await async_get_item_name(did + 100000) is None
 
@@ -351,7 +351,7 @@ def test_item_search_ranks_exact_then_prefix_and_can_require_a_listing():
     server = _server()
 
     async def test(pg):
-        await async_upsert_item_names(names)
+        await async_upsert_item_names([(d, n, None, None) for d, n in names])
 
         found = await async_search_item_names(f"test widget {tag}", 10, listed_only=False)
         assert [r["did"] for r in found] == [base + 3, base + 2, base + 1]  # exact, starts with, contains
@@ -420,5 +420,188 @@ def test_price_history_per_scan_and_per_day():
         assert await async_get_price_history(server, did, day2 + timedelta(days=1), "scan") == []
         assert await async_get_price_history(server + "x", did, since, "scan") == []
         assert await async_get_price_history(server, did + 1, since, "day") == []
+
+    _run(test)
+
+
+
+# ===== browsing =====
+
+
+def _browse_setup(tag):
+    """Item names for one test: (did, name, category, min_level). The tag keeps names and slugs unique."""
+    base = 4_000_000 + int(tag[:5], 16) * 10
+    return base, [
+        (base + 1, f"Alpha Ring {tag}", "jewelry.rings", None),
+        (base + 2, f"Alpha Ring {tag}", "jewelry.rings", None),  # a second item type with the same name
+        (base + 3, f"Beta's Club {tag}", "weapons.simple.club", 12),
+        (base + 4, f"Gamma Potion {tag}", "potions", None),
+    ]
+
+
+def test_item_slugs_come_from_the_name():
+    from services.shard_exchange_db import async_upsert_item_names
+
+    did = 5_000_000 + int(uuid4().hex[:5], 16)
+
+    async def test(pg):
+        await async_upsert_item_names([(did, "Dragon's Hoard: +2 Ring (Epic)", None, None)])
+        row = await _one(pg, "SELECT slug FROM item_names WHERE did = %s", did)
+        assert row["slug"] == "dragons-hoard-2-ring-epic"
+        await async_upsert_item_names([(did, "  Renamed -- Item  ", None, None)])
+        assert (await _one(pg, "SELECT slug FROM item_names WHERE did = %s", did))["slug"] == "renamed-item"
+
+    _run(test)
+
+
+def test_item_category_and_level_are_kept_when_not_sent():
+    from services.shard_exchange_db import async_upsert_item_names
+
+    did = 5_100_000 + int(uuid4().hex[:5], 16)
+
+    async def test(pg):
+        assert await async_upsert_item_names([(did, "Kept", "potions", 5)]) == 1
+        assert await async_upsert_item_names([(did, "Kept", None, None)]) == 0
+        assert await async_upsert_item_names([(did, "Kept", "scrolls", None)]) == 1
+        row = await _one(pg, "SELECT category, min_level FROM item_names WHERE did = %s", did)
+        assert (row["category"], row["min_level"]) == ("scrolls", 5)
+
+    _run(test)
+
+
+def test_listings_filter_sort_and_page():
+    from services.shard_exchange_db import (
+        ListingFilters,
+        async_get_category_counts,
+        async_search_listings,
+        async_upsert_item_names,
+    )
+
+    tag = uuid4().hex[:8]
+    server = _server()
+    base, names = _browse_setup(tag)
+    now = datetime.now(timezone.utc)
+
+    async def test(pg):
+        await async_upsert_item_names(names)
+        rows = [
+            _row(1, did=base + 1, buyout=500, min_bid=100, min_level=20, expires=now + timedelta(hours=5)),
+            _row(2, did=base + 2, buyout=0, min_bid=50, bid=70, bidder=9, min_level=8, expires=now + timedelta(hours=1)),
+            _row(3, did=base + 3, buyout=300, min_bid=10),  # level from the item type: 12
+            _row(4, did=base + 4, quantity=10, buyout=200, min_bid=20, expires=now + timedelta(days=2)),
+            _row(5, did=base + 4, quantity=2, buyout=100, min_bid=30),
+            _row(6, did=base + 9, buyout=50, min_bid=50),  # no name known
+        ]
+        await _persist(server, rows, finished=now - timedelta(minutes=5))
+        async with pg.get_async_dict_cursor(commit=True) as cur:
+            # one past its expiry time (not ended yet) and one ended: neither is shown
+            await cur.execute(
+                "UPDATE shard_exchange_listings SET expires_at = %s WHERE server = %s AND auction_id = 5",
+                (now - timedelta(minutes=1), server),
+            )
+        await _persist(server, rows[:4] + [rows[5]], finished=now - timedelta(minutes=1))
+        await _persist(server, rows[:4] + [rows[5], _row(7, did=base + 4, buyout=1)], finished=now)
+        async with pg.get_async_dict_cursor(commit=True) as cur:
+            await cur.execute(
+                "UPDATE shard_exchange_listings SET ended_at = now() WHERE server = %s AND auction_id = 7",
+                (server,),
+            )
+
+        async def search(sort="name", descending=False, limit=20, offset=0, **f):
+            found, total = await async_search_listings(
+                server, ListingFilters(words=f.pop("words", []), **f),
+                sort=sort, descending=descending, limit=limit, offset=offset,
+            )
+            return [r["auction_id"] for r in found], total
+
+        # by name (unknown name last), every active listing once
+        ids, total = await search()
+        assert total == 5 and ids[-1] == 6 and sorted(ids) == [1, 2, 3, 4, 6]
+        assert ids[:2] in ([1, 2], [2, 1])  # the two Alpha Rings first
+
+        # words: all must match, any case
+        assert (await search(words=["alpha", tag.upper()]))[0] in ([1, 2], [2, 1])
+        assert (await search(words=["alpha", "potion"]))[1] == 0
+
+        # a category includes its subcategories
+        assert (await search(category="weapons"))[0] == [3]
+        assert (await search(category="weapons.simple.club"))[0] == [3]
+        assert (await search(category="weapons.simple.dagger"))[1] == 0
+        assert sorted((await search(category="jewelry"))[0]) == [1, 2]
+
+        # one item by slug: both item types named Alpha Ring
+        assert sorted((await search(item_slug=f"alpha-ring-{tag}"))[0]) == [1, 2]
+
+        # level: the listing's own, else the item type's (12 for the club); unknown counts as 1
+        assert sorted((await search(min_level=10))[0]) == [1, 3]
+        assert sorted((await search(max_level=8))[0]) == [2, 4, 6]
+        assert (await search(min_level=10, max_level=15))[0] == [3]
+
+        assert sorted((await search(buyout_only=True))[0]) == [1, 3, 4, 6]
+
+        # buyout: listings without one last, both ways
+        assert (await search(sort="buyout"))[0] == [6, 4, 3, 1, 2]
+        assert (await search(sort="buyout", descending=True))[0] == [1, 3, 4, 6, 2]
+        # current price: the bid if there is one, else the minimum bid (10, 20, 50, 70, 100)
+        assert (await search(sort="price"))[0] == [3, 4, 6, 2, 1]
+        # per unit: the potions are 200 for 10
+        assert (await search(sort="unit_buyout"))[0] == [4, 6, 3, 1, 2]
+        # time left: unknown expiry last
+        assert (await search(sort="time_left"))[0][:3] == [2, 1, 4]
+
+        # paging
+        page2, total = await search(sort="buyout", limit=2, offset=2)
+        assert page2 == [3, 1] and total == 5
+        past_end, total = await search(limit=2, offset=10)
+        assert past_end == [] and total == 5
+
+        counts = await async_get_category_counts(server)
+        assert counts == {"jewelry.rings": 2, "weapons.simple.club": 1, "potions": 1, None: 1}
+
+    _run(test)
+
+
+def test_item_by_slug_and_its_combined_price_history():
+    from services.shard_exchange_db import (
+        async_get_item_by_slug,
+        async_get_price_history_by_slug,
+        async_upsert_item_names,
+    )
+
+    tag = uuid4().hex[:8]
+    server = _server()
+    base, names = _browse_setup(tag)
+    day = datetime(2026, 11, 10, 6, 0, tzinfo=timezone.utc)
+
+    async def test(pg):
+        await async_upsert_item_names(names)
+        slug = f"alpha-ring-{tag}"
+
+        item = await async_get_item_by_slug(slug)
+        assert (item["name"], item["category"]) == (f"Alpha Ring {tag}", "jewelry.rings")
+        assert await async_get_item_by_slug(f"no-such-item-{tag}") is None
+
+        # two item types with that name in one scan: their statistics are combined
+        await _persist(
+            server,
+            [
+                _row(1, did=base + 1, buyout=100, min_bid=40),
+                _row(2, did=base + 2, buyout=300, min_bid=20),
+                _row(3, did=base + 2, buyout=500, min_bid=60),
+                _row(4, did=base + 4, buyout=7),  # another item
+            ],
+            finished=day,
+        )
+        since = datetime(2026, 11, 1, tzinfo=timezone.utc)
+        scans = await async_get_price_history_by_slug(server, slug, since, "scan")
+        assert len(scans) == 1
+        s = scans[0]
+        assert (s["listing_count"], s["buyout_listing_count"]) == (3, 3)
+        assert (s["min_buyout_unit"], s["max_buyout_unit"], s["min_bid_unit"]) == (100, 500, 20)
+        assert s["median_buyout_unit"] == 250  # the median of the two types' medians, 100 and 400
+
+        days = await async_get_price_history_by_slug(server, slug, since, "day")
+        assert [d["time"] for d in days] == ["2026-11-10T00:00:00+00:00"] and days[0]["scans"] == 1
+        assert await async_get_price_history_by_slug(server + "x", slug, since, "day") == []
 
     _run(test)

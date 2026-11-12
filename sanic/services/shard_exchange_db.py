@@ -304,16 +304,25 @@ def _plain(value):
     return value
 
 
-async def async_upsert_item_names(items: list[tuple[int, str]]) -> int:
-    """Adds or renames items by data ID. Returns how many rows were written."""
+async def async_upsert_item_names(
+    items: list[tuple[int, str, str | None, int | None]],
+) -> int:
+    """Adds or renames items by data ID: (did, name, category, min_level). A category or minimum level
+    of None keeps the stored one. Returns how many rows were written."""
     if not items:
         return 0
     async with get_async_dict_cursor(commit=True) as cur:
         await cur.executemany(
             """
-            INSERT INTO item_names (did, name) VALUES (%s, %s)
-            ON CONFLICT (did) DO UPDATE SET name = EXCLUDED.name, updated_at = now()
+            INSERT INTO item_names (did, name, category, min_level) VALUES (%s, %s, %s, %s)
+            ON CONFLICT (did) DO UPDATE SET
+                name = EXCLUDED.name,
+                category = COALESCE(EXCLUDED.category, item_names.category),
+                min_level = COALESCE(EXCLUDED.min_level, item_names.min_level),
+                updated_at = now()
             WHERE item_names.name IS DISTINCT FROM EXCLUDED.name
+               OR (EXCLUDED.category IS NOT NULL AND item_names.category IS DISTINCT FROM EXCLUDED.category)
+               OR (EXCLUDED.min_level IS NOT NULL AND item_names.min_level IS DISTINCT FROM EXCLUDED.min_level)
             """,
             items,
         )
@@ -414,6 +423,10 @@ async def async_get_price_history(
     async with get_async_dict_cursor(commit=False) as cur:
         await cur.execute(query, (server, did, since))
         rows = await cur.fetchall()
+    return _price_rows(rows)
+
+
+def _price_rows(rows) -> list[dict]:
     return [
         {
             "time": row["time"].astimezone(timezone.utc).isoformat(),
@@ -422,3 +435,206 @@ async def async_get_price_history(
         }
         for row in rows
     ]
+
+
+# =============================================
+# Reading: browsing the active listings
+# =============================================
+
+# A listing is active until a complete scan misses it; one past its expiry time is over already.
+_ACTIVE_LISTING = (
+    "l.server = %(server)s AND l.ended_at IS NULL"
+    " AND (l.expires_at IS NULL OR l.expires_at > now())"
+)
+
+# The item's minimum level: the listing's own (randomised items), else the item type's.
+_EFFECTIVE_LEVEL = "COALESCE(l.min_level, n.min_level)"
+_UNITS = "GREATEST(COALESCE(l.quantity, 1), 1)"
+
+# Each sort is a list of ORDER BY terms; "{dir}" takes ASC or DESC. Listings without the sorted value
+# (no name, no expiry, no buyout) go last either way.
+_LISTING_SORTS: dict[str, list[str]] = {
+    "name": ["(n.name IS NULL)", "lower(n.name) {dir}"],
+    "time_left": ["(l.expires_at IS NULL)", "l.expires_at {dir}"],
+    "price": ["GREATEST(l.bid, l.min_bid) {dir}"],
+    "buyout": ["(l.buyout = 0)", "l.buyout {dir}"],
+    "unit_price": ["GREATEST(l.bid, l.min_bid)::numeric / " + _UNITS + " {dir}"],
+    "unit_buyout": ["(l.buyout = 0)", "l.buyout::numeric / " + _UNITS + " {dir}"],
+}
+# Makes the order total, so paging never repeats or skips a listing.
+_LISTING_TIEBREAK = ["lower(n.name)", "l.expires_at", "l.auction_id", "l.item_id"]
+
+
+@dataclass
+class ListingFilters:
+    words: list[str]
+    category: str | None = None
+    item_slug: str | None = None
+    min_level: int | None = None
+    max_level: int | None = None
+    buyout_only: bool = False
+
+
+def _listing_where(server: str, filters: ListingFilters) -> tuple[str, dict]:
+    clauses = [_ACTIVE_LISTING]
+    params: dict = {"server": server}
+    for i, word in enumerate(filters.words):
+        clauses.append(f"n.name ILIKE %(word{i})s")
+        params[f"word{i}"] = f"%{_like_pattern(word)}%"
+    if filters.category:
+        clauses.append(
+            "(n.category = %(category)s OR n.category LIKE %(category_prefix)s)"
+        )
+        params["category"] = filters.category
+        params["category_prefix"] = f"{_like_pattern(filters.category)}.%"
+    if filters.item_slug:
+        clauses.append("n.slug = %(item_slug)s")
+        params["item_slug"] = filters.item_slug
+    if filters.min_level is not None:
+        clauses.append(f"COALESCE({_EFFECTIVE_LEVEL}, 1) >= %(min_level)s")
+        params["min_level"] = filters.min_level
+    if filters.max_level is not None:
+        clauses.append(f"COALESCE({_EFFECTIVE_LEVEL}, 1) <= %(max_level)s")
+        params["max_level"] = filters.max_level
+    if filters.buyout_only:
+        clauses.append("l.buyout > 0")
+    return " AND ".join(clauses), params
+
+
+def _listing_order(sort: str, descending: bool) -> str:
+    direction = "DESC" if descending else "ASC"
+    terms = [term.format(dir=direction) for term in _LISTING_SORTS[sort]]
+    return ", ".join(terms + _LISTING_TIEBREAK)
+
+
+async def async_search_listings(
+    server: str,
+    filters: ListingFilters,
+    *,
+    sort: str,
+    descending: bool,
+    limit: int,
+    offset: int,
+) -> tuple[list[dict], int]:
+    """One page of a server's active listings, and how many match in all."""
+    if sort not in _LISTING_SORTS:
+        raise ValueError(f"unknown sort: {sort}")
+    where, params = _listing_where(server, filters)
+    source = f"""
+        FROM shard_exchange_listings l
+        LEFT JOIN item_names n ON n.did = l.did
+        WHERE {where}
+    """
+    query = f"""
+        SELECT l.server, l.auction_id, l.item_id, n.name, n.slug, n.category, l.quantity,
+               {_EFFECTIVE_LEVEL} AS min_level, l.bound, l.min_bid, l.bid, l.buyout,
+               l.posted_at, l.expires_at
+        {source}
+        ORDER BY {_listing_order(sort, descending)}
+        LIMIT %(limit)s OFFSET %(offset)s
+    """
+    async with get_async_dict_cursor(commit=False) as cur:
+        await cur.execute(f"SELECT count(*) AS n {source}", params)
+        total = (await cur.fetchone())["n"]
+        rows: list[dict] = []
+        if total > offset:
+            await cur.execute(query, {**params, "limit": limit, "offset": offset})
+            rows = list(await cur.fetchall())
+    return rows, total
+
+
+async def async_get_category_counts(server: str) -> dict[str | None, int]:
+    """How many active listings each stored category has on a server (None: no category known)."""
+    async with get_async_dict_cursor(commit=False) as cur:
+        await cur.execute(
+            f"""
+            SELECT n.category, count(*) AS n
+            FROM shard_exchange_listings l
+            LEFT JOIN item_names n ON n.did = l.did
+            WHERE {_ACTIVE_LISTING}
+            GROUP BY n.category
+            """,
+            {"server": server},
+        )
+        return {row["category"]: row["n"] for row in await cur.fetchall()}
+
+
+async def async_get_last_scan_time(server: str) -> datetime | None:
+    """When the last complete scan of a server finished."""
+    async with get_async_dict_cursor(commit=False) as cur:
+        await cur.execute(
+            "SELECT max(finished_at) AS t FROM shard_exchange_scans WHERE server = %s AND complete",
+            (server,),
+        )
+        row = await cur.fetchone()
+        return row["t"] if row else None
+
+
+async def async_get_item_by_slug(slug: str) -> dict | None:
+    """An item as players know it, by its name's slug: the name most of the item types with that slug
+    have, and their most common category. Items with the same name (random loot, for example) are one
+    item here."""
+    async with get_async_dict_cursor(commit=False) as cur:
+        await cur.execute(
+            """
+            SELECT
+                (SELECT name FROM item_names WHERE slug = %(slug)s
+                 GROUP BY name ORDER BY count(*) DESC, name LIMIT 1) AS name,
+                (SELECT category FROM item_names WHERE slug = %(slug)s AND category IS NOT NULL
+                 GROUP BY category ORDER BY count(*) DESC, category LIMIT 1) AS category
+            """,
+            {"slug": slug},
+        )
+        row = await cur.fetchone()
+        return row if row and row["name"] is not None else None
+
+
+async def async_get_price_history_by_slug(
+    server: str, slug: str, since: datetime, bucket: str
+) -> list[dict]:
+    """Price history of every item type with one name (by slug) on one server, oldest first.
+
+    Each scan's rows are combined first (the lowest minimum, the median of the medians, the highest
+    maximum, the lowest current price, the listing and unit counts added up); bucket "day" then
+    combines a day's scans the way async_get_price_history does."""
+    per_scan = """
+        WITH per_scan AS (
+            SELECT p."time",
+                   sum(p.listing_count) AS listing_count,
+                   sum(p.unit_count) AS unit_count,
+                   sum(p.buyout_listing_count) AS buyout_listing_count,
+                   min(p.min_buyout_unit) AS min_buyout_unit,
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY p.median_buyout_unit) AS median_buyout_unit,
+                   max(p.max_buyout_unit) AS max_buyout_unit,
+                   min(p.min_bid_unit) AS min_bid_unit
+            FROM shard_exchange_price_history p
+            JOIN item_names n ON n.did = p.did
+            WHERE n.slug = %(slug)s AND p.server = %(server)s AND p."time" >= %(since)s
+            GROUP BY p."time"
+        )
+    """
+    if bucket == "day":
+        query = per_scan + """
+            SELECT time_bucket('1 day', "time") AS "time",
+                   round(avg(listing_count))::int AS listing_count,
+                   round(avg(unit_count))::bigint AS unit_count,
+                   round(avg(buyout_listing_count))::int AS buyout_listing_count,
+                   min(min_buyout_unit) AS min_buyout_unit,
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY median_buyout_unit) AS median_buyout_unit,
+                   max(max_buyout_unit) AS max_buyout_unit,
+                   min(min_bid_unit) AS min_bid_unit,
+                   count(*)::int AS scans
+            FROM per_scan
+            GROUP BY 1
+            ORDER BY 1
+        """
+    else:
+        query = per_scan + """
+            SELECT "time", listing_count, unit_count, buyout_listing_count, min_buyout_unit,
+                   median_buyout_unit, max_buyout_unit, min_bid_unit, 1 AS scans
+            FROM per_scan
+            ORDER BY "time"
+        """
+    async with get_async_dict_cursor(commit=False) as cur:
+        await cur.execute(query, {"server": server, "slug": slug, "since": since})
+        return _price_rows(await cur.fetchall())
