@@ -532,6 +532,20 @@ ALTER TABLE IF EXISTS public."item_names"
 CREATE INDEX IF NOT EXISTS idx_item_names_name_lower
     ON public."item_names" (lower(name) text_pattern_ops);
 
+ALTER TABLE IF EXISTS public."item_names"
+    ADD COLUMN IF NOT EXISTS slug text GENERATED ALWAYS AS (
+        btrim(regexp_replace(regexp_replace(lower(name), '[''’]', '', 'g'), '[^a-z0-9]+', '-', 'g'), '-')
+    ) STORED;
+
+ALTER TABLE IF EXISTS public."item_names"
+    ADD COLUMN IF NOT EXISTS category text;
+
+ALTER TABLE IF EXISTS public."item_names"
+    ADD COLUMN IF NOT EXISTS min_level integer;
+
+CREATE INDEX IF NOT EXISTS idx_item_names_slug
+    ON public."item_names" (slug);
+
 -- Finds the data ID of an item instance seen in a listing.
 CREATE INDEX IF NOT EXISTS idx_shard_exchange_listings_item
     ON public."shard_exchange_listings" (item_id);

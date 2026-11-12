@@ -8,6 +8,7 @@ from constants.shard_exchange import (
     MAX_ITEM_NAME_LENGTH,
     MAX_ITEM_NAMES_PER_REQUEST,
     MAX_LISTINGS_PER_SCAN,
+    SHARD_EXCHANGE_CATEGORY_SLUGS,
 )
 from pydantic import BaseModel, Field, field_validator
 
@@ -66,6 +67,20 @@ class ItemNameApiModel(BaseModel):
     # The item's type ID (the did that scans carry).
     did: int = Field(ge=0, le=INT64_MAX)
     name: str = Field(min_length=1, max_length=MAX_ITEM_NAME_LENGTH)
+    # Optional, kept when not sent: the slug of the most specific Shard Exchange category the item is in
+    # (one of SHARD_EXCHANGE_CATEGORY_SLUGS), and the item's own minimum level.
+    category: str | None = None
+    min_level: int | None = Field(default=None, ge=0, le=INT32_MAX)
+
+    @field_validator("category")
+    @classmethod
+    def _category_is_known(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        category = value.strip().lower()
+        if category not in SHARD_EXCHANGE_CATEGORY_SLUGS:
+            raise ValueError(f"unknown category: {value}")
+        return category
 
 
 class ItemNamesRequestApiModel(BaseModel):

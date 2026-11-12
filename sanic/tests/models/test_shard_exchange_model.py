@@ -122,3 +122,36 @@ def test_item_names_request_rejects_bad_items(item):
 
     with pytest.raises(ValidationError):
         ItemNamesRequestApiModel(items=[item])
+
+
+
+# ===== item names =====
+
+
+def test_item_name_category_is_optional_and_checked():
+    import pytest as _pytest
+
+    from models.shard_exchange import ItemNameApiModel
+
+    assert ItemNameApiModel(did=1, name="X").category is None
+    assert ItemNameApiModel(did=1, name="X", category=" Armor.Cloth ").category == "armor.cloth"
+    with _pytest.raises(Exception):
+        ItemNameApiModel(did=1, name="X", category="armor.spoon")
+    with _pytest.raises(Exception):
+        ItemNameApiModel(did=1, name="X", min_level=-1)
+
+
+def test_category_slugs_are_unique_and_well_formed():
+    import re
+
+    from constants.shard_exchange import SHARD_EXCHANGE_CATEGORIES, SHARD_EXCHANGE_CATEGORY_SLUGS
+
+    def walk(categories):
+        for c in categories:
+            yield c["slug"]
+            yield from walk(c["children"])
+
+    slugs = list(walk(SHARD_EXCHANGE_CATEGORIES))
+    assert len(slugs) == len(set(slugs)) == len(SHARD_EXCHANGE_CATEGORY_SLUGS) == 81
+    assert all(re.match(r"^[a-z0-9-]+(\.[a-z0-9-]+)*$", s) for s in slugs)
+    assert len(SHARD_EXCHANGE_CATEGORIES) == 19
