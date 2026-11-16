@@ -15,9 +15,13 @@ from uuid import UUID
 
 import orjson
 from constants.shard_exchange import (
-    END_REASON_EXPIRED,
-    END_REASON_SOLD_OR_CANCELLED,
+    END_REASON_CANCELLED,
+    END_REASON_CANCELLED_OR_BOUGHT_OUT,
+    END_REASON_SOLD_AUCTION,
+    END_REASON_SOLD_BUYOUT,
+    END_REASON_SOLD_BUYOUT_OR_AUCTION,
     END_REASON_UNKNOWN,
+    END_REASON_UNSOLD_OR_UNKNOWN,
     EXPIRY_SLACK_SECONDS,
     MIN_ACTIVE_FRACTION_TO_END_LISTINGS,
     RETENTION_DAYS,
@@ -137,13 +141,21 @@ _INSERT_PRICE_HISTORY = """
 """
 
 # Listings we had as active that this (complete) scan did not see.
+# "Before expiry" means the missing scan finished more than the slack before expires_at, so the listing
+# surely vanished early; otherwise it may have vanished at expiry. See constants/shard_exchange.py.
 _END_LISTINGS = f"""
     UPDATE shard_exchange_listings
     SET ended_at = %(finished)s,
         end_reason = CASE
             WHEN expires_at IS NULL THEN '{END_REASON_UNKNOWN}'
-            WHEN expires_at <= %(finished)s + make_interval(secs => {EXPIRY_SLACK_SECONDS}) THEN '{END_REASON_EXPIRED}'
-            ELSE '{END_REASON_SOLD_OR_CANCELLED}'
+            WHEN bid > 0 AND buyout > 0 AND expires_at > %(finished)s + make_interval(secs => {EXPIRY_SLACK_SECONDS})
+                THEN '{END_REASON_SOLD_BUYOUT}'
+            WHEN bid > 0 AND buyout > 0 THEN '{END_REASON_SOLD_BUYOUT_OR_AUCTION}'
+            WHEN bid > 0 THEN '{END_REASON_SOLD_AUCTION}'
+            WHEN expires_at <= %(finished)s + make_interval(secs => {EXPIRY_SLACK_SECONDS})
+                THEN '{END_REASON_UNSOLD_OR_UNKNOWN}'
+            WHEN buyout > 0 THEN '{END_REASON_CANCELLED_OR_BOUGHT_OUT}'
+            ELSE '{END_REASON_CANCELLED}'
         END
     WHERE server = %(server)s
       AND ended_at IS NULL

@@ -162,23 +162,46 @@ def test_listings_missing_from_a_complete_scan_are_ended_with_a_reason():
 
     async def test(pg):
         later = NOW + timedelta(hours=1)
-        rows = [_row(i) for i in range(1, 11)]
-        rows[0] = _row(1, expires=later + timedelta(hours=20))  # still had a day: sold or cancelled
-        rows[1] = _row(2, expires=later - timedelta(minutes=10))  # ran out of time: expired
-        rows[2] = _row(3, expires=None)  # unknown
-        rows[3] = _row(4, expires=later + timedelta(seconds=60))  # within the expiry slack: expired
-        await _persist(server, rows)
+        early = later + timedelta(hours=20)  # surely vanished before it expired
+        near = later - timedelta(minutes=10)  # its expiry fell inside the gap between the scans
+        ending = [
+            _row(1, bid=20, bidder=5, buyout=100, expires=early),
+            _row(2, bid=20, bidder=5, buyout=100, expires=near),
+            _row(3, bid=20, bidder=5, expires=near),
+            _row(4, bid=20, bidder=5, expires=early),
+            _row(5, buyout=100, expires=early),
+            _row(6, buyout=100, expires=near),
+            _row(7, expires=early),
+            _row(8, expires=near),
+            _row(9, expires=None),
+            _row(10, expires=later + timedelta(seconds=120)),  # on the slack boundary: may be at expiry
+            _row(11, expires=later + timedelta(seconds=121)),  # just outside it: vanished early
+        ]
+        staying = [_row(i) for i in range(100, 121)]
+        await _persist(server, ending + staying)
 
-        result = await _persist(server, rows[4:] + [_row(11)], finished=later)  # 7 of 10 still there, plus one new
+        result = await _persist(server, staying + [_row(200)], finished=later)
 
-        assert result.ended == 4 and result.new_listings == 1
+        assert result.ended == 11 and result.new_listings == 1
         reasons = {
             r["auction_id"]: r["end_reason"]
             for r in await _all(pg, "SELECT auction_id, end_reason FROM shard_exchange_listings WHERE server=%s AND ended_at IS NOT NULL", server)
         }
-        assert reasons == {1: "sold_or_cancelled", 2: "expired", 3: "unknown", 4: "expired"}
+        assert reasons == {
+            1: "sold_buyout",
+            2: "sold_buyout_or_auction",
+            3: "sold_auction",
+            4: "sold_auction",
+            5: "cancelled_or_bought_out",
+            6: "unsold_or_unknown",
+            7: "cancelled",
+            8: "unsold_or_unknown",
+            9: "unknown",
+            10: "unsold_or_unknown",
+            11: "cancelled",
+        }
         active = await _one(pg, "SELECT count(*) n FROM shard_exchange_listings WHERE server=%s AND ended_at IS NULL", server)
-        assert active["n"] == 7
+        assert active["n"] == 22
 
     _run(test)
 

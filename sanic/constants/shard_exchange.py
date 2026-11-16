@@ -11,7 +11,8 @@ MAX_LISTINGS_PER_SCAN = 100_000
 RETENTION_DAYS = 180
 
 # A listing's expiry time is an estimate, good to a few seconds.
-# A listing that vanished within this long before its expiry time is counted as expired, not sold.
+# A listing is only known to have vanished BEFORE its expiry if the scan that missed it finished more
+# than this long before the expiry time; otherwise it may have vanished at expiry.
 EXPIRY_SLACK_SECONDS = 120
 
 # A complete scan marks every listing it did not see as ended. If it saw fewer than this fraction of the
@@ -19,9 +20,20 @@ EXPIRY_SLACK_SECONDS = 120
 # the market), so nothing is marked ended.
 MIN_ACTIVE_FRACTION_TO_END_LISTINGS = 0.5
 
+# Why a listing left the exchange. Once someone bids, the poster can no longer cancel, so a listing with
+# a bid always sells (to the highest bidder at expiry, or to a buyer who pays the buyout earlier).
+# Scans are about hourly, so we only know the listing vanished somewhere between two scans, and a bid
+# placed in that gap is invisible to us. We never guess: when the evidence can't tell, the reason says so.
+END_REASON_SOLD_BUYOUT = "sold_buyout"  # bid + buyout, vanished well before expiry: bought out
+END_REASON_SOLD_AUCTION = "sold_auction"  # bid, no buyout: went to the highest bidder
+END_REASON_SOLD_BUYOUT_OR_AUCTION = "sold_buyout_or_auction"  # bid + buyout, vanished around expiry
+END_REASON_CANCELLED = "cancelled"  # no bid, no buyout, vanished well before expiry
+END_REASON_CANCELLED_OR_BOUGHT_OUT = "cancelled_or_bought_out"  # no bid, buyout, vanished well before expiry
+END_REASON_UNSOLD_OR_UNKNOWN = "unsold_or_unknown"  # no bid seen, vanished around expiry
+END_REASON_UNKNOWN = "unknown"  # no expiry time
+# Legacy values from before bids were considered; old rows may still carry them.
 END_REASON_EXPIRED = "expired"
 END_REASON_SOLD_OR_CANCELLED = "sold_or_cancelled"
-END_REASON_UNKNOWN = "unknown"
 
 # Price history can be asked for as far back as it is kept.
 MAX_PRICE_HISTORY_DAYS = RETENTION_DAYS
