@@ -552,7 +552,47 @@ async def async_search_listings(
         if total > offset:
             await cur.execute(query, {**params, "limit": limit, "offset": offset})
             rows = list(await cur.fetchall())
+            history = await _fetch_bid_history(cur, server, rows)
+            for row in rows:
+                row["bids"] = history.get((row["auction_id"], row["item_id"]), [])
     return rows, total
+
+
+# The most bids kept per listing in a response (the latest ones).
+MAX_BIDS_PER_LISTING = 50
+
+
+async def _fetch_bid_history(
+    cur, server: str, rows: list[dict]
+) -> dict[tuple[int, int], list[dict]]:
+    """The recorded bids of the listings that have one, oldest first: {(auction_id, item_id): [{"amount",
+    "time"}]}. A bid is recorded when a scan sees a different bid than before, so bids placed between
+    two scans show up as one.
+    """
+    keys = [(r["auction_id"], r["item_id"]) for r in rows if r["bid"] > 0]
+    if not keys:
+        return {}
+    await cur.execute(
+        """
+        SELECT b.auction_id, b.item_id, b.bid AS amount, b."time"
+        FROM shard_exchange_bids b
+        JOIN unnest(%(auctions)s::bigint[], %(items)s::bigint[]) AS k(auction_id, item_id)
+            ON k.auction_id = b.auction_id AND k.item_id = b.item_id
+        WHERE b.server = %(server)s
+        ORDER BY b."time"
+        """,
+        {
+            "server": server,
+            "auctions": [k[0] for k in keys],
+            "items": [k[1] for k in keys],
+        },
+    )
+    history: dict[tuple[int, int], list[dict]] = {}
+    for row in await cur.fetchall():
+        history.setdefault((row["auction_id"], row["item_id"]), []).append(
+            {"amount": row["amount"], "time": row["time"]}
+        )
+    return {k: v[-MAX_BIDS_PER_LISTING:] for k, v in history.items()}
 
 
 async def async_get_category_counts(server: str) -> dict[str | None, int]:

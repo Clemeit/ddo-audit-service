@@ -32,7 +32,18 @@ pytestmark = pytest.mark.skipif(
 NOW = datetime(2026, 11, 11, 20, 0, 0, tzinfo=timezone.utc)
 
 
-def _row(auction_id, *, did=1, quantity=None, bid=0, min_bid=10, buyout=0, expires=None, bidder=None, **extra):
+def _row(
+    auction_id,
+    *,
+    did=1,
+    quantity=None,
+    bid=0,
+    min_bid=10,
+    buyout=0,
+    expires=None,
+    bidder=None,
+    **extra,
+):
     from services.shard_exchange_db import ShardListingRow
 
     return ShardListingRow(
@@ -117,23 +128,46 @@ def test_first_scan_stores_listings_bids_and_prices():
         assert result.bid_changes == 1
         assert result.ended == 0
 
-        stored = await _one(pg, "SELECT * FROM shard_exchange_listings WHERE server=%s AND auction_id=2", server)
+        stored = await _one(
+            pg,
+            "SELECT * FROM shard_exchange_listings WHERE server=%s AND auction_id=2",
+            server,
+        )
         assert stored["bid"] == 120 and stored["bidder_id"] == 5
         assert stored["quantity"] == 10
         assert stored["item_props"] == {"101": 5}
         assert stored["ended_at"] is None
-        unstacked = await _one(pg, "SELECT quantity, bidder_id FROM shard_exchange_listings WHERE server=%s AND auction_id=4", server)
+        unstacked = await _one(
+            pg,
+            "SELECT quantity, bidder_id FROM shard_exchange_listings WHERE server=%s AND auction_id=4",
+            server,
+        )
         assert unstacked["quantity"] is None and unstacked["bidder_id"] is None
 
         # did 100: per unit buyouts 10, 20, 30; the lowest current price per unit is min(50, 120, 80) / 10
-        prices = await _one(pg, "SELECT * FROM shard_exchange_price_history WHERE server=%s AND did=100", server)
+        prices = await _one(
+            pg,
+            "SELECT * FROM shard_exchange_price_history WHERE server=%s AND did=100",
+            server,
+        )
         assert prices["listing_count"] == 3 and prices["unit_count"] == 30
         assert prices["buyout_listing_count"] == 3
-        assert (prices["min_buyout_unit"], prices["median_buyout_unit"], prices["max_buyout_unit"]) == (10, 20, 30)
+        assert (
+            prices["min_buyout_unit"],
+            prices["median_buyout_unit"],
+            prices["max_buyout_unit"],
+        ) == (10, 20, 30)
         assert prices["min_bid_unit"] == 5
         # did 200 has no buyout and one unit
-        no_buyout = await _one(pg, "SELECT * FROM shard_exchange_price_history WHERE server=%s AND did=200", server)
-        assert no_buyout["buyout_listing_count"] == 0 and no_buyout["min_buyout_unit"] is None
+        no_buyout = await _one(
+            pg,
+            "SELECT * FROM shard_exchange_price_history WHERE server=%s AND did=200",
+            server,
+        )
+        assert (
+            no_buyout["buyout_listing_count"] == 0
+            and no_buyout["min_buyout_unit"] is None
+        )
         assert no_buyout["min_bid_unit"] == 7 and no_buyout["unit_count"] == 1
 
     _run(test)
@@ -146,12 +180,28 @@ def test_posting_the_same_scan_again_changes_nothing():
         scan_id = uuid4()
         rows = [_row(1, bid=30, bidder=5), _row(2)]
         await _persist(server, rows, scan_id=scan_id)
-        again = await _persist(server, rows, scan_id=scan_id, finished=NOW + timedelta(hours=1))
+        again = await _persist(
+            server, rows, scan_id=scan_id, finished=NOW + timedelta(hours=1)
+        )
 
         assert again.duplicate is True
-        assert (await _one(pg, "SELECT count(*) n FROM shard_exchange_scans WHERE server=%s", server))["n"] == 1
-        assert (await _one(pg, "SELECT count(*) n FROM shard_exchange_bids WHERE server=%s", server))["n"] == 1
-        last = await _one(pg, "SELECT max(last_seen_at) t FROM shard_exchange_listings WHERE server=%s", server)
+        assert (
+            await _one(
+                pg,
+                "SELECT count(*) n FROM shard_exchange_scans WHERE server=%s",
+                server,
+            )
+        )["n"] == 1
+        assert (
+            await _one(
+                pg, "SELECT count(*) n FROM shard_exchange_bids WHERE server=%s", server
+            )
+        )["n"] == 1
+        last = await _one(
+            pg,
+            "SELECT max(last_seen_at) t FROM shard_exchange_listings WHERE server=%s",
+            server,
+        )
         assert last["t"] == NOW
 
     _run(test)
@@ -163,7 +213,9 @@ def test_listings_missing_from_a_complete_scan_are_ended_with_a_reason():
     async def test(pg):
         later = NOW + timedelta(hours=1)
         early = later + timedelta(hours=20)  # surely vanished before it expired
-        near = later - timedelta(minutes=10)  # its expiry fell inside the gap between the scans
+        near = later - timedelta(
+            minutes=10
+        )  # its expiry fell inside the gap between the scans
         ending = [
             _row(1, bid=20, bidder=5, buyout=100, expires=early),
             _row(2, bid=20, bidder=5, buyout=100, expires=near),
@@ -174,8 +226,12 @@ def test_listings_missing_from_a_complete_scan_are_ended_with_a_reason():
             _row(7, expires=early),
             _row(8, expires=near),
             _row(9, expires=None),
-            _row(10, expires=later + timedelta(seconds=120)),  # on the slack boundary: may be at expiry
-            _row(11, expires=later + timedelta(seconds=121)),  # just outside it: vanished early
+            _row(
+                10, expires=later + timedelta(seconds=120)
+            ),  # on the slack boundary: may be at expiry
+            _row(
+                11, expires=later + timedelta(seconds=121)
+            ),  # just outside it: vanished early
         ]
         staying = [_row(i) for i in range(100, 121)]
         await _persist(server, ending + staying)
@@ -185,7 +241,11 @@ def test_listings_missing_from_a_complete_scan_are_ended_with_a_reason():
         assert result.ended == 11 and result.new_listings == 1
         reasons = {
             r["auction_id"]: r["end_reason"]
-            for r in await _all(pg, "SELECT auction_id, end_reason FROM shard_exchange_listings WHERE server=%s AND ended_at IS NOT NULL", server)
+            for r in await _all(
+                pg,
+                "SELECT auction_id, end_reason FROM shard_exchange_listings WHERE server=%s AND ended_at IS NOT NULL",
+                server,
+            )
         }
         assert reasons == {
             1: "sold_buyout",
@@ -200,7 +260,11 @@ def test_listings_missing_from_a_complete_scan_are_ended_with_a_reason():
             10: "unsold_or_unknown",
             11: "cancelled",
         }
-        active = await _one(pg, "SELECT count(*) n FROM shard_exchange_listings WHERE server=%s AND ended_at IS NULL", server)
+        active = await _one(
+            pg,
+            "SELECT count(*) n FROM shard_exchange_listings WHERE server=%s AND ended_at IS NULL",
+            server,
+        )
         assert active["n"] == 22
 
     _run(test)
@@ -218,9 +282,17 @@ def test_a_changed_bid_is_recorded_once_and_updates_the_listing():
         )
 
         assert result.bid_changes == 1  # listing 2's bid did not change
-        bids = await _all(pg, 'SELECT auction_id, bid FROM shard_exchange_bids WHERE server=%s ORDER BY "time", auction_id', server)
+        bids = await _all(
+            pg,
+            'SELECT auction_id, bid FROM shard_exchange_bids WHERE server=%s ORDER BY "time", auction_id',
+            server,
+        )
         assert [(b["auction_id"], b["bid"]) for b in bids] == [(2, 50), (1, 40)]
-        stored = await _one(pg, "SELECT bid, bidder_id FROM shard_exchange_listings WHERE server=%s AND auction_id=1", server)
+        stored = await _one(
+            pg,
+            "SELECT bid, bidder_id FROM shard_exchange_listings WHERE server=%s AND auction_id=1",
+            server,
+        )
         assert (stored["bid"], stored["bidder_id"]) == (40, 6)
 
     _run(test)
@@ -231,12 +303,25 @@ def test_a_partial_scan_adds_and_updates_but_ends_nothing_and_has_no_prices():
 
     async def test(pg):
         await _persist(server, [_row(i) for i in range(1, 7)])
-        result = await _persist(server, [_row(1, bid=9, bidder=5)], complete=False, finished=NOW + timedelta(hours=1))
+        result = await _persist(
+            server,
+            [_row(1, bid=9, bidder=5)],
+            complete=False,
+            finished=NOW + timedelta(hours=1),
+        )
 
         assert result.ended == 0 and result.price_rows == 0
-        active = await _one(pg, "SELECT count(*) n FROM shard_exchange_listings WHERE server=%s AND ended_at IS NULL", server)
+        active = await _one(
+            pg,
+            "SELECT count(*) n FROM shard_exchange_listings WHERE server=%s AND ended_at IS NULL",
+            server,
+        )
         assert active["n"] == 6
-        prices = await _one(pg, "SELECT count(*) n FROM shard_exchange_price_history WHERE server=%s", server)
+        prices = await _one(
+            pg,
+            "SELECT count(*) n FROM shard_exchange_price_history WHERE server=%s",
+            server,
+        )
         assert prices["n"] == 1  # the first scan's one did; the partial scan added none
 
     _run(test)
@@ -247,11 +332,17 @@ def test_a_scan_far_smaller_than_the_active_set_ends_nothing():
 
     async def test(pg):
         await _persist(server, [_row(i) for i in range(1, 11)])
-        result = await _persist(server, [_row(1), _row(2)], finished=NOW + timedelta(hours=1))
+        result = await _persist(
+            server, [_row(1), _row(2)], finished=NOW + timedelta(hours=1)
+        )
 
         assert result.ended == 0
         assert result.ended_skipped_reason is not None
-        active = await _one(pg, "SELECT count(*) n FROM shard_exchange_listings WHERE server=%s AND ended_at IS NULL", server)
+        active = await _one(
+            pg,
+            "SELECT count(*) n FROM shard_exchange_listings WHERE server=%s AND ended_at IS NULL",
+            server,
+        )
         assert active["n"] == 10
 
     _run(test)
@@ -276,10 +367,20 @@ def test_an_ended_listing_that_reappears_is_active_again():
         rows = [_row(i) for i in range(1, 5)]
         await _persist(server, rows)
         await _persist(server, rows[:3], finished=NOW + timedelta(hours=1))
-        assert (await _one(pg, "SELECT ended_at FROM shard_exchange_listings WHERE server=%s AND auction_id=4", server))["ended_at"] is not None
+        assert (
+            await _one(
+                pg,
+                "SELECT ended_at FROM shard_exchange_listings WHERE server=%s AND auction_id=4",
+                server,
+            )
+        )["ended_at"] is not None
 
         await _persist(server, rows, finished=NOW + timedelta(hours=2))
-        again = await _one(pg, "SELECT ended_at, end_reason FROM shard_exchange_listings WHERE server=%s AND auction_id=4", server)
+        again = await _one(
+            pg,
+            "SELECT ended_at, end_reason FROM shard_exchange_listings WHERE server=%s AND auction_id=4",
+            server,
+        )
         assert again["ended_at"] is None and again["end_reason"] is None
 
     _run(test)
@@ -289,10 +390,18 @@ def test_an_older_scan_arriving_late_does_not_overwrite_a_newer_one():
     server = _server()
 
     async def test(pg):
-        await _persist(server, [_row(1, bid=90, bidder=6)], finished=NOW + timedelta(hours=2))
-        await _persist(server, [_row(1, bid=50, bidder=5)], finished=NOW + timedelta(hours=1))
+        await _persist(
+            server, [_row(1, bid=90, bidder=6)], finished=NOW + timedelta(hours=2)
+        )
+        await _persist(
+            server, [_row(1, bid=50, bidder=5)], finished=NOW + timedelta(hours=1)
+        )
 
-        stored = await _one(pg, "SELECT bid, bidder_id, last_seen_at FROM shard_exchange_listings WHERE server=%s AND auction_id=1", server)
+        stored = await _one(
+            pg,
+            "SELECT bid, bidder_id, last_seen_at FROM shard_exchange_listings WHERE server=%s AND auction_id=1",
+            server,
+        )
         assert (stored["bid"], stored["bidder_id"]) == (90, 6)
         assert stored["last_seen_at"] == NOW + timedelta(hours=2)
 
@@ -303,10 +412,14 @@ def test_the_same_listing_twice_in_one_scan_is_stored_once():
     server = _server()
 
     async def test(pg):
-        result = await _persist(server, [_row(1, bid=10, bidder=5), _row(1, bid=20, bidder=6)])
+        result = await _persist(
+            server, [_row(1, bid=10, bidder=5), _row(1, bid=20, bidder=6)]
+        )
 
         assert result.listings == 1
-        stored = await _one(pg, "SELECT bid FROM shard_exchange_listings WHERE server=%s", server)
+        stored = await _one(
+            pg, "SELECT bid FROM shard_exchange_listings WHERE server=%s", server
+        )
         assert stored["bid"] == 20
 
     _run(test)
@@ -328,14 +441,34 @@ def test_old_ended_listings_and_scans_are_pruned():
                     """INSERT INTO shard_exchange_listings
                        (server, auction_id, item_id, did, first_seen_at, last_seen_at, first_scan_id, last_scan_id, ended_at, end_reason)
                        VALUES (%s, %s, 1, 1, %s, %s, %s, %s, %s, %s)""",
-                    (server, auction_id, old, old, uuid4(), uuid4(), ended_at, "expired" if ended_at else None),
+                    (
+                        server,
+                        auction_id,
+                        old,
+                        old,
+                        uuid4(),
+                        uuid4(),
+                        ended_at,
+                        "expired" if ended_at else None,
+                    ),
                 )
 
-        await _persist(server, [_row(3)], finished=datetime.now(timezone.utc))  # any scan prunes
+        await _persist(
+            server, [_row(3)], finished=datetime.now(timezone.utc)
+        )  # any scan prunes
 
-        remaining = await _all(pg, "SELECT auction_id FROM shard_exchange_listings WHERE server=%s ORDER BY auction_id", server)
-        assert [r["auction_id"] for r in remaining] == [2, 3]  # the old ended one is gone, the old active one is not
-        scans = await _one(pg, "SELECT count(*) n FROM shard_exchange_scans WHERE server=%s", server)
+        remaining = await _all(
+            pg,
+            "SELECT auction_id FROM shard_exchange_listings WHERE server=%s ORDER BY auction_id",
+            server,
+        )
+        assert [r["auction_id"] for r in remaining] == [
+            2,
+            3,
+        ]  # the old ended one is gone, the old active one is not
+        scans = await _one(
+            pg, "SELECT count(*) n FROM shard_exchange_scans WHERE server=%s", server
+        )
         assert scans["n"] == 1
 
     _run(test)
@@ -352,7 +485,9 @@ def test_item_names_are_added_and_renamed():
     async def test(pg):
         assert await async_upsert_item_names([(did, "Old Name", None, None)]) == 1
         assert await async_get_item_name(did) == "Old Name"
-        assert await async_upsert_item_names([(did, "Old Name", None, None)]) == 0  # unchanged: nothing written
+        assert (
+            await async_upsert_item_names([(did, "Old Name", None, None)]) == 0
+        )  # unchanged: nothing written
         assert await async_upsert_item_names([(did, "New Name", None, None)]) == 1
         assert await async_get_item_name(did) == "New Name"
         assert await async_get_item_name(did + 100000) is None
@@ -361,7 +496,10 @@ def test_item_names_are_added_and_renamed():
 
 
 def test_item_search_ranks_exact_then_prefix_and_can_require_a_listing():
-    from services.shard_exchange_db import async_search_item_names, async_upsert_item_names
+    from services.shard_exchange_db import (
+        async_search_item_names,
+        async_upsert_item_names,
+    )
 
     tag = uuid4().hex[:8]
     base = 1_000_000 + int(tag[:5], 16)
@@ -376,18 +514,33 @@ def test_item_search_ranks_exact_then_prefix_and_can_require_a_listing():
     async def test(pg):
         await async_upsert_item_names([(d, n, None, None) for d, n in names])
 
-        found = await async_search_item_names(f"test widget {tag}", 10, listed_only=False)
-        assert [r["did"] for r in found] == [base + 3, base + 2, base + 1]  # exact, starts with, contains
+        found = await async_search_item_names(
+            f"test widget {tag}", 10, listed_only=False
+        )
+        assert [r["did"] for r in found] == [
+            base + 3,
+            base + 2,
+            base + 1,
+        ]  # exact, starts with, contains
 
         # only items that were on the exchange (have price history)
-        assert await async_search_item_names(f"test widget {tag}", 10, listed_only=True) == []
+        assert (
+            await async_search_item_names(f"test widget {tag}", 10, listed_only=True)
+            == []
+        )
         await _persist(server, [_row(1, did=base + 2, buyout=10)])
-        listed = await async_search_item_names(f"test widget {tag}", 10, listed_only=True)
+        listed = await async_search_item_names(
+            f"test widget {tag}", 10, listed_only=True
+        )
         assert [r["did"] for r in listed] == [base + 2]
 
         # % and _ in the search are literal, not wildcards
-        assert [r["did"] for r in await async_search_item_names(f"1%{tag}", 10, False)] == []
-        assert [r["did"] for r in await async_search_item_names(f"100%_{tag}", 10, False)] == [base + 4]
+        assert [
+            r["did"] for r in await async_search_item_names(f"1%{tag}", 10, False)
+        ] == []
+        assert [
+            r["did"] for r in await async_search_item_names(f"100%_{tag}", 10, False)
+        ] == [base + 4]
         assert len(await async_search_item_names(f"{tag}", 2, False)) == 2  # the limit
 
     _run(test)
@@ -400,7 +553,9 @@ def test_item_id_resolves_to_its_type_on_any_server():
     did = 2_000_000 + int(uuid4().hex[:5], 16)
 
     async def test(pg):
-        row = _row(10**9 + int(uuid4().hex[:6], 16), did=did)  # item IDs are unique in the game, so here too
+        row = _row(
+            10**9 + int(uuid4().hex[:6], 16), did=did
+        )  # item IDs are unique in the game, so here too
         await _persist(server, [row])
         assert await async_get_did_for_item_id(row.item_id) == did
         assert await async_get_did_for_item_id(row.item_id + 10**12) is None
@@ -418,34 +573,67 @@ def test_price_history_per_scan_and_per_day():
 
     async def test(pg):
         # day 1: two scans; day 2: one scan. The ids differ per scan so each scan sees its own listings.
-        await _persist(server, [_row(1, did=did, quantity=10, buyout=100, min_bid=40), _row(2, did=did, quantity=10, buyout=300)], finished=day1)
-        await _persist(server, [_row(1, did=did, quantity=10, buyout=100, min_bid=40), _row(2, did=did, quantity=10, buyout=500)], finished=day1 + timedelta(hours=1))
-        await _persist(server, [_row(1, did=did, quantity=10, buyout=200, min_bid=60)], finished=day2)
+        await _persist(
+            server,
+            [
+                _row(1, did=did, quantity=10, buyout=100, min_bid=40),
+                _row(2, did=did, quantity=10, buyout=300),
+            ],
+            finished=day1,
+        )
+        await _persist(
+            server,
+            [
+                _row(1, did=did, quantity=10, buyout=100, min_bid=40),
+                _row(2, did=did, quantity=10, buyout=500),
+            ],
+            finished=day1 + timedelta(hours=1),
+        )
+        await _persist(
+            server,
+            [_row(1, did=did, quantity=10, buyout=200, min_bid=60)],
+            finished=day2,
+        )
         since = datetime(2026, 11, 1, tzinfo=timezone.utc)
 
         scans = await async_get_price_history(server, did, since, "scan")
-        assert [r["time"] for r in scans] == [t.isoformat() for t in (day1, day1 + timedelta(hours=1), day2)]
-        assert scans[0]["min_buyout_unit"] == 10 and scans[0]["median_buyout_unit"] == 20 and scans[0]["max_buyout_unit"] == 30
+        assert [r["time"] for r in scans] == [
+            t.isoformat() for t in (day1, day1 + timedelta(hours=1), day2)
+        ]
+        assert (
+            scans[0]["min_buyout_unit"] == 10
+            and scans[0]["median_buyout_unit"] == 20
+            and scans[0]["max_buyout_unit"] == 30
+        )
         assert scans[0]["listing_count"] == 2 and scans[0]["unit_count"] == 20
         assert scans[2]["median_buyout_unit"] == 20 and scans[2]["listing_count"] == 1
 
         days = await async_get_price_history(server, did, since, "day")
-        assert [r["time"] for r in days] == ["2026-11-10T00:00:00+00:00", "2026-11-11T00:00:00+00:00"]
+        assert [r["time"] for r in days] == [
+            "2026-11-10T00:00:00+00:00",
+            "2026-11-11T00:00:00+00:00",
+        ]
         first = days[0]
         assert first["scans"] == 2
         assert first["min_buyout_unit"] == 10  # the lowest of the day
         assert first["max_buyout_unit"] == 50  # the highest of the day
-        assert first["median_buyout_unit"] == 25  # median of the scans' medians (20 and 30)
-        assert first["min_bid_unit"] == 1  # lowest current price per unit: the 10-shard minimum bid on 10 units
+        assert (
+            first["median_buyout_unit"] == 25
+        )  # median of the scans' medians (20 and 30)
+        assert (
+            first["min_bid_unit"] == 1
+        )  # lowest current price per unit: the 10-shard minimum bid on 10 units
         assert days[1]["scans"] == 1 and days[1]["min_buyout_unit"] == 20
 
         # a window that starts after the data, another server, another item
-        assert await async_get_price_history(server, did, day2 + timedelta(days=1), "scan") == []
+        assert (
+            await async_get_price_history(server, did, day2 + timedelta(days=1), "scan")
+            == []
+        )
         assert await async_get_price_history(server + "x", did, since, "scan") == []
         assert await async_get_price_history(server, did + 1, since, "day") == []
 
     _run(test)
-
 
 
 # ===== browsing =====
@@ -456,7 +644,12 @@ def _browse_setup(tag):
     base = 4_000_000 + int(tag[:5], 16) * 10
     return base, [
         (base + 1, f"Alpha Ring {tag}", "jewelry.rings", None),
-        (base + 2, f"Alpha Ring {tag}", "jewelry.rings", None),  # a second item type with the same name
+        (
+            base + 2,
+            f"Alpha Ring {tag}",
+            "jewelry.rings",
+            None,
+        ),  # a second item type with the same name
         (base + 3, f"Beta's Club {tag}", "weapons.simple.club", 12),
         (base + 4, f"Gamma Potion {tag}", "potions", None),
     ]
@@ -468,11 +661,15 @@ def test_item_slugs_come_from_the_name():
     did = 5_000_000 + int(uuid4().hex[:5], 16)
 
     async def test(pg):
-        await async_upsert_item_names([(did, "Dragon's Hoard: +2 Ring (Epic)", None, None)])
+        await async_upsert_item_names(
+            [(did, "Dragon's Hoard: +2 Ring (Epic)", None, None)]
+        )
         row = await _one(pg, "SELECT slug FROM item_names WHERE did = %s", did)
         assert row["slug"] == "dragons-hoard-2-ring-epic"
         await async_upsert_item_names([(did, "  Renamed -- Item  ", None, None)])
-        assert (await _one(pg, "SELECT slug FROM item_names WHERE did = %s", did))["slug"] == "renamed-item"
+        assert (await _one(pg, "SELECT slug FROM item_names WHERE did = %s", did))[
+            "slug"
+        ] == "renamed-item"
 
     _run(test)
 
@@ -486,7 +683,9 @@ def test_item_category_and_level_are_kept_when_not_sent():
         assert await async_upsert_item_names([(did, "Kept", "potions", 5)]) == 1
         assert await async_upsert_item_names([(did, "Kept", None, None)]) == 0
         assert await async_upsert_item_names([(did, "Kept", "scrolls", None)]) == 1
-        row = await _one(pg, "SELECT category, min_level FROM item_names WHERE did = %s", did)
+        row = await _one(
+            pg, "SELECT category, min_level FROM item_names WHERE did = %s", did
+        )
         assert (row["category"], row["min_level"]) == ("scrolls", 5)
 
     _run(test)
@@ -508,10 +707,35 @@ def test_listings_filter_sort_and_page():
     async def test(pg):
         await async_upsert_item_names(names)
         rows = [
-            _row(1, did=base + 1, buyout=500, min_bid=100, min_level=20, expires=now + timedelta(hours=5)),
-            _row(2, did=base + 2, buyout=0, min_bid=50, bid=70, bidder=9, min_level=8, expires=now + timedelta(hours=1)),
-            _row(3, did=base + 3, buyout=300, min_bid=10),  # level from the item type: 12
-            _row(4, did=base + 4, quantity=10, buyout=200, min_bid=20, expires=now + timedelta(days=2)),
+            _row(
+                1,
+                did=base + 1,
+                buyout=500,
+                min_bid=100,
+                min_level=20,
+                expires=now + timedelta(hours=5),
+            ),
+            _row(
+                2,
+                did=base + 2,
+                buyout=0,
+                min_bid=50,
+                bid=70,
+                bidder=9,
+                min_level=8,
+                expires=now + timedelta(hours=1),
+            ),
+            _row(
+                3, did=base + 3, buyout=300, min_bid=10
+            ),  # level from the item type: 12
+            _row(
+                4,
+                did=base + 4,
+                quantity=10,
+                buyout=200,
+                min_bid=20,
+                expires=now + timedelta(days=2),
+            ),
             _row(5, did=base + 4, quantity=2, buyout=100, min_bid=30),
             _row(6, did=base + 9, buyout=50, min_bid=50),  # no name known
         ]
@@ -522,8 +746,12 @@ def test_listings_filter_sort_and_page():
                 "UPDATE shard_exchange_listings SET expires_at = %s WHERE server = %s AND auction_id = 5",
                 (now - timedelta(minutes=1), server),
             )
-        await _persist(server, rows[:4] + [rows[5]], finished=now - timedelta(minutes=1))
-        await _persist(server, rows[:4] + [rows[5], _row(7, did=base + 4, buyout=1)], finished=now)
+        await _persist(
+            server, rows[:4] + [rows[5]], finished=now - timedelta(minutes=1)
+        )
+        await _persist(
+            server, rows[:4] + [rows[5], _row(7, did=base + 4, buyout=1)], finished=now
+        )
         async with pg.get_async_dict_cursor(commit=True) as cur:
             await cur.execute(
                 "UPDATE shard_exchange_listings SET ended_at = now() WHERE server = %s AND auction_id = 7",
@@ -532,8 +760,12 @@ def test_listings_filter_sort_and_page():
 
         async def search(sort="name", descending=False, limit=20, offset=0, **f):
             found, total = await async_search_listings(
-                server, ListingFilters(words=f.pop("words", []), **f),
-                sort=sort, descending=descending, limit=limit, offset=offset,
+                server,
+                ListingFilters(words=f.pop("words", []), **f),
+                sort=sort,
+                descending=descending,
+                limit=limit,
+                offset=offset,
             )
             return [r["auction_id"] for r in found], total
 
@@ -578,8 +810,21 @@ def test_listings_filter_sort_and_page():
         past_end, total = await search(limit=2, offset=10)
         assert past_end == [] and total == 5
 
+        found, _ = await async_search_listings(
+            server, ListingFilters(), sort="name", descending=False, limit=20, offset=0
+        )
+        by_id = {r["auction_id"]: r for r in found}
+        assert [b["amount"] for b in by_id[2]["bids"]] == [70]
+        assert all(set(b) == {"amount", "time"} for b in by_id[2]["bids"])
+        assert by_id[1]["bids"] == []
+
         counts = await async_get_category_counts(server)
-        assert counts == {"jewelry.rings": 2, "weapons.simple.club": 1, "potions": 1, None: 1}
+        assert counts == {
+            "jewelry.rings": 2,
+            "weapons.simple.club": 1,
+            "potions": 1,
+            None: 1,
+        }
 
     _run(test)
 
@@ -601,7 +846,10 @@ def test_item_by_slug_and_its_combined_price_history():
         slug = f"alpha-ring-{tag}"
 
         item = await async_get_item_by_slug(slug)
-        assert (item["name"], item["category"]) == (f"Alpha Ring {tag}", "jewelry.rings")
+        assert (item["name"], item["category"]) == (
+            f"Alpha Ring {tag}",
+            "jewelry.rings",
+        )
         assert await async_get_item_by_slug(f"no-such-item-{tag}") is None
 
         # two item types with that name in one scan: their statistics are combined
@@ -620,11 +868,22 @@ def test_item_by_slug_and_its_combined_price_history():
         assert len(scans) == 1
         s = scans[0]
         assert (s["listing_count"], s["buyout_listing_count"]) == (3, 3)
-        assert (s["min_buyout_unit"], s["max_buyout_unit"], s["min_bid_unit"]) == (100, 500, 20)
-        assert s["median_buyout_unit"] == 250  # the median of the two types' medians, 100 and 400
+        assert (s["min_buyout_unit"], s["max_buyout_unit"], s["min_bid_unit"]) == (
+            100,
+            500,
+            20,
+        )
+        assert (
+            s["median_buyout_unit"] == 250
+        )  # the median of the two types' medians, 100 and 400
 
         days = await async_get_price_history_by_slug(server, slug, since, "day")
-        assert [d["time"] for d in days] == ["2026-11-10T00:00:00+00:00"] and days[0]["scans"] == 1
-        assert await async_get_price_history_by_slug(server + "x", slug, since, "day") == []
+        assert [d["time"] for d in days] == ["2026-11-10T00:00:00+00:00"] and days[0][
+            "scans"
+        ] == 1
+        assert (
+            await async_get_price_history_by_slug(server + "x", slug, since, "day")
+            == []
+        )
 
     _run(test)

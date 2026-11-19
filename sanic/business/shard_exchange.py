@@ -11,11 +11,14 @@ from services.shard_exchange_db import ShardListingRow, ShardScanResult
 
 def _ref_key() -> bytes:
     """The key for listing refs: SHARD_EXCHANGE_REF_SECRET, else derived from JWT_SECRET_KEY. With
-    neither set the refs are random per process (they then change when the service restarts)."""
+    neither set the refs are random per process (they then change when the service restarts).
+    """
     secret = os.getenv("SHARD_EXCHANGE_REF_SECRET") or os.getenv("JWT_SECRET_KEY")
     if not secret:
         return secrets.token_bytes(32)
-    return hashlib.sha256(b"shard-exchange-listing-ref:" + secret.encode("utf-8")).digest()
+    return hashlib.sha256(
+        b"shard-exchange-listing-ref:" + secret.encode("utf-8")
+    ).digest()
 
 
 _REF_KEY = _ref_key()
@@ -34,8 +37,12 @@ def _iso(value: datetime | None) -> str | None:
 
 def to_public_listing(row: dict) -> dict:
     """A listing as the public API shows it: no internal IDs, no characters, no raw item properties.
-    Prices are whole listings (not per unit) in shards; bid and buyout are None when there is none."""
+    Prices are whole listings (not per unit) in shards; bid and buyout are None when there is none.
+    """
     bid = row["bid"] or None
+    bids = [
+        {"amount": b["amount"], "at": _iso(b["time"])} for b in row.get("bids") or []
+    ]
     return {
         "ref": listing_ref(row["server"], row["auction_id"], row["item_id"]),
         "name": row["name"],
@@ -46,6 +53,7 @@ def to_public_listing(row: dict) -> dict:
         "bound": bool(row["bound"]),
         "min_bid": row["min_bid"],
         "bid": bid,
+        "bids": bids,
         "current_price": max(row["bid"], row["min_bid"]),
         "buyout": row["buyout"] or None,
         "posted_at": _iso(row["posted_at"]),

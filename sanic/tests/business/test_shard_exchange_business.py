@@ -60,7 +60,9 @@ def test_handle_passes_the_scan_to_the_database_layer(monkeypatch, run_async):
         return ShardScanResult(listings=1)
 
     monkeypatch.setattr(
-        shard_business.shard_exchange_db, "async_persist_shard_exchange_scan", fake_persist
+        shard_business.shard_exchange_db,
+        "async_persist_shard_exchange_scan",
+        fake_persist,
     )
     scan_id = uuid4()
     body = ShardExchangeRequestApiModel(
@@ -85,7 +87,6 @@ def test_handle_passes_the_scan_to_the_database_layer(monkeypatch, run_async):
     assert call["pages"] == 5
     assert call["complete"] is False
     assert [row.auction_id for row in call["listings"]] == [1]
-
 
 
 # ===== public listings =====
@@ -115,12 +116,33 @@ def _db_row(**overrides) -> dict:
 def test_public_listing_has_no_ids_and_nulls_for_none():
     listing = shard_business.to_public_listing(_db_row())
 
-    assert not {"auction_id", "item_id", "did", "bidder_id", "poster_id", "item_props"} & set(listing)
+    assert not {
+        "auction_id",
+        "item_id",
+        "did",
+        "bidder_id",
+        "poster_id",
+        "item_props",
+    } & set(listing)
     assert "123456789" not in listing["ref"] and "987654321" not in listing["ref"]
-    assert (listing["bid"], listing["buyout"], listing["current_price"]) == (None, None, 10)
+    assert (listing["bid"], listing["buyout"], listing["current_price"]) == (
+        None,
+        None,
+        10,
+    )
     assert listing["bound"] is True
     assert listing["posted_at"] == "2026-11-11T18:00:00+00:00"
     assert listing["expires_at"] is None
+
+
+def test_public_listing_bids_have_amount_and_time_only():
+    when = datetime(2026, 11, 11, 19, 0, tzinfo=timezone.utc)
+    row = _db_row(bid=55, bids=[{"amount": 55, "time": when, "bidder_id": 4242}])
+
+    listing = shard_business.to_public_listing(row)
+
+    assert listing["bids"] == [{"amount": 55, "at": "2026-11-11T19:00:00+00:00"}]
+    assert shard_business.to_public_listing(_db_row())["bids"] == []
 
 
 def test_listing_ref_is_stable_and_distinct():
@@ -133,10 +155,14 @@ def test_listing_ref_is_stable_and_distinct():
 
 def test_category_counts_roll_up():
     tree = [
-        {"slug": "a", "name": "A", "children": [
-            {"slug": "a.b", "name": "B", "children": []},
-            {"slug": "a.c", "name": "C", "children": []},
-        ]},
+        {
+            "slug": "a",
+            "name": "A",
+            "children": [
+                {"slug": "a.b", "name": "B", "children": []},
+                {"slug": "a.c", "name": "C", "children": []},
+            ],
+        },
     ]
     result = shard_business.category_tree_with_counts(tree, {"a": 1, "a.b": 2})
     assert result[0]["count"] == 3
