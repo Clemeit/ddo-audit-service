@@ -483,6 +483,12 @@ SELECT add_retention_policy('shard_exchange_bids', INTERVAL '180 days', if_not_e
 CREATE INDEX IF NOT EXISTS idx_shard_exchange_bids_listing
     ON public."shard_exchange_bids" (server, auction_id, item_id, "time" DESC);
 
+CREATE INDEX IF NOT EXISTS idx_shard_exchange_bids_bidder
+    ON public."shard_exchange_bids" (bidder_id, "time" DESC) WHERE bidder_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_shard_exchange_listings_bidder
+    ON public."shard_exchange_listings" (bidder_id) WHERE bidder_id IS NOT NULL;
+
 ALTER TABLE IF EXISTS public."shard_exchange_bids"
     OWNER to pgadmin;
 

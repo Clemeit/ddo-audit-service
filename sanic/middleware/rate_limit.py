@@ -28,6 +28,12 @@ USER_RATE_LIMIT = {
     "window": 3600,  # 1 hour
 }
 
+MY_BIDS_RATE_LIMIT = {
+    "requests": 30,
+    "window": 60,
+}
+
+MY_BIDS_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/shard-exchange/my-bids/?$")
 AUTH_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/auth/(register|login)$")
 REFRESH_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/auth/refresh$")
 USER_ENDPOINT_PATTERN = re.compile(
@@ -116,6 +122,32 @@ async def rate_limit_middleware(request: Request):
                 )
         except Exception as e:
             # Fail open - allow request if Redis is down
+            pass
+
+    elif request.method == "POST" and MY_BIDS_ENDPOINT_PATTERN.match(path):
+        ip = get_client_ip(request)
+        try:
+            allowed, retry_after = await _async_increment_and_check_limit(
+                f"rate_limit:my_bids:{ip}",
+                MY_BIDS_RATE_LIMIT["requests"],
+                MY_BIDS_RATE_LIMIT["window"],
+            )
+            if not allowed:
+                return json(
+                    {
+                        "error": "Rate limit exceeded. Try again in 1 minute.",
+                        "retry_after": retry_after,
+                    },
+                    status=429,
+                    headers={
+                        "Retry-After": str(
+                            retry_after
+                            if retry_after is not None
+                            else MY_BIDS_RATE_LIMIT["window"]
+                        )
+                    },
+                )
+        except Exception:
             pass
 
     elif REFRESH_ENDPOINT_PATTERN.match(path):

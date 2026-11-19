@@ -364,3 +364,39 @@ def test_rate_limit_middleware_ignores_non_limited_path(
 
     assert response is None
     assert called["value"] is False
+
+
+def test_rate_limit_middleware_my_bids_is_limited_per_ip(
+    monkeypatch, make_request, run_async
+):
+    captured = {}
+
+    async def _blocked(rate_limit_key, limit, window):
+        captured.update(key=rate_limit_key, limit=limit, window=window)
+        return False, 12
+
+    monkeypatch.setattr(rate_limit_module, "get_client_ip", lambda request: "203.0.113.10")
+    monkeypatch.setattr(rate_limit_module, "_async_increment_and_check_limit", _blocked)
+    request = make_request(method="POST", path="/v1/shard-exchange/my-bids")
+
+    response = run_async(rate_limit_module.rate_limit_middleware(request))
+
+    assert response.status == 429
+    assert response.headers["Retry-After"] == "12"
+    assert captured == {
+        "key": "rate_limit:my_bids:203.0.113.10",
+        "limit": rate_limit_module.MY_BIDS_RATE_LIMIT["requests"],
+        "window": rate_limit_module.MY_BIDS_RATE_LIMIT["window"],
+    }
+
+
+def test_rate_limit_middleware_ignores_other_shard_exchange_routes(
+    monkeypatch, make_request, run_async
+):
+    async def _fail(*args, **kwargs):
+        raise AssertionError("should not be rate limited")
+
+    monkeypatch.setattr(rate_limit_module, "_async_increment_and_check_limit", _fail)
+    request = make_request(method="GET", path="/v1/shard-exchange/listings")
+
+    assert run_async(rate_limit_module.rate_limit_middleware(request)) is None

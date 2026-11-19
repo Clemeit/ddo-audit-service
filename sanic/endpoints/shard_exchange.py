@@ -6,18 +6,17 @@ import math
 import re
 from datetime import datetime, timedelta, timezone
 
+import services.postgres as postgres_client
 import services.shard_exchange_db as shard_exchange_db
 from business.shard_exchange import (
     category_tree_with_counts,
     handle_incoming_shard_exchange,
+    to_my_bid_listings,
     to_public_listing,
 )
 from constants.server import SERVER_NAMES_LOWERCASE
 from constants.shard_exchange import (
     DEFAULT_PRICE_HISTORY_DAYS,
-    ITEM_SEARCH_DEFAULT_LIMIT,
-    ITEM_SEARCH_MAX_LIMIT,
-    ITEM_SEARCH_MIN_LENGTH,
     ITEM_SLUG_PATTERN,
     LISTINGS_CACHE_SECONDS,
     LISTINGS_DEFAULT_LIMIT,
@@ -31,20 +30,21 @@ from constants.shard_exchange import (
     MAX_CATEGORY_SLUG_LENGTH,
     MAX_ITEM_SLUG_LENGTH,
     MAX_PRICE_HISTORY_DAYS,
-    PRICE_HISTORY_BUCKETS,
+    MY_BIDS_MAX_BODY_BYTES,
+    MY_BIDS_MAX_RESULTS,
     SHARD_EXCHANGE_CATEGORIES,
     SHARD_EXCHANGE_CATEGORY_SLUGS,
 )
 from services.shard_exchange_db import ListingFilters
 from models.shard_exchange import (
     ItemNamesRequestApiModel,
+    MyBidsRequestApiModel,
     ShardExchangeRequestApiModel,
 )
 from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json
 from sanic_ext import openapi
-from utils.game_ids import parse_game_id
 from utils.log import logMessage
 from utils.request_body import (
     RequestBodyError,
@@ -157,172 +157,6 @@ async def post_item_names(request: Request):
 
 
 # ======= Client-facing endpoints =======
-@shard_exchange_blueprint.get("/items")
-@openapi.summary("Find items by name")
-@openapi.parameter(
-    "name", str, "query", description="Part of the item's name (at least 2 letters)"
-)
-@openapi.parameter(
-    "limit",
-    int,
-    "query",
-    description="Most results to return (default 20, at most 100)",
-)
-@openapi.parameter(
-    "listed_only",
-    bool,
-    "query",
-    description="Only items that have been on the Shard Exchange (default true)",
-)
-@openapi.response(
-    200, {"application/json": {"description": "Matching items: did, did_hex, name"}}
-)
-@openapi.response(400, description="Missing or too short a name, or a bad limit")
-async def search_items(request: Request):
-    """
-    Method: GET
-
-    Route: /shard-exchange/items?name=<text>
-
-    Description: Find items by name. Each result's `did` is the item's type, which is what
-    /shard-exchange/prices takes. Exact matches come first, then names that start with the text.
-    """
-    name = (request.args.get("name") or "").strip()
-    if len(name) < ITEM_SEARCH_MIN_LENGTH:
-        return json(
-            {"message": f"name must be at least {ITEM_SEARCH_MIN_LENGTH} characters"},
-            status=400,
-        )
-    try:
-        limit = int(request.args.get("limit", ITEM_SEARCH_DEFAULT_LIMIT))
-    except ValueError:
-        return json({"message": "limit must be a number"}, status=400)
-    if not 1 <= limit <= ITEM_SEARCH_MAX_LIMIT:
-        return json(
-            {"message": f"limit must be 1 to {ITEM_SEARCH_MAX_LIMIT}"}, status=400
-        )
-    listed_only = request.args.get("listed_only", "true").lower() not in (
-        "false",
-        "0",
-        "no",
-    )
-
-    try:
-        rows = await shard_exchange_db.async_search_item_names(name, limit, listed_only)
-    except Exception as e:
-        return json({"message": str(e)}, status=500)
-
-    return json(
-        {
-            "data": [
-                {"did": row["did"], "did_hex": hex(row["did"]), "name": row["name"]}
-                for row in rows
-            ]
-        }
-    )
-
-
-@shard_exchange_blueprint.get("/prices")
-@openapi.summary("Get the price history of an item type on a server")
-@openapi.parameter("server", str, "query", required=True, description="Server name")
-@openapi.parameter(
-    "did",
-    str,
-    "query",
-    description="The item's type (data ID), decimal or 0x hex. Give this or item_id",
-)
-@openapi.parameter(
-    "item_id",
-    str,
-    "query",
-    description="An item instance seen on the exchange; its type is looked up. Give this or did",
-)
-@openapi.parameter(
-    "days", int, "query", description="How far back (default 180, at most 180)"
-)
-@openapi.parameter(
-    "bucket",
-    str,
-    "query",
-    description="'day' (default): one row per UTC day. 'scan': one row per scan, about hourly",
-)
-@openapi.response(
-    200, {"application/json": {"description": "The item and its price history"}}
-)
-@openapi.response(400, description="A missing or invalid parameter")
-@openapi.response(404, description="item_id was never seen in a listing")
-async def get_price_history(request: Request):
-    """
-    Method: GET
-
-    Route: /shard-exchange/prices?server=<server>&did=<did>
-
-    Description: The asking-price history of one item type on one server, from the Shard Exchange.
-    Prices are shards per unit (price divided by stack size) and are what sellers ask, not what items
-    sold for. `min_buyout_unit`, `median_buyout_unit` and `max_buyout_unit` are over the listings that
-    have a buyout price; `min_bid_unit` is the lowest current price (the bid if there is one, else the
-    minimum bid). Items with random properties share a type, so their prices are mixed together.
-    """
-    server = (request.args.get("server") or "").strip().lower()
-    if server not in SERVER_NAMES_LOWERCASE:
-        return json({"message": "Invalid server name"}, status=400)
-
-    did_text = request.args.get("did")
-    item_id_text = request.args.get("item_id")
-    if (did_text is None) == (item_id_text is None):
-        return json({"message": "Give exactly one of did or item_id"}, status=400)
-
-    try:
-        days = int(request.args.get("days", DEFAULT_PRICE_HISTORY_DAYS))
-    except ValueError:
-        return json({"message": "days must be a number"}, status=400)
-    if not 1 <= days <= MAX_PRICE_HISTORY_DAYS:
-        return json(
-            {"message": f"days must be 1 to {MAX_PRICE_HISTORY_DAYS}"}, status=400
-        )
-
-    bucket = (request.args.get("bucket") or "day").lower()
-    if bucket not in PRICE_HISTORY_BUCKETS:
-        return json(
-            {"message": f"bucket must be one of: {', '.join(PRICE_HISTORY_BUCKETS)}"},
-            status=400,
-        )
-
-    try:
-        if did_text is not None:
-            did = parse_game_id(did_text)
-            if did is None:
-                return json({"message": "did is not a valid ID"}, status=400)
-        else:
-            item_id = parse_game_id(item_id_text)
-            if item_id is None:
-                return json({"message": "item_id is not a valid ID"}, status=400)
-            did = await shard_exchange_db.async_get_did_for_item_id(item_id)
-            if did is None:
-                return json(
-                    {"message": "That item has not been seen on the Shard Exchange"},
-                    status=404,
-                )
-
-        since = datetime.now(timezone.utc) - timedelta(days=days)
-        data = await shard_exchange_db.async_get_price_history(
-            server, did, since, bucket
-        )
-        name = await shard_exchange_db.async_get_item_name(did)
-    except Exception as e:
-        return json({"message": str(e)}, status=500)
-
-    return json(
-        {
-            "server": server,
-            "did": did,
-            "did_hex": hex(did),
-            "name": name,
-            "days": days,
-            "bucket": bucket,
-            "data": data,
-        }
-    )
 
 
 # ======= Browsing (no internal IDs in these responses) =======
@@ -396,6 +230,11 @@ def _query_words(request: Request) -> list[str]:
 
 def _cached(response):
     response.headers["Cache-Control"] = f"public, max-age={LISTINGS_CACHE_SECONDS}"
+    return response
+
+
+def _private(response):
+    response.headers["Cache-Control"] = "private, no-store"
     return response
 
 
@@ -489,6 +328,61 @@ async def search_listings(request: Request):
                 "pages": max(1, math.ceil(total / limit)),
                 "updated_at": _iso(updated_at),
                 "data": [to_public_listing(row) for row in rows],
+            }
+        )
+    )
+
+
+@shard_exchange_blueprint.post("/my-bids")
+@openapi.summary("Bids placed by your verified characters")
+@openapi.body({"application/json": MyBidsRequestApiModel})
+@openapi.response(200, {"application/json": {"description": "Listings your characters bid on"}})
+@openapi.response(400, description="A missing or invalid body")
+async def get_my_bids(request: Request):
+    """
+    Method: POST
+
+    Route: /shard-exchange/my-bids
+
+    Description: Listings that your verified characters have bid on, including ended ones. Each has a
+    `status` (leading, outbid or ended) and `my_bid`. Unknown tokens are ignored.
+    """
+    try:
+        payload = read_json_body(request, max_bytes=MY_BIDS_MAX_BODY_BYTES)
+        if not isinstance(payload, dict):
+            raise ValueError("body must be an object")
+        request_body = MyBidsRequestApiModel(**payload)
+    except RequestBodyTooLarge as e:
+        return json({"message": str(e)}, status=413)
+    except Exception:
+        return json({"message": "Invalid request body"}, status=400)
+
+    try:
+        resolved = await postgres_client.async_get_character_ids_by_access_tokens(
+            request_body.access_tokens
+        )
+        character_ids = sorted(set(resolved.values()))
+        rows = await shard_exchange_db.async_get_bids_for_characters(
+            character_ids, MY_BIDS_MAX_RESULTS
+        )
+        updated_at = (
+            await shard_exchange_db.async_get_latest_scan_time() if character_ids else None
+        )
+    except Exception as e:
+        logMessage(
+            message="Error reading Shard Exchange bids",
+            level="error",
+            action="get_my_bids",
+            metadata={"error": str(e)},
+        )
+        return _private(json({"message": "Error reading bids"}, status=500))
+
+    return _private(
+        json(
+            {
+                "characters": character_ids,
+                "updated_at": _iso(updated_at),
+                "data": to_my_bid_listings(rows),
             }
         )
     )

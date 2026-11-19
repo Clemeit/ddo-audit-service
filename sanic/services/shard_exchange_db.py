@@ -595,6 +595,68 @@ async def _fetch_bid_history(
     return {k: v[-MAX_BIDS_PER_LISTING:] for k, v in history.items()}
 
 
+async def async_get_bids_for_characters(
+    character_ids: list[int], limit: int
+) -> list[dict]:
+    if not character_ids:
+        return []
+    async with get_async_dict_cursor(commit=False) as cur:
+        await cur.execute(
+            """
+            WITH mine AS (
+                SELECT DISTINCT ON (b.server, b.auction_id, b.item_id, b.bidder_id)
+                       b.server, b.auction_id, b.item_id, b.bidder_id AS character_id,
+                       b.bid AS my_amount, b."time" AS my_time
+                FROM shard_exchange_bids b
+                WHERE b.bidder_id = ANY(%(ids)s)
+                ORDER BY b.server, b.auction_id, b.item_id, b.bidder_id, b."time" DESC
+            ),
+            combined AS (
+                SELECT * FROM mine
+                UNION ALL
+                SELECT l.server, l.auction_id, l.item_id, l.bidder_id, l.bid, l.first_seen_at
+                FROM shard_exchange_listings l
+                WHERE l.bidder_id = ANY(%(ids)s) AND l.bid > 0
+                  AND NOT EXISTS (
+                      SELECT 1 FROM mine m
+                      WHERE m.server = l.server AND m.auction_id = l.auction_id
+                        AND m.item_id = l.item_id AND m.character_id = l.bidder_id
+                  )
+            )
+            SELECT c.character_id, c.my_amount, c.my_time,
+                   l.server, l.auction_id, l.item_id, n.name, n.slug, n.category, l.quantity,
+                   """ + _EFFECTIVE_LEVEL + """ AS min_level, l.bound, l.min_bid, l.bid, l.buyout,
+                   l.posted_at, l.expires_at, l.ended_at,
+                   COALESCE(l.bidder_id = c.character_id, false) AS is_top
+            FROM combined c
+            JOIN shard_exchange_listings l
+                ON l.server = c.server AND l.auction_id = c.auction_id AND l.item_id = c.item_id
+            LEFT JOIN item_names n ON n.did = l.did
+            ORDER BY c.my_time DESC
+            LIMIT %(limit)s
+            """,
+            {"ids": list(character_ids), "limit": limit},
+        )
+        rows = list(await cur.fetchall())
+        by_server: dict[str, list[dict]] = {}
+        for row in rows:
+            by_server.setdefault(row["server"], []).append(row)
+        for server, server_rows in by_server.items():
+            history = await _fetch_bid_history(cur, server, server_rows)
+            for row in server_rows:
+                row["bids"] = history.get((row["auction_id"], row["item_id"]), [])
+    return rows
+
+
+async def async_get_latest_scan_time() -> datetime | None:
+    async with get_async_dict_cursor(commit=False) as cur:
+        await cur.execute(
+            "SELECT max(finished_at) AS t FROM shard_exchange_scans WHERE complete"
+        )
+        row = await cur.fetchone()
+        return row["t"] if row else None
+
+
 async def async_get_category_counts(server: str) -> dict[str | None, int]:
     """How many active listings each stored category has on a server (None: no category known)."""
     async with get_async_dict_cursor(commit=False) as cur:

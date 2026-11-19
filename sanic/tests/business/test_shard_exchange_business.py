@@ -167,3 +167,70 @@ def test_category_counts_roll_up():
     result = shard_business.category_tree_with_counts(tree, {"a": 1, "a.b": 2})
     assert result[0]["count"] == 3
     assert [c["count"] for c in result[0]["children"]] == [2, 0]
+
+
+def _bid_row(**overrides) -> dict:
+    row = {
+        "character_id": 11,
+        "my_amount": 50,
+        "my_time": datetime(2026, 11, 11, 18, 0, tzinfo=timezone.utc),
+        "server": "thrane",
+        "auction_id": 1,
+        "item_id": 2,
+        "name": "Test Item",
+        "slug": "test-item",
+        "category": None,
+        "quantity": None,
+        "min_level": None,
+        "bound": False,
+        "min_bid": 10,
+        "bid": 50,
+        "buyout": 0,
+        "posted_at": None,
+        "expires_at": datetime(2026, 11, 12, tzinfo=timezone.utc),
+        "ended_at": None,
+        "is_top": True,
+        "bids": [],
+    }
+    row.update(overrides)
+    return row
+
+
+_NOW = datetime(2026, 11, 11, 20, 0, tzinfo=timezone.utc)
+
+
+def test_bid_status():
+    assert shard_business.bid_status(_bid_row(), _NOW) == "leading"
+    assert shard_business.bid_status(_bid_row(is_top=False), _NOW) == "outbid"
+    assert shard_business.bid_status(_bid_row(ended_at=_NOW), _NOW) == "ended"
+    assert (
+        shard_business.bid_status(
+            _bid_row(is_top=False, expires_at=datetime(2026, 11, 11, tzinfo=timezone.utc)),
+            _NOW,
+        )
+        == "ended"
+    )
+    assert shard_business.bid_status(_bid_row(expires_at=None), _NOW) == "leading"
+
+
+def test_my_bids_keep_one_entry_per_listing():
+    later = datetime(2026, 11, 11, 19, 0, tzinfo=timezone.utc)
+    rows = [
+        _bid_row(character_id=11, is_top=False, my_time=later, my_amount=40),
+        _bid_row(character_id=12, is_top=True, my_amount=50),
+        _bid_row(item_id=3, character_id=11, is_top=False),
+        _bid_row(item_id=3, character_id=12, is_top=False, my_time=later),
+    ]
+    listings = shard_business.to_my_bid_listings(rows, _NOW)
+    assert len(listings) == 2
+    assert listings[0]["my_bid"]["character_id"] == 12
+    assert listings[0]["status"] == "leading"
+    assert listings[1]["my_bid"]["character_id"] == 12
+    assert listings[1]["status"] == "outbid"
+
+
+def test_my_bid_listings_have_no_internal_ids():
+    listing = shard_business.to_my_bid_listings([_bid_row()], _NOW)[0]
+    for key in ("auction_id", "item_id", "bidder_id", "poster_id", "is_top", "did"):
+        assert key not in listing
+    assert set(listing["my_bid"]) == {"character_id", "amount", "at"}

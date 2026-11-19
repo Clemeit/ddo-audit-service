@@ -5607,6 +5607,19 @@ async def async_get_character_id_by_access_token(access_token: str) -> int | Non
         return row["character_id"]
 
 
+async def async_get_character_ids_by_access_tokens(
+    access_tokens: list[str],
+) -> dict[str, int]:
+    if not access_tokens:
+        return {}
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            "SELECT character_id, access_token FROM public.access_tokens WHERE access_token = ANY(%s)",
+            (list(access_tokens),),
+        )
+        return {row["access_token"]: row["character_id"] for row in await cursor.fetchall()}
+
+
 # ========================================
 # Async auth Postgres functions (psycopg3)
 # ========================================
