@@ -4,7 +4,8 @@ Alert Dispatch Worker - matches queued alert events against users' rules and del
 Producers (LFM ingestion today; server status, shard exchange, character activity later) RPUSH events
 onto the Redis list ``alerts:events``. This worker BLPOPs them, matches each against an in-memory index
 of enabled rules (refreshed from Postgres every ALERT_RULE_REFRESH_SECS), dedupes and caps per user,
-and hands each alert to every channel (Phase 1: the per-user inbox the open site polls).
+and hands each alert to every channel: the per-user inbox the open site polls, and Web Push (when
+VAPID_PRIVATE_KEY and VAPID_SUBJECT are set) for browsers that turned push notifications on.
 
 See business/alerts for the types, channels and dispatcher.
 """
@@ -21,7 +22,9 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 import business.alerts  # noqa: F401  (registers the alert types)  # type: ignore
+from business.alerts.base import AlertChannel  # type: ignore
 from business.alerts.channels.inbox import InboxChannel  # type: ignore
+from business.alerts.channels.web_push import WebPushChannel  # type: ignore
 from business.alerts.dispatcher import (  # type: ignore
     RULES_VERSION_KEY,
     AlertDispatcher,
@@ -60,10 +63,23 @@ def read_rules_version():
         return client.get(RULES_VERSION_KEY)
 
 
+def build_channels() -> list[AlertChannel]:
+    channels: list[AlertChannel] = [InboxChannel()]
+    vapid_private_key = os.getenv("VAPID_PRIVATE_KEY", "").strip()
+    vapid_subject = os.getenv("VAPID_SUBJECT", "").strip()
+    if vapid_private_key and vapid_subject:
+        channels.append(WebPushChannel(vapid_private_key, vapid_subject))
+    else:
+        logger.warning(
+            "VAPID_PRIVATE_KEY / VAPID_SUBJECT not set: Web Push alerts are disabled"
+        )
+    return channels
+
+
 def build_dispatcher() -> AlertDispatcher:
     return AlertDispatcher(
         load_rules=get_enabled_rules_by_type,
-        channels=[InboxChannel()],
+        channels=build_channels(),
         refresh_seconds=env_float("ALERT_RULE_REFRESH_SECS", 30.0),
         rules_version=read_rules_version,
     )
