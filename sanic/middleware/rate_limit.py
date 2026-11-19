@@ -43,7 +43,7 @@ MY_BIDS_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/shard-exchange/my-bids/?$")
 AUTH_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/auth/(register|login)$")
 REFRESH_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/auth/refresh$")
 USER_ENDPOINT_PATTERN = re.compile(
-    r"^/v?\d*/(user/(?:settings/persistent|profile/password|alerts/(?:rules|types|test))|auth/logout)(?:/\d+)?$"
+    r"^/v?\d*/(user/(?:settings/persistent|profile/password|alerts/(?:rules|types|test)|push-subscriptions)|auth/logout)(?:/\d+)?$"
 )
 ALERTS_INBOX_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/user/alerts/inbox/?$")
 

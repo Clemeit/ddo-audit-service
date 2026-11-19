@@ -414,3 +414,10 @@ def test_alert_routes_use_user_and_inbox_limits():
     assert USER_ENDPOINT_PATTERN.match("/v1/user/settings/persistent").group(1) == "user/settings/persistent"
     assert not USER_ENDPOINT_PATTERN.match("/v1/user/alerts/inbox")
     assert ALERTS_INBOX_ENDPOINT_PATTERN.match("/v1/user/alerts/inbox")
+
+
+def test_push_subscription_route_uses_user_limit():
+    from middleware.rate_limit import USER_ENDPOINT_PATTERN
+
+    match = USER_ENDPOINT_PATTERN.match("/v1/user/push-subscriptions")
+    assert match and match.group(1) == "user/push-subscriptions"
