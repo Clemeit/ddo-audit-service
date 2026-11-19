@@ -18,3 +18,6 @@ npm-debug.log
 
 # React build
 client/
+postgres/migrations/
+ASYNC_MIGRATION_PLAN.md
+SSE_PUSH_PLAN.md
