@@ -5,6 +5,7 @@ Service endpoints.
 import services.postgres as postgres_client
 import services.redis as redis_client
 import services.sse as sse_service
+from business.alerts.dispatcher import async_get_metrics as async_get_alert_metrics
 
 from sanic import Blueprint
 from sanic.response import json, empty
@@ -40,9 +41,15 @@ async def get_sse_metrics(request: Request):
 
     Description: Get current SSE stream performance metrics. All counters are
     cumulative since process start and reset on restart. Use two samples
-    taken at different times to compute rates.
+    taken at different times to compute rates. Alert counters (under "alerts") are
+    cumulative since the Redis hash was created; "queued" is the current queue length.
     """
-    return json({"data": sse_service.get_metrics()})
+    metrics = dict(sse_service.get_metrics())
+    try:
+        metrics["alerts"] = await async_get_alert_metrics()
+    except Exception:
+        metrics["alerts"] = None
+    return json({"data": metrics})
 
 
 @service_blueprint.get("/health")

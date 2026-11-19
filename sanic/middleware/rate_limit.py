@@ -28,6 +28,12 @@ USER_RATE_LIMIT = {
     "window": 3600,  # 1 hour
 }
 
+# The open site polls the alerts inbox every 15s (more often with several tabs).
+ALERTS_INBOX_RATE_LIMIT = {
+    "requests": 900,
+    "window": 3600,  # 1 hour
+}
+
 MY_BIDS_RATE_LIMIT = {
     "requests": 30,
     "window": 60,
@@ -37,8 +43,9 @@ MY_BIDS_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/shard-exchange/my-bids/?$")
 AUTH_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/auth/(register|login)$")
 REFRESH_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/auth/refresh$")
 USER_ENDPOINT_PATTERN = re.compile(
-    r"^/v?\d*/(user/(settings/persistent|profile/password)|auth/logout)$"
+    r"^/v?\d*/(user/(?:settings/persistent|profile/password|alerts/(?:rules|types|test))|auth/logout)(?:/\d+)?$"
 )
+ALERTS_INBOX_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/user/alerts/inbox/?$")
 
 # Lua script to atomically increment a rate-limit counter and set its TTL on
 # the first touch.  Returns [current_count, ttl].  This replaces 2-3
@@ -182,6 +189,34 @@ async def rate_limit_middleware(request: Request):
         except Exception as e:
             # Fail open - allow request if Redis is down
             pass
+
+    elif ALERTS_INBOX_ENDPOINT_PATTERN.match(path):
+        user_id = getattr(request.ctx, "user_id", None)
+        if user_id:
+            try:
+                allowed, retry_after = await _async_increment_and_check_limit(
+                    f"rate_limit:user:{user_id}:user:alerts:inbox",
+                    ALERTS_INBOX_RATE_LIMIT["requests"],
+                    ALERTS_INBOX_RATE_LIMIT["window"],
+                )
+                if not allowed:
+                    return json(
+                        {
+                            "error": "Rate limit exceeded. Try again later.",
+                            "retry_after": retry_after,
+                        },
+                        status=429,
+                        headers={
+                            "Retry-After": (
+                                str(retry_after)
+                                if retry_after is not None
+                                else str(ALERTS_INBOX_RATE_LIMIT["window"])
+                            )
+                        },
+                    )
+            except Exception:
+                # Fail open - allow request if Redis is down
+                pass
 
     # Check if this is a protected user endpoint (should be rate limited by user)
     elif USER_ENDPOINT_PATTERN.match(path):

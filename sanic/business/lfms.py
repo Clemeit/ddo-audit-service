@@ -1,3 +1,5 @@
+import logging
+
 import services.redis as redis_client
 import services.sse as sse_service
 from constants.server import SERVER_NAMES_LOWERCASE, SSE_SERVER_NAMES_LOWERCASE
@@ -6,6 +8,14 @@ from models.lfm import Lfm, LfmActivity, LfmActivityEvent, LfmActivityType
 from models.redis import ServerLfmData
 
 from utils.time import get_current_datetime_string
+from business.alerts.events import emit_alert_events
+
+logger = logging.getLogger(__name__)
+
+LFM_POSTED_ALERT_TYPE = "lfm_posted"
+# More newly-posted LFMs than this in one batch for one server means the cache was empty (Redis flushed,
+# collector restarted), not that players really posted them all at once, so they do not trigger alerts.
+MAX_POSTED_LFMS_PER_BATCH_FOR_ALERTS = 50
 
 
 def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType):
@@ -35,6 +45,12 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
 
         lfm_activity = get_lfm_activity(previous_lfms_data, server_lfm_data.lfms)
         hydrated_lfms = hydrate_lfms_with_activity(incoming_lfms, lfm_activity)
+
+        alert_candidates = get_lfm_alert_candidates(
+            previous_lfms_data, server_lfm_data.lfms
+        )
+        if alert_candidates:
+            emit_alert_events(LFM_POSTED_ALERT_TYPE, alert_candidates)
 
         if type == LfmRequestType.set:
             redis_client.set_lfms_by_server_name(hydrated_lfms, server_name)
@@ -66,6 +82,47 @@ def handle_incoming_lfms(request_body: LfmRequestApiModel, type: LfmRequestType)
                     updates,
                     removals,
                 )
+
+
+def get_lfm_alert_candidates(
+    previous_lfms: dict[int, Lfm], current_lfms: dict[int, Lfm]
+) -> list[dict]:
+    """Event data for the ``lfm_posted`` alert type: LFMs that were just posted with a quest, and existing
+    LFMs whose quest changed to a (non-empty) quest. Never raises; alerts must not break ingestion."""
+    posted: list[dict] = []
+    quest_changed: list[dict] = []
+    try:
+        for lfm_id, lfm in current_lfms.items():
+            if not lfm.quest_id:
+                continue
+            previous = previous_lfms.get(lfm_id)
+            if previous is None:
+                posted.append(_lfm_alert_data(lfm))
+            elif previous.quest_id != lfm.quest_id:
+                quest_changed.append(_lfm_alert_data(lfm))
+    except Exception as e:
+        logger.error(f"Could not build LFM alert candidates: {e}")
+        return []
+
+    if len(posted) > MAX_POSTED_LFMS_PER_BATCH_FOR_ALERTS:
+        logger.info(
+            f"Skipping alerts for {len(posted)} newly posted LFMs in one batch (cold cache)"
+        )
+        posted = []
+    return posted + quest_changed
+
+
+def _lfm_alert_data(lfm: Lfm) -> dict:
+    return {
+        "server_name": (lfm.server_name or "").lower(),
+        "lfm_id": lfm.id,
+        "quest_id": lfm.quest_id,
+        "difficulty": lfm.difficulty,
+        "minimum_level": lfm.minimum_level,
+        "maximum_level": lfm.maximum_level,
+        "leader_name": lfm.leader.name if lfm.leader else None,
+        "member_count": len(lfm.members or []) + 1,
+    }
 
 
 def get_lfm_activity(

@@ -99,6 +99,13 @@ class RedisKeys(Enum):
     NEWS = "news"
     PAGE_MESSAGES = "page_messages"
     ACTIVE_QUEST_SESSIONS = "active_quest_sessions"
+    # Alerts pipeline (see business/alerts). Not JSON documents, so not in REDIS_KEY_TYPE_MAPPING.
+    ALERT_EVENTS = "alerts:events"  # list of pending alert events
+    ALERT_INBOX = "alerts:inbox:{user_id}"  # stream of delivered alerts
+    ALERT_SENT = "alerts:sent:{user_id}:{dedupe_key}"  # dedupe marker
+    ALERT_USER_CAP = "alerts:cap:{user_id}"  # per-user delivery counter
+    ALERT_METRICS = "alerts:metrics"  # hash of counters
+    ALERT_RULES_VERSION = "alerts:rules_version"  # bumped whenever any rule changes
 
 
 class VerificationChallengesModel(BaseModel):

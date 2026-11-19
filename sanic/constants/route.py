@@ -17,6 +17,7 @@ JWT_PROTECTED_ROUTES = [
     r"^/v?\d*/user/settings/persistent",
     r"^/v?\d*/auth/logout$",
     r"^/v?\d*/auth/account$",
+    r"^/v?\d*/user/alerts(?:/.*)?$",
 ]
 
 OPEN_METHODS = ["GET"]
