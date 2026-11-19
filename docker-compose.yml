@@ -51,6 +51,7 @@ services:
       - APP_HOST=${APP_HOST}
       - APP_PORT=${APP_PORT}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_PORT=${POSTGRES_PORT}
@@ -176,6 +177,37 @@ services:
       - QUEST_METRICS_BATCH_SIZE=${QUEST_METRICS_BATCH_SIZE}
       - QUEST_METRICS_MIN_SESSIONS=${QUEST_METRICS_MIN_SESSIONS}
       - WORKER_LOG_LEVEL=${WORKER_LOG_LEVEL}
+    expose:
+      - 0
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  alert_dispatch_worker:
+    build:
+      context: ./sanic
+      dockerfile: Dockerfile
+    image: clemeit/ddoaudit-sanic:latest
+    restart: always
+    command: ["python", "-m", "workers.alert_dispatch_worker"]
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_MIN_CONN=${POSTGRES_MIN_CONN}
+      - POSTGRES_MAX_CONN=${POSTGRES_MAX_CONN}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - ALERT_RULE_REFRESH_SECS=${ALERT_RULE_REFRESH_SECS:-30}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-}
+      - WORKER_LOG_LEVEL=${WORKER_LOG_LEVEL:-INFO}
     expose:
       - 0
     networks:

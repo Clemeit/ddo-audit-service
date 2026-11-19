@@ -17,6 +17,8 @@ from endpoints.demographics import demographics_blueprint
 from endpoints.guilds import guild_blueprint
 from endpoints.user import user_blueprint
 from endpoints.auth import auth_blueprint
+from endpoints.alerts import alerts_blueprint
+from endpoints.push import push_blueprint, push_subscriptions_blueprint
 from reports.server_status import get_game_info_scheduler
 from services.redis import close_redis_async, initialize_redis
 from services.postgres import (
@@ -87,6 +89,9 @@ app.blueprint(
         guild_blueprint,
         user_blueprint,
         auth_blueprint,
+        alerts_blueprint,
+        push_blueprint,
+        push_subscriptions_blueprint,
     ]
 )
 

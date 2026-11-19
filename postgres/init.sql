@@ -555,3 +555,53 @@ CREATE INDEX IF NOT EXISTS idx_item_names_slug
 -- Finds the data ID of an item instance seen in a listing.
 CREATE INDEX IF NOT EXISTS idx_shard_exchange_listings_item
     ON public."shard_exchange_listings" (item_id);
+
+-- Alerts (see postgres/migrations/2026-11-alerts.sql).
+CREATE TABLE IF NOT EXISTS public."alert_rules"
+(
+    id serial NOT NULL,
+    user_id integer NOT NULL REFERENCES public."users"(id) ON DELETE CASCADE,
+    type text NOT NULL,
+    criteria jsonb NOT NULL DEFAULT '{}'::jsonb,
+    enabled boolean NOT NULL DEFAULT true,
+    expires_at timestamp with time zone,
+    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    PRIMARY KEY (id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."alert_rules"
+    OWNER to pgadmin;
+
+CREATE INDEX IF NOT EXISTS idx_alert_rules_user
+    ON public."alert_rules" (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_alert_rules_type_enabled
+    ON public."alert_rules" (type) WHERE enabled;
+
+-- Web Push subscriptions (see postgres/migrations/2026-11-push-subscriptions.sql).
+CREATE TABLE IF NOT EXISTS public."push_subscriptions"
+(
+    id serial NOT NULL,
+    user_id integer NOT NULL REFERENCES public."users"(id) ON DELETE CASCADE,
+    endpoint text NOT NULL,
+    p256dh text NOT NULL,
+    auth text NOT NULL,
+    user_agent text,
+    failure_count integer NOT NULL DEFAULT 0,
+    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    last_success_at timestamp with time zone,
+    PRIMARY KEY (id),
+    UNIQUE (endpoint)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."push_subscriptions"
+    OWNER to pgadmin;
+
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
+    ON public."push_subscriptions" (user_id);

@@ -455,3 +455,98 @@ def test_handle_incoming_lfms_skips_broadcast_for_empty_delta(monkeypatch):
     lfms_business.handle_incoming_lfms(request_body, LfmRequestType.update)
 
     assert broadcast_calls == []
+
+
+# ----- alert candidates -----
+
+
+def test_get_lfm_alert_candidates_includes_new_lfms_with_quests():
+    leader = _member(1, "Leader")
+    current = {
+        1: Lfm(
+            id=1,
+            server_name="Argonnessen",
+            quest_id=100,
+            difficulty="Elite",
+            minimum_level=20,
+            maximum_level=24,
+            leader=leader,
+            members=[_member(2, "A"), _member(3, "B")],
+        ),
+        2: _lfm(2, quest_id=None),
+    }
+
+    candidates = lfms_business.get_lfm_alert_candidates({}, current)
+
+    assert candidates == [
+        {
+            "server_name": "argonnessen",
+            "lfm_id": 1,
+            "quest_id": 100,
+            "difficulty": "Elite",
+            "minimum_level": 20,
+            "maximum_level": 24,
+            "leader_name": "Leader",
+            "member_count": 3,
+        }
+    ]
+
+
+def test_get_lfm_alert_candidates_includes_quest_changes_only():
+    previous = {
+        1: _lfm(1, quest_id=100),
+        2: _lfm(2, quest_id=100),
+        3: _lfm(3, quest_id=100),
+    }
+    current = {
+        1: _lfm(1, quest_id=100, comment="changed comment"),
+        2: _lfm(2, quest_id=200),
+        3: _lfm(3, quest_id=None),
+    }
+
+    candidates = lfms_business.get_lfm_alert_candidates(previous, current)
+
+    assert [(c["lfm_id"], c["quest_id"]) for c in candidates] == [(2, 200)]
+
+
+def test_get_lfm_alert_candidates_skips_posted_burst_on_cold_cache(monkeypatch):
+    monkeypatch.setattr(lfms_business, "MAX_POSTED_LFMS_PER_BATCH_FOR_ALERTS", 2)
+    previous = {9: _lfm(9, quest_id=100)}
+    current = {
+        1: _lfm(1, quest_id=100),
+        2: _lfm(2, quest_id=100),
+        3: _lfm(3, quest_id=100),
+        9: _lfm(9, quest_id=200),
+    }
+
+    candidates = lfms_business.get_lfm_alert_candidates(previous, current)
+
+    assert [c["lfm_id"] for c in candidates] == [9]
+
+
+def test_handle_incoming_lfms_emits_alert_events(monkeypatch):
+    emitted = []
+    monkeypatch.setattr(lfms_business, "SERVER_NAMES_LOWERCASE", ["alpha"])
+    monkeypatch.setattr(lfms_business, "SSE_SERVER_NAMES_LOWERCASE", [])
+    monkeypatch.setattr(
+        lfms_business.redis_client, "get_lfms_by_server_name", lambda _s: {}
+    )
+    monkeypatch.setattr(
+        lfms_business.redis_client, "set_lfms_by_server_name", lambda *_a: None
+    )
+    monkeypatch.setattr(
+        lfms_business,
+        "emit_alert_events",
+        lambda alert_type, items: emitted.append((alert_type, items)),
+    )
+
+    request_body = LfmRequestApiModel(
+        lfms=[_lfm(11, server_name="Alpha", quest_id=100), _lfm(12, server_name="Alpha")],
+        deleted_ids=[],
+    )
+    lfms_business.handle_incoming_lfms(request_body, LfmRequestType.set)
+
+    assert len(emitted) == 1
+    alert_type, items = emitted[0]
+    assert alert_type == "lfm_posted"
+    assert [i["lfm_id"] for i in items] == [11]

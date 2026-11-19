@@ -400,3 +400,24 @@ def test_rate_limit_middleware_ignores_other_shard_exchange_routes(
     request = make_request(method="GET", path="/v1/shard-exchange/listings")
 
     assert run_async(rate_limit_module.rate_limit_middleware(request)) is None
+
+
+def test_alert_routes_use_user_and_inbox_limits():
+    from middleware.rate_limit import (
+        ALERTS_INBOX_ENDPOINT_PATTERN,
+        USER_ENDPOINT_PATTERN,
+    )
+
+    rules = USER_ENDPOINT_PATTERN.match("/v1/user/alerts/rules/12")
+    assert rules and rules.group(1) == "user/alerts/rules"
+    assert USER_ENDPOINT_PATTERN.match("/v1/user/alerts/test").group(1) == "user/alerts/test"
+    assert USER_ENDPOINT_PATTERN.match("/v1/user/settings/persistent").group(1) == "user/settings/persistent"
+    assert not USER_ENDPOINT_PATTERN.match("/v1/user/alerts/inbox")
+    assert ALERTS_INBOX_ENDPOINT_PATTERN.match("/v1/user/alerts/inbox")
+
+
+def test_push_subscription_route_uses_user_limit():
+    from middleware.rate_limit import USER_ENDPOINT_PATTERN
+
+    match = USER_ENDPOINT_PATTERN.match("/v1/user/push-subscriptions")
+    assert match and match.group(1) == "user/push-subscriptions"
