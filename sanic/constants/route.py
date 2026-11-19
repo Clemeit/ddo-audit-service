@@ -8,6 +8,7 @@ OPEN_ROUTES = [
     ("POST", "/auth/register"),
     ("POST", "/auth/login"),
     ("POST", "/auth/refresh"),
+    ("POST", "/shard-exchange/my-bids$"),
 ]
 
 # Routes that use JWT authentication instead of API key

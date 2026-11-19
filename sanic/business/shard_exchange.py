@@ -61,6 +61,45 @@ def to_public_listing(row: dict) -> dict:
     }
 
 
+BID_STATUS_LEADING = "leading"
+BID_STATUS_OUTBID = "outbid"
+BID_STATUS_ENDED = "ended"
+
+
+def bid_status(row: dict, now: datetime) -> str:
+    expires_at = row.get("expires_at")
+    if row.get("ended_at") or (expires_at is not None and expires_at <= now):
+        return BID_STATUS_ENDED
+    return BID_STATUS_LEADING if row.get("is_top") else BID_STATUS_OUTBID
+
+
+def to_my_bid_listings(rows: list[dict], now: datetime | None = None) -> list[dict]:
+    now = now or datetime.now(timezone.utc)
+    chosen: dict[tuple, dict] = {}
+    for row in rows:
+        key = (row["server"], row["auction_id"], row["item_id"])
+        current = chosen.get(key)
+        if current is None or (row["is_top"], row["my_time"]) > (
+            current["is_top"],
+            current["my_time"],
+        ):
+            chosen[key] = row
+    return [
+        {
+            **to_public_listing(row),
+            "server": row["server"],
+            "status": bid_status(row, now),
+            "ended_at": _iso(row["ended_at"]),
+            "my_bid": {
+                "character_id": row["character_id"],
+                "amount": row["my_amount"],
+                "at": _iso(row["my_time"]),
+            },
+        }
+        for row in chosen.values()
+    ]
+
+
 def category_tree_with_counts(
     categories: list[dict], counts: dict[str | None, int]
 ) -> list[dict]:

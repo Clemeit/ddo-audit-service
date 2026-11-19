@@ -1,6 +1,7 @@
 """Request models for the Shard Exchange (auction house) endpoints. The field names are the contract with
 collection; don't rename them on one side only."""
 
+import re
 from uuid import UUID
 
 from constants.server import SERVER_NAMES_LOWERCASE
@@ -8,9 +9,13 @@ from constants.shard_exchange import (
     MAX_ITEM_NAME_LENGTH,
     MAX_ITEM_NAMES_PER_REQUEST,
     MAX_LISTINGS_PER_SCAN,
+    MY_BIDS_MAX_TOKENS,
+    MY_BIDS_TOKEN_PATTERN,
     SHARD_EXCHANGE_CATEGORY_SLUGS,
 )
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictStr, field_validator
+
+_TOKEN_RE = re.compile(MY_BIDS_TOKEN_PATTERN)
 
 INT64_MAX = 2**63 - 1
 INT32_MAX = 2**31 - 1
@@ -85,3 +90,18 @@ class ItemNameApiModel(BaseModel):
 
 class ItemNamesRequestApiModel(BaseModel):
     items: list[ItemNameApiModel] = Field(max_length=MAX_ITEM_NAMES_PER_REQUEST)
+
+
+class MyBidsRequestApiModel(BaseModel):
+    access_tokens: list[StrictStr] = Field(min_length=1, max_length=MY_BIDS_MAX_TOKENS)
+
+    @field_validator("access_tokens")
+    @classmethod
+    def _tokens_are_well_formed(cls, value: list[str]) -> list[str]:
+        tokens = []
+        for token in value:
+            if not _TOKEN_RE.fullmatch(token):
+                raise ValueError("invalid access token")
+            if token not in tokens:
+                tokens.append(token)
+        return tokens

@@ -59,6 +59,11 @@ LISTINGS_DEFAULT_SORT = "name"
 # The data changes about once an hour; a short cache spares the database.
 LISTINGS_CACHE_SECONDS = 60
 
+MY_BIDS_MAX_TOKENS = 50
+MY_BIDS_MAX_RESULTS = 500
+MY_BIDS_TOKEN_PATTERN = r"[A-Za-z0-9_-]{1,128}"
+MY_BIDS_MAX_BODY_BYTES = 16 * 1024
+
 # An item's public key: its name in lower case, runs of other characters as one "-". It is computed by
 # the database (item_names.slug); this pattern only checks what a client sends.
 ITEM_SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
