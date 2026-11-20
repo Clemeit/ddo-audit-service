@@ -320,3 +320,29 @@ def test_refresh_if_due_tolerates_version_read_errors():
     d = AlertDispatcher(load_rules=lambda t: [], channels=[], now=lambda: NOW, rules_version=broken)
     d.refresh_if_due()
     d.refresh_if_due()
+
+
+def test_dedupe_marker_uses_the_types_ttl():
+    from business.alerts.types.server_status import ServerStatusAlertType
+
+    server_status = registry.get_type("server_status")
+    rule_row = {
+        "id": 1,
+        "user_id": 1,
+        "type": "server_status",
+        "criteria": {},
+        "expires_at": None,
+    }
+    dispatcher = AlertDispatcher(
+        load_rules=lambda name: [rule_row] if name == "server_status" else [],
+        channels=[],
+        now=lambda: NOW,
+    )
+    dispatcher.refresh()
+    redis = FakeRedis()
+    dispatcher.process_event(
+        redis,
+        {"type": "server_status", "data": {"server_name": "thrane", "is_online": False}},
+    )
+    key = "alerts:sent:1:server:thrane:offline"
+    assert redis.expiries[key] == ServerStatusAlertType.dedupe_ttl_secs == server_status.dedupe_ttl_secs

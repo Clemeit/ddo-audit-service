@@ -887,3 +887,116 @@ def test_item_by_slug_and_its_combined_price_history():
         )
 
     _run(test)
+
+
+# ----- rows for alerts (new listings, outbids) -----
+
+
+def test_scan_returns_new_listings_and_outbids_for_alerts():
+    from services.shard_exchange_db import async_upsert_item_names
+
+    server = _server()
+    did = 910_000 + int(uuid4().hex[:4], 16)
+    tag = uuid4().hex[:8]
+
+    async def test(pg):
+        await async_upsert_item_names([(did, f"Alert Widget {tag}", None, None)])
+        first = await _persist(
+            server,
+            [_row(1, did=did, bid=100, bidder=5), _row(2, did=did, bid=50, bidder=6)],
+        )
+        # A server's first scan alerts nobody.
+        assert first.new_listings == 2
+        assert first.new_listing_rows == [] and first.outbid_rows == []
+
+        second = await _persist(
+            server,
+            [
+                _row(1, did=did, bid=150, bidder=9),  # 5 was outbid
+                _row(2, did=did, bid=50, bidder=6),  # unchanged
+                _row(3, did=did, buyout=500),  # new
+            ],
+            finished=NOW + timedelta(hours=1),
+        )
+        assert [r["auction_id"] for r in second.new_listing_rows] == [3]
+        new = second.new_listing_rows[0]
+        assert new["slug"] == f"alert-widget-{tag}" and new["buyout"] == 500
+        assert [
+            (r["auction_id"], r["prev_bidder_id"], r["new_bidder_id"], r["bid"])
+            for r in second.outbid_rows
+        ] == [(1, 5, 9, 150)]
+
+    _run(test)
+
+
+def test_public_item_search_returns_one_row_per_slug_without_ids():
+    from services.shard_exchange_db import (
+        async_search_items_public,
+        async_upsert_item_names,
+    )
+
+    tag = uuid4().hex[:8]
+    base = 920_000 + int(uuid4().hex[:4], 16)
+
+    async def test(pg):
+        await async_upsert_item_names(
+            [
+                (base, f"Search Gem {tag}", "gems", None),
+                (base + 1, f"Search Gem {tag}", "gems", None),  # same name, same slug
+                (base + 2, f"Big Search Gem {tag}", None, None),
+            ]
+        )
+        found = await async_search_items_public(f"search gem {tag}", 10)
+        assert found == [
+            {"slug": f"search-gem-{tag}", "name": f"Search Gem {tag}", "category": "gems"},
+            {"slug": f"big-search-gem-{tag}", "name": f"Big Search Gem {tag}", "category": None},
+        ]
+        assert len(await async_search_items_public(tag, 1)) == 1
+
+    _run(test)
+
+
+# ----- alert user context (friends, verified characters from user settings) -----
+
+
+def test_user_alert_context_reads_friends_and_verified_characters():
+    import json
+
+    import services.alerts_db as alerts_db
+
+    tag = uuid4().hex[:8]
+    char_a, char_b = 930_000 + int(tag[:4], 16), 940_000 + int(tag[:4], 16)
+
+    async def test(pg):
+        async with pg.get_async_dict_cursor(commit=True) as cur:
+            await cur.execute(
+                "INSERT INTO users (username, password_hash) VALUES (%s, 'x') RETURNING id",
+                (f"alerts-{tag}",),
+            )
+            user_id = (await cur.fetchone())["id"]
+            await cur.execute(
+                "INSERT INTO access_tokens (character_id, access_token) VALUES (%s, %s), (%s, %s)",
+                (char_a, f"tok-a-{tag}", char_b, f"tok-b-{tag}"),
+            )
+            settings = {
+                "friends": [1, 2, "3", "junk", None],
+                "access-tokens": [
+                    {"character_id": char_a, "access_token": f"tok-a-{tag}"},
+                    {"character_id": char_b, "access_token": "wrong token"},
+                    "not an object",
+                ],
+            }
+            await cur.execute(
+                "INSERT INTO user_settings (user_id, settings) VALUES (%s, %s::jsonb)",
+                (user_id, json.dumps(settings)),
+            )
+
+        assert await alerts_db.async_get_verified_character_ids(user_id) == {char_a}
+        # the worker's sync query, on the sync pool
+        await asyncio.to_thread(pg.initialize_postgres)
+        context = await asyncio.to_thread(
+            alerts_db.get_user_alert_context, [user_id, 999_999_999]
+        )
+        assert context == {user_id: {"friends": {1, 2, 3}, "verified": {char_a}}}
+
+    _run(test)

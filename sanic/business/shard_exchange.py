@@ -5,6 +5,13 @@ import secrets
 from datetime import datetime, timezone
 
 import services.shard_exchange_db as shard_exchange_db
+from business.alerts.events import emit_alert_events
+from business.alerts.producers import (
+    SHARD_EXCHANGE_LISTED_ALERT_TYPE,
+    SHARD_EXCHANGE_OUTBID_ALERT_TYPE,
+    shard_exchange_listing_events,
+    shard_exchange_outbid_events,
+)
 from models.shard_exchange import ShardExchangeRequestApiModel, ShardListingApiModel
 from services.shard_exchange_db import ShardListingRow, ShardScanResult
 
@@ -147,8 +154,8 @@ def to_listing_row(listing: ShardListingApiModel) -> ShardListingRow:
 async def handle_incoming_shard_exchange(
     request_body: ShardExchangeRequestApiModel,
 ) -> ShardScanResult:
-    """Stores one scan of one server's Shard Exchange. Raises on a database error."""
-    return await shard_exchange_db.async_persist_shard_exchange_scan(
+    """Stores one scan of one server's Shard Exchange, then queues alert events. Raises on a database error."""
+    result = await shard_exchange_db.async_persist_shard_exchange_scan(
         server=request_body.server,
         scan_id=request_body.scan_id,
         started_at=_from_unix(request_body.started_unix),
@@ -157,3 +164,29 @@ async def handle_incoming_shard_exchange(
         complete=request_body.complete,
         listings=[to_listing_row(listing) for listing in request_body.listings],
     )
+    # Only after the transaction committed, so a failed scan (which the uploader resends) alerts nobody.
+    try:
+        emit_shard_exchange_alerts(request_body.server, result)
+    except Exception as e:  # alerts must never fail an ingest
+        print(f"Error emitting Shard Exchange alerts: {e}")
+    return result
+
+
+def _with_ref(server: str, rows: list[dict]) -> list[dict]:
+    return [
+        {**row, "ref": listing_ref(server, row["auction_id"], row["item_id"])}
+        for row in rows
+    ]
+
+
+def emit_shard_exchange_alerts(server: str, result: ShardScanResult) -> None:
+    if result.duplicate:
+        return
+    listed = shard_exchange_listing_events(
+        server, _with_ref(server, result.new_listing_rows)
+    )
+    if listed:
+        emit_alert_events(SHARD_EXCHANGE_LISTED_ALERT_TYPE, listed)
+    outbid = shard_exchange_outbid_events(server, _with_ref(server, result.outbid_rows))
+    if outbid:
+        emit_alert_events(SHARD_EXCHANGE_OUTBID_ALERT_TYPE, outbid)

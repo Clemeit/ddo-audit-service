@@ -8,7 +8,7 @@ Tables: see postgres/init.sql (shard_exchange_*) and postgres/migrations/2026-11
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
@@ -62,6 +62,9 @@ class ShardScanResult:
     ended: int = 0
     ended_skipped_reason: str | None = None  # why a complete scan did not end anything
     previously_active: int = 0
+    # For alerts (internal rows; never returned by the API as they are). Empty on a server's first scan.
+    new_listing_rows: list[dict] = field(default_factory=list)
+    outbid_rows: list[dict] = field(default_factory=list)
 
 
 _CREATE_TEMP = """
@@ -99,6 +102,32 @@ _INSERT_BIDS = """
     LEFT JOIN shard_exchange_listings l
         ON l.server = %(server)s AND l.auction_id = t.auction_id AND l.item_id = t.item_id
     WHERE t.bid > 0 AND (l.bid IS NULL OR l.bid <> t.bid)
+"""
+
+# Listings this scan has not seen before, with the item's name and slug (for listing alerts).
+_SELECT_NEW_LISTINGS = """
+    SELECT t.auction_id, t.item_id, t.quantity, t.min_bid, t.bid, t.buyout, n.name, n.slug
+    FROM _shard_scan_listings t
+    LEFT JOIN item_names n ON n.did = t.did
+    WHERE NOT EXISTS (
+        SELECT 1 FROM shard_exchange_listings l
+        WHERE l.server = %(server)s AND l.auction_id = t.auction_id AND l.item_id = t.item_id)
+"""
+
+# Active listings whose bid went up and whose high bidder changed (for outbid alerts).
+# A scan older than the stored sighting (out-of-order upload) is not compared.
+_SELECT_OUTBIDS = """
+    SELECT t.auction_id, t.item_id, t.bid, t.buyout, l.bidder_id AS prev_bidder_id,
+           t.bidder_id AS new_bidder_id, n.name, n.slug
+    FROM _shard_scan_listings t
+    JOIN shard_exchange_listings l
+        ON l.server = %(server)s AND l.auction_id = t.auction_id AND l.item_id = t.item_id
+    LEFT JOIN item_names n ON n.did = t.did
+    WHERE l.ended_at IS NULL
+      AND l.bidder_id IS NOT NULL
+      AND t.bid > COALESCE(l.bid, 0)
+      AND t.bidder_id IS DISTINCT FROM l.bidder_id
+      AND l.last_seen_at <= %(finished)s
 """
 
 # Everything but the bid, the bidder and the sighting is fixed when a listing is first seen.
@@ -248,19 +277,19 @@ async def async_persist_shard_exchange_scan(
 
         # In this order: the bid history and the new-listing count compare against the stored rows,
         # so they have to be worked out before the upsert changes them.
+        await cur.execute(_SELECT_OUTBIDS, params)
+        outbid_rows = [dict(r) for r in await cur.fetchall()]
+
         await cur.execute(_INSERT_BIDS, params)
         result.bid_changes = cur.rowcount
 
-        await cur.execute(
-            """
-            SELECT count(*) AS n FROM _shard_scan_listings t
-            WHERE NOT EXISTS (
-                SELECT 1 FROM shard_exchange_listings l
-                WHERE l.server = %s AND l.auction_id = t.auction_id AND l.item_id = t.item_id)
-            """,
-            (server,),
-        )
-        result.new_listings = (await cur.fetchone())["n"]
+        await cur.execute(_SELECT_NEW_LISTINGS, params)
+        new_listing_rows = [dict(r) for r in await cur.fetchall()]
+        result.new_listings = len(new_listing_rows)
+        # On a server's first scan every listing is "new"; that is not news to anyone.
+        if result.previously_active:
+            result.new_listing_rows = new_listing_rows
+            result.outbid_rows = outbid_rows
 
         await cur.execute(_UPSERT_LISTINGS, params)
 
@@ -380,6 +409,35 @@ async def async_search_item_names(
             },
         )
         return list(await cur.fetchall())
+
+
+async def async_search_items_public(name: str, limit: int) -> list[dict]:
+    """Items as players know them (one per slug) whose name contains `name`, for pickers.
+    Returns only slug, name and category: no internal IDs. Exact matches first, then prefixes."""
+    escaped = _like_pattern(name)
+    async with get_async_dict_cursor(commit=False) as cur:
+        await cur.execute(
+            """
+            SELECT n.slug, min(n.name) AS name, mode() WITHIN GROUP (ORDER BY n.category) AS category
+            FROM item_names n
+            WHERE n.slug IS NOT NULL AND n.slug <> '' AND n.name ILIKE %(contains)s
+            GROUP BY n.slug
+            ORDER BY bool_or(lower(n.name) = lower(%(name)s)) DESC,
+                     bool_or(n.name ILIKE %(prefix)s) DESC,
+                     min(n.name), n.slug
+            LIMIT %(limit)s
+            """,
+            {
+                "contains": f"%{escaped}%",
+                "prefix": f"{escaped}%",
+                "name": name,
+                "limit": limit,
+            },
+        )
+        return [
+            {"slug": r["slug"], "name": r["name"], "category": r["category"]}
+            for r in await cur.fetchall()
+        ]
 
 
 async def async_get_item_name(did: int) -> str | None:

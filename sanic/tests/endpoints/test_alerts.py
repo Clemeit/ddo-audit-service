@@ -306,3 +306,50 @@ def test_send_test_alert_queues_event_for_user(monkeypatch, make_request, run_as
     assert queued[0][0] == "test"
     assert queued[0][1]["user_id"] == 4
     assert queued[0][1]["nonce"]
+
+
+# ----- per-type checks that need the user (validate_for_user) -----
+
+
+def test_create_outbid_rule_rejects_unverified_character(
+    monkeypatch, make_request, run_async, response_json
+):
+    import services.alerts_db as alerts_db
+
+    async def _verified(user_id):
+        return {10}
+
+    monkeypatch.setattr(alerts_db, "async_get_verified_character_ids", _verified)
+    body = {"type": "shard_exchange_outbid", "criteria": {"character_ids": [11]}}
+    response = run_async(
+        _call("create_alert_rule", _req(make_request, "POST", json_body=body))
+    )
+    assert response.status == 400
+    assert "verified" in response_json(response)["error"]
+
+
+def test_create_listed_rule_stores_server_side_item_name(
+    monkeypatch, make_request, run_async
+):
+    import services.shard_exchange_db as shard_exchange_db
+
+    async def _item(slug):
+        return {"name": "Some Item", "category": None}
+
+    monkeypatch.setattr(shard_exchange_db, "async_get_item_by_slug", _item)
+    captured = {}
+
+    def _create(user_id, rule_type, criteria, enabled, expires_at):
+        captured.update(criteria=criteria)
+        return _row(type=rule_type, criteria=criteria)
+
+    monkeypatch.setattr(alerts_endpoints.alerts_db, "async_create_rule", _amock(_create))
+    body = {
+        "type": "shard_exchange_listed",
+        "criteria": {"item_slug": "some-item", "item_name": "<b>spoof</b>"},
+    }
+    response = run_async(
+        _call("create_alert_rule", _req(make_request, "POST", json_body=body))
+    )
+    assert response.status == 201
+    assert captured["criteria"]["item_name"] == "Some Item"

@@ -54,7 +54,7 @@ def _validation_message(e: ValidationError) -> str:
     return ", ".join(parts)
 
 
-def _parse_rule_body(request: Request):
+async def _parse_rule_body(request: Request, user_id: int):
     """Returns (AlertRuleInput, validated criteria dict) or raises ValueError with a user-facing message."""
     if len(request.body or b"") > MAX_ALERT_RULE_BODY_BYTES:
         raise ValueError("Request body too large")
@@ -69,6 +69,7 @@ def _parse_rule_body(request: Request):
         criteria = alert_type.Criteria.model_validate(body.criteria)
     except ValidationError as e:
         raise ValueError(_validation_message(e))
+    criteria = await alert_type.validate_for_user(criteria, user_id)
     return body, criteria.model_dump(mode="json")
 
 
@@ -116,7 +117,7 @@ async def create_alert_rule(request: Request):
     if not user_id:
         return json({"error": "Unauthorized"}, status=401)
     try:
-        body, criteria = _parse_rule_body(request)
+        body, criteria = await _parse_rule_body(request, user_id)
     except ValueError as e:
         return json({"error": str(e)}, status=400)
     try:
@@ -146,7 +147,7 @@ async def update_alert_rule(request: Request, rule_id: int):
     if not user_id:
         return json({"error": "Unauthorized"}, status=401)
     try:
-        body, criteria = _parse_rule_body(request)
+        body, criteria = await _parse_rule_body(request, user_id)
     except ValueError as e:
         return json({"error": str(e)}, status=400)
     try:
