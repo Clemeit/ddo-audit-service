@@ -579,3 +579,98 @@ def test_item_by_slug_rejects_bad_requests(
     _stub_item(monkeypatch)
     response = _get_item(make_request, run_async, slug, **args)
     assert response.status == 400
+
+
+# ===== per-server summary =====
+
+
+def _summary(**overrides) -> dict:
+    summary = {
+        "listings": 0,
+        "ending_soon": 0,
+        "new_listings": 0,
+        "ended": 0,
+        "sold": 0,
+        "bids": 0,
+        "updated_at": None,
+        "trend": [],
+    }
+    summary.update(overrides)
+    return summary
+
+
+def test_server_summaries(monkeypatch, make_request, run_async, response_json):
+    calls = []
+    scanned = datetime(2026, 11, 19, 12, 0, 0, tzinfo=timezone.utc)
+
+    async def fake_summaries(servers, **windows):
+        calls.append((servers, windows))
+        return {
+            "cormyr": _summary(
+                listings=120,
+                ending_soon=7,
+                new_listings=30,
+                ended=25,
+                sold=9,
+                bids=14,
+                updated_at=scanned,
+                trend=[
+                    {"time": datetime(2026, 11, 18, 18, tzinfo=timezone.utc), "listings": 110},
+                    {"time": datetime(2026, 11, 19, 0, tzinfo=timezone.utc), "listings": 118},
+                ],
+            ),
+            "thrane": _summary(),
+        }
+
+    monkeypatch.setattr(
+        shard_endpoints.shard_exchange_db, "async_get_server_summaries", fake_summaries
+    )
+
+    response = _get(make_request, run_async, shard_endpoints.get_server_summaries)
+
+    assert response.status == 200
+    assert "public" in response.headers["Cache-Control"]
+    payload = response_json(response)
+    assert payload["activity_hours"] == 24
+    assert payload["ending_soon_minutes"] == 60
+    assert payload["trend_days"] == 7
+    assert payload["trend_bucket_hours"] == 6
+    assert [s["server"] for s in payload["data"]] == ["cormyr", "thrane"]
+
+    cormyr = payload["data"][0]
+    assert cormyr["listings"] == 120
+    assert cormyr["ending_soon"] == 7
+    assert cormyr["last_day"] == {"new_listings": 30, "ended": 25, "sold": 9, "bids": 14}
+    assert cormyr["updated_at"] == "2026-11-19T12:00:00+00:00"
+    assert cormyr["trend"] == [
+        {"time": "2026-11-18T18:00:00+00:00", "listings": 110},
+        {"time": "2026-11-19T00:00:00+00:00", "listings": 118},
+    ]
+
+    thrane = payload["data"][1]
+    assert thrane["updated_at"] is None
+    assert thrane["trend"] == []
+
+    servers, windows = calls[0]
+    assert tuple(servers) == ("cormyr", "shadowdale", "thrane", "moonsea")
+    assert windows["activity"].total_seconds() == 24 * 3600
+    assert windows["ending_soon"].total_seconds() == 3600
+    assert windows["trend"].days == 7
+    assert windows["trend_bucket"].total_seconds() == 6 * 3600
+
+
+def test_server_summaries_database_failure_is_a_500(
+    monkeypatch, make_request, run_async, response_json
+):
+    async def broken(servers, **windows):
+        raise RuntimeError("database is down")
+
+    monkeypatch.setattr(
+        shard_endpoints.shard_exchange_db, "async_get_server_summaries", broken
+    )
+    monkeypatch.setattr(shard_endpoints, "logMessage", lambda **kwargs: None)
+
+    response = _get(make_request, run_async, shard_endpoints.get_server_summaries)
+
+    assert response.status == 500
+    assert "database is down" not in response_json(response)["message"]

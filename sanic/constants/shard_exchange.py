@@ -59,6 +59,13 @@ LISTINGS_DEFAULT_SORT = "name"
 # The data changes about once an hour; a short cache spares the database.
 LISTINGS_CACHE_SECONDS = 60
 
+# The per-server summary (GET /shard-exchange/servers): the servers it covers and its time windows.
+SUMMARY_SERVERS = ("cormyr", "shadowdale", "thrane", "moonsea")
+SUMMARY_ACTIVITY_HOURS = 24
+SUMMARY_ENDING_SOON_MINUTES = 60
+SUMMARY_TREND_DAYS = 7
+SUMMARY_TREND_BUCKET_HOURS = 6
+
 MY_BIDS_MAX_TOKENS = 50
 MY_BIDS_MAX_RESULTS = 500
 MY_BIDS_TOKEN_PATTERN = r"[A-Za-z0-9_-]{1,128}"

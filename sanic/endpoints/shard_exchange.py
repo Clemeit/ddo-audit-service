@@ -34,6 +34,11 @@ from constants.shard_exchange import (
     MY_BIDS_MAX_RESULTS,
     SHARD_EXCHANGE_CATEGORIES,
     SHARD_EXCHANGE_CATEGORY_SLUGS,
+    SUMMARY_ACTIVITY_HOURS,
+    SUMMARY_ENDING_SOON_MINUTES,
+    SUMMARY_SERVERS,
+    SUMMARY_TREND_BUCKET_HOURS,
+    SUMMARY_TREND_DAYS,
 )
 from services.shard_exchange_db import ListingFilters
 from models.shard_exchange import (
@@ -383,6 +388,72 @@ async def get_my_bids(request: Request):
                 "characters": character_ids,
                 "updated_at": _iso(updated_at),
                 "data": to_my_bid_listings(rows),
+            }
+        )
+    )
+
+
+@shard_exchange_blueprint.get("/servers")
+@openapi.summary("A summary of each server's Shard Exchange")
+@openapi.response(200, {"application/json": {"description": "One summary per server"}})
+async def get_server_summaries(request: Request):
+    """
+    Method: GET
+
+    Route: /shard-exchange/servers
+
+    Description: For each server whose Shard Exchange is tracked:
+    - listings: active listings
+    - ending_soon: active listings that end within `ending_soon_minutes`
+    - last_day: over the last `activity_hours`, listings first seen (new_listings), listings that
+      ended (ended), those of them known to have sold (sold, a lower bound) and bids seen (bids)
+    - updated_at: when the server's data was last updated, or null
+    - trend: the number of listings over the last `trend_days` days, one point per
+      `trend_bucket_hours` hours (oldest first; periods with no data are left out)
+    """
+    try:
+        summaries = await shard_exchange_db.async_get_server_summaries(
+            SUMMARY_SERVERS,
+            activity=timedelta(hours=SUMMARY_ACTIVITY_HOURS),
+            ending_soon=timedelta(minutes=SUMMARY_ENDING_SOON_MINUTES),
+            trend=timedelta(days=SUMMARY_TREND_DAYS),
+            trend_bucket=timedelta(hours=SUMMARY_TREND_BUCKET_HOURS),
+        )
+    except Exception as e:
+        logMessage(
+            message="Error summarizing the Shard Exchange servers",
+            level="error",
+            action="get_server_summaries",
+            metadata={"error": str(e)},
+        )
+        return json({"message": "Error summarizing the servers"}, status=500)
+
+    return _cached(
+        json(
+            {
+                "activity_hours": SUMMARY_ACTIVITY_HOURS,
+                "ending_soon_minutes": SUMMARY_ENDING_SOON_MINUTES,
+                "trend_days": SUMMARY_TREND_DAYS,
+                "trend_bucket_hours": SUMMARY_TREND_BUCKET_HOURS,
+                "data": [
+                    {
+                        "server": server,
+                        "updated_at": _iso(summary["updated_at"]),
+                        "listings": summary["listings"],
+                        "ending_soon": summary["ending_soon"],
+                        "last_day": {
+                            "new_listings": summary["new_listings"],
+                            "ended": summary["ended"],
+                            "sold": summary["sold"],
+                            "bids": summary["bids"],
+                        },
+                        "trend": [
+                            {"time": _iso(point["time"]), "listings": point["listings"]}
+                            for point in summary["trend"]
+                        ],
+                    }
+                    for server, summary in summaries.items()
+                ],
             }
         )
     )

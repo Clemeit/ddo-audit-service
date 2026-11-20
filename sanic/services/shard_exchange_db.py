@@ -9,7 +9,7 @@ Tables: see postgres/init.sql (shard_exchange_*) and postgres/migrations/2026-11
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
 
@@ -682,6 +682,120 @@ async def async_get_last_scan_time(server: str) -> datetime | None:
         )
         row = await cur.fetchone()
         return row["t"] if row else None
+
+
+_SOLD_END_REASONS = [
+    END_REASON_SOLD_BUYOUT,
+    END_REASON_SOLD_AUCTION,
+    END_REASON_SOLD_BUYOUT_OR_AUCTION,
+]
+
+# Listings that are up now, plus those that ended within the activity window. Every listing first
+# seen within the window is one of the two, so one pass over them gives all the counts. The two halves
+# are separate so each can use its own partial index.
+_SUMMARY_LISTINGS = """
+    WITH recent AS (
+        SELECT server, first_seen_at, expires_at, ended_at, end_reason
+        FROM shard_exchange_listings
+        WHERE ended_at IS NULL AND server = ANY(%(servers)s)
+        UNION ALL
+        SELECT server, first_seen_at, expires_at, ended_at, end_reason
+        FROM shard_exchange_listings
+        WHERE ended_at > now() - %(activity)s AND server = ANY(%(servers)s)
+    )
+    SELECT l.server,
+           count(*) FILTER (WHERE l.ended_at IS NULL AND (l.expires_at IS NULL OR l.expires_at > now()))
+               AS listings,
+           count(*) FILTER (WHERE l.ended_at IS NULL AND l.expires_at > now()
+                                AND l.expires_at <= now() + %(ending_soon)s) AS ending_soon,
+           count(*) FILTER (WHERE l.first_seen_at > now() - %(activity)s) AS new_listings,
+           count(*) FILTER (WHERE l.ended_at > now() - %(activity)s) AS ended,
+           count(*) FILTER (WHERE l.ended_at > now() - %(activity)s
+                                AND l.end_reason = ANY(%(sold)s)) AS sold
+    FROM recent l
+    GROUP BY l.server
+"""
+
+_SUMMARY_BIDS = """
+    SELECT server, count(*) AS bids
+    FROM shard_exchange_bids
+    WHERE "time" > now() - %(activity)s AND server = ANY(%(servers)s)
+    GROUP BY server
+"""
+
+_SUMMARY_LAST_SCAN = """
+    SELECT server, max(finished_at) AS updated_at
+    FROM shard_exchange_scans
+    WHERE complete AND server = ANY(%(servers)s)
+    GROUP BY server
+"""
+
+# The average listing count of each period's complete scans
+_SUMMARY_TREND = """
+    SELECT server, time_bucket(%(bucket)s, finished_at) AS "time",
+           round(avg(listing_count))::int AS listings
+    FROM shard_exchange_scans
+    WHERE complete AND server = ANY(%(servers)s)
+      AND finished_at >= time_bucket(%(bucket)s, now() - %(trend)s)
+    GROUP BY 1, 2
+    ORDER BY 1, 2
+"""
+
+
+async def async_get_server_summaries(
+    servers: list[str] | tuple[str, ...],
+    *,
+    activity: timedelta,
+    ending_soon: timedelta,
+    trend: timedelta,
+    trend_bucket: timedelta,
+) -> dict[str, dict]:
+    """For each server: active listings, how many end soon, the activity window's new, ended and sold
+    listings and bids, when it was last scanned, and its listing count over the trend window (oldest
+    first). Servers with no data have zeros, None and an empty trend."""
+    servers = list(servers)
+    params = {
+        "servers": servers,
+        "activity": activity,
+        "ending_soon": ending_soon,
+        "trend": trend,
+        "bucket": trend_bucket,
+        "sold": _SOLD_END_REASONS,
+    }
+    summaries = {
+        server: {
+            "listings": 0,
+            "ending_soon": 0,
+            "new_listings": 0,
+            "ended": 0,
+            "sold": 0,
+            "bids": 0,
+            "updated_at": None,
+            "trend": [],
+        }
+        for server in servers
+    }
+    async with get_async_dict_cursor(commit=False) as cur:
+        await cur.execute(_SUMMARY_LISTINGS, params)
+        for row in await cur.fetchall():
+            summary = summaries[row["server"]]
+            for key in ("listings", "ending_soon", "new_listings", "ended", "sold"):
+                summary[key] = row[key]
+
+        await cur.execute(_SUMMARY_BIDS, params)
+        for row in await cur.fetchall():
+            summaries[row["server"]]["bids"] = row["bids"]
+
+        await cur.execute(_SUMMARY_LAST_SCAN, params)
+        for row in await cur.fetchall():
+            summaries[row["server"]]["updated_at"] = row["updated_at"]
+
+        await cur.execute(_SUMMARY_TREND, params)
+        for row in await cur.fetchall():
+            summaries[row["server"]]["trend"].append(
+                {"time": row["time"], "listings": row["listings"]}
+            )
+    return summaries
 
 
 async def async_get_item_by_slug(slug: str) -> dict | None:
