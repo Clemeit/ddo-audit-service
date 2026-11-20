@@ -5,6 +5,8 @@ Game endpoints.
 import services.redis as redis_client
 from services.betterstack import server_info_heartbeat
 from models.redis import ServerInfo
+from business.alerts.events import emit_alert_events
+from business.alerts.producers import SERVER_STATUS_ALERT_TYPE, server_status_events
 
 from sanic import Blueprint
 from sanic.request import Request
@@ -92,6 +94,13 @@ async def patch_game_info(request: Request):
     except Exception:
         return json({"message": "Invalid request body"}, status=400)
 
+    # Remember each server's status before the merge so online/offline changes can raise alerts.
+    previous_servers = None
+    try:
+        previous_servers = redis_client.get_server_info_as_dict()
+    except Exception:
+        pass
+
     # update in redis cache
     try:
         redis_client.merge_server_info(request_body)
@@ -106,6 +115,17 @@ async def patch_game_info(request: Request):
             },
         )
         return json({"message": str(e)}, status=500)
+
+    # Alerts must never fail an ingest.
+    try:
+        status_events = server_status_events(
+            previous_servers if isinstance(previous_servers, dict) else None,
+            request_body.model_dump(exclude_unset=True).get("servers") or {},
+        )
+        if status_events:
+            emit_alert_events(SERVER_STATUS_ALERT_TYPE, status_events)
+    except Exception:
+        pass
 
     try:
         server_info_heartbeat()

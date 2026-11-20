@@ -112,3 +112,69 @@ def get_enabled_rules_by_type(rule_type: str) -> list[dict]:
             (rule_type,),
         )
         return [dict(row) for row in cursor.fetchall()]
+
+
+# ----- per-user context for alert types (friends, verified characters) -----
+#
+# The UI syncs a user's friends (character IDs) and verified-character access tokens into
+# ``user_settings.settings`` under "friends" and "access-tokens". Alert types that mean "all my friends"
+# or "all my verified characters" resolve them here. Tokens are joined to ``access_tokens`` so only
+# characters the user really verified count.
+
+_FRIEND_IDS_SQL = """
+    COALESCE((
+        SELECT array_agg(DISTINCT f::bigint)
+        FROM jsonb_array_elements_text(
+            CASE WHEN jsonb_typeof(us.settings->'friends') = 'array'
+                 THEN us.settings->'friends' ELSE '[]'::jsonb END
+        ) AS f
+        WHERE f ~ '^[0-9]{1,18}$'
+    ), '{}') AS friend_ids
+"""
+
+_VERIFIED_IDS_SQL = """
+    COALESCE((
+        SELECT array_agg(DISTINCT tok.character_id)
+        FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(us.settings->'access-tokens') = 'array'
+                 THEN us.settings->'access-tokens' ELSE '[]'::jsonb END
+        ) AS t
+        JOIN access_tokens tok
+          ON jsonb_typeof(t) = 'object'
+         AND tok.access_token = t->>'access_token'
+         AND tok.character_id::text = t->>'character_id'
+    ), '{}') AS verified_ids
+"""
+
+
+def get_user_alert_context(user_ids: list[int]) -> dict[int, dict[str, set[int]]]:
+    """``{user_id: {"friends": {...}, "verified": {...}}}`` for the given users (sync, for the worker)."""
+    if not user_ids:
+        return {}
+    with get_dict_cursor(commit=False) as cursor:
+        cursor.execute(
+            f"""
+            SELECT us.user_id, {_FRIEND_IDS_SQL}, {_VERIFIED_IDS_SQL}
+            FROM user_settings us
+            WHERE us.user_id = ANY(%s)
+            """,
+            (list(set(user_ids)),),
+        )
+        return {
+            int(row["user_id"]): {
+                "friends": {int(i) for i in row["friend_ids"] or []},
+                "verified": {int(i) for i in row["verified_ids"] or []},
+            }
+            for row in cursor.fetchall()
+        }
+
+
+async def async_get_verified_character_ids(user_id: int) -> set[int]:
+    """Characters this user has verified (via access tokens synced to their settings)."""
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            f"SELECT {_VERIFIED_IDS_SQL} FROM user_settings us WHERE us.user_id = %s",
+            (user_id,),
+        )
+        row = await cursor.fetchone()
+        return {int(i) for i in (row["verified_ids"] if row else None) or []}

@@ -317,10 +317,22 @@ async def update_persistent_settings(request: Request):
         success = await postgres_client.async_update_user_settings(user_id, settings)
         if not success:
             return json({"error": "Failed to update settings"}, status=500)
+        await _bump_alert_rules_if_needed(settings)
 
         return json({"data": {"settings": settings}}, status=200)
     except Exception as e:
         return json({"error": "Internal server error"}, status=500)
+
+
+# Alert rules for "all my friends" / "all my verified characters" read these settings keys.
+_ALERT_CONTEXT_SETTINGS_KEYS = ("friends", "access-tokens")
+
+
+async def _bump_alert_rules_if_needed(settings: dict) -> None:
+    if any(key in settings for key in _ALERT_CONTEXT_SETTINGS_KEYS):
+        from business.alerts.dispatcher import async_bump_rules_version
+
+        await async_bump_rules_version()
 
 
 @user_blueprint.patch("/settings/persistent")
@@ -384,6 +396,7 @@ async def patch_persistent_settings(request: Request):
         )
         if merged_settings is None:
             return json({"error": "Failed to patch settings"}, status=500)
+        await _bump_alert_rules_if_needed(settings_patch)
 
         return json({"data": {"settings": merged_settings}}, status=200)
     except Exception as e:

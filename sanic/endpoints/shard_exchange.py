@@ -517,6 +517,52 @@ async def get_categories(request: Request):
     )
 
 
+ITEM_SEARCH_MIN_LENGTH = 2
+ITEM_SEARCH_MAX_LIMIT = 20
+
+
+@shard_exchange_blueprint.get("/items")
+@openapi.summary("Search items by name (for pickers)")
+@openapi.parameter("q", str, "query", required=True, description="Part of the item's name")
+@openapi.parameter("limit", int, "query", description="How many (default 10, at most 20)")
+@openapi.response(200, {"application/json": {"description": "Matching items: slug, name, category"}})
+@openapi.response(400, description="A missing or invalid parameter")
+async def search_items(request: Request):
+    """
+    Method: GET
+
+    Route: /shard-exchange/items?q=<text>
+
+    Description: Items whose name contains the text, one per slug, as {slug, name, category}.
+    """
+    query = " ".join((request.args.get("q") or "").split())
+    if len(query) < ITEM_SEARCH_MIN_LENGTH or len(query) > LISTINGS_MAX_QUERY_LENGTH:
+        return json(
+            {
+                "message": f"q must be {ITEM_SEARCH_MIN_LENGTH} to {LISTINGS_MAX_QUERY_LENGTH} characters"
+            },
+            status=400,
+        )
+    try:
+        limit = _int_arg(request, "limit", 10, 1, ITEM_SEARCH_MAX_LIMIT)
+    except _BadParameter as e:
+        return json({"message": str(e)}, status=400)
+    try:
+        items = await shard_exchange_db.async_search_items_public(query, limit)
+    except Exception as e:
+        logMessage(
+            message="Error searching item names",
+            level="error",
+            action="search_items",
+            metadata={"error": str(e)},
+        )
+        return json({"message": "Internal server error"}, status=500)
+    return json(
+        {"data": items},
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
 @shard_exchange_blueprint.get("/items/<slug:str>")
 @openapi.summary("An item and its price history on a server, by slug")
 @openapi.parameter("server", str, "query", required=True, description="Server name")

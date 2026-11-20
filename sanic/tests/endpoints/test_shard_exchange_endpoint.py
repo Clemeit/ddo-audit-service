@@ -674,3 +674,37 @@ def test_server_summaries_database_failure_is_a_500(
 
     assert response.status == 500
     assert "database is down" not in response_json(response)["message"]
+
+
+# ----- item search (for alert pickers) -----
+
+
+def _search(make_request, run_async, **args):
+    request = make_request(method="GET", path="/v1/shard-exchange/items")
+    request.args = args
+    return run_async(shard_endpoints.search_items(request))
+
+
+def test_item_search_returns_public_fields_only(
+    monkeypatch, make_request, run_async, response_json
+):
+    seen = {}
+
+    async def fake_search(name, limit):
+        seen.update(name=name, limit=limit)
+        return [{"slug": "some-item", "name": "Some Item", "category": "gear"}]
+
+    monkeypatch.setattr(
+        shard_endpoints.shard_exchange_db, "async_search_items_public", fake_search
+    )
+    response = _search(make_request, run_async, q="  some   item ", limit="5")
+    assert response.status == 200
+    assert seen == {"name": "some item", "limit": 5}
+    assert response_json(response)["data"] == [
+        {"slug": "some-item", "name": "Some Item", "category": "gear"}
+    ]
+
+
+@pytest.mark.parametrize("args", [{}, {"q": "a"}, {"q": "ok", "limit": "99"}])
+def test_item_search_rejects_bad_params(args, make_request, run_async):
+    assert _search(make_request, run_async, **args).status == 400

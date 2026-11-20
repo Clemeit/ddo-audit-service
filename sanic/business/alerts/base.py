@@ -58,6 +58,15 @@ class AlertType:
     Criteria: ClassVar[type[BaseModel] | None] = None
     # False for internal types (e.g. the test alert) that users cannot create rules for.
     user_creatable: ClassVar[bool] = True
+    # How long the dispatcher remembers that a user got this event (``dedupe_key``), in seconds.
+    dedupe_ttl_secs: ClassVar[int] = 6 * 60 * 60
+
+    async def validate_for_user(self, criteria: BaseModel, user_id: int) -> BaseModel:
+        """Checks that need the database or the user (ownership, existence), run when a rule is saved.
+
+        Return the (possibly canonicalised) criteria, or raise ValueError with a user-facing message.
+        """
+        return criteria
 
     def refresh(self) -> None:
         """Reload any lookup data the type needs (called by the worker alongside the rule refresh)."""

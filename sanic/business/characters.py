@@ -8,6 +8,8 @@ from constants.server import SERVER_NAMES_LOWERCASE, SSE_SERVER_NAMES_LOWERCASE
 from models.api import CharacterRequestApiModel, CharacterRequestType
 from models.character import CharacterActivity
 from models.redis import ServerCharacterData
+from business.alerts.events import emit_alert_events
+from business.alerts.producers import FRIEND_LOGIN_ALERT_TYPE, friend_login_events
 
 from utils.time import get_current_datetime_string
 from utils.log import logMessage
@@ -77,6 +79,15 @@ async def handle_incoming_characters(
                 deleted_character_ids=character_ids_we_can_save,
             )
         )
+
+        try:  # alerts must never fail an ingest
+            login_events = friend_login_events(
+                server_name, previous_character_ids, incoming_characters
+            )
+            if login_events:
+                emit_alert_events(FRIEND_LOGIN_ALERT_TYPE, login_events)
+        except Exception as e:
+            print(f"Error emitting friend login alerts: {e}")
 
         for character_id, character_data in incoming_characters.items():
             previous_login_time = previous_characters.get(character_id, {}).get(

@@ -19,7 +19,6 @@ from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
-DEDUPE_TTL_SECONDS = 6 * 60 * 60
 USER_CAP = 10  # alerts per user per window
 USER_CAP_WINDOW_SECONDS = 10 * 60
 METRICS_KEY = RedisKeys.ALERT_METRICS.value
@@ -151,7 +150,7 @@ class AlertDispatcher:
             sent_key = RedisKeys.ALERT_SENT.value.format(
                 user_id=user_id, dedupe_key=dedupe_key
             )
-            if not client.set(sent_key, 1, nx=True, ex=DEDUPE_TTL_SECONDS):
+            if not client.set(sent_key, 1, nx=True, ex=alert_type.dedupe_ttl_secs):
                 stats["deduped"] += 1
                 continue
             if self._over_cap(client, user_id):
