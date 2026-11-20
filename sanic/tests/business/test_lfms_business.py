@@ -482,6 +482,7 @@ def test_get_lfm_alert_candidates_includes_new_lfms_with_quests():
         {
             "server_name": "argonnessen",
             "lfm_id": 1,
+            "leader_id": 1,
             "quest_id": 100,
             "difficulty": "Elite",
             "minimum_level": 20,

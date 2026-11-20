@@ -116,6 +116,7 @@ def _lfm_alert_data(lfm: Lfm) -> dict:
     return {
         "server_name": (lfm.server_name or "").lower(),
         "lfm_id": lfm.id,
+        "leader_id": lfm.leader.id if lfm.leader else None,
         "quest_id": lfm.quest_id,
         "difficulty": lfm.difficulty,
         "minimum_level": lfm.minimum_level,

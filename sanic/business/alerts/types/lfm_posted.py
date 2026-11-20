@@ -153,11 +153,17 @@ class LfmPostedAlertType(AlertType):
         quest_id = data.get("quest_id")
         if not quest_id:
             return []
-        return [r for r in index.get(quest_id, []) if criteria_matches(r.criteria, data)]
+        return [
+            r for r in index.get(quest_id, []) if criteria_matches(r.criteria, data)
+        ]
+
+    @staticmethod
+    def _stable_id(data: dict):
+        return data.get("leader_id") or data.get("lfm_id")
 
     def dedupe_key(self, data: dict) -> str:
         server = str(data.get("server_name") or "").lower()
-        return f"lfm:{server}:{data.get('lfm_id')}:{data.get('quest_id')}"
+        return f"lfm:{server}:{self._stable_id(data)}:{data.get('quest_id')}"
 
     def render(self, data: dict, rule: AlertRule) -> RenderedAlert:
         server_lower = str(data.get("server_name") or "").lower()
@@ -185,5 +191,5 @@ class LfmPostedAlertType(AlertType):
             title=f"{quest_name} on {server}",
             body=" · ".join(details) or "New LFM posted",
             url=f"/grouping/{server_lower}",
-            tag=f"lfm-{server_lower}-{data.get('lfm_id')}",
+            tag=f"lfm-{server_lower}-{self._stable_id(data)}",
         )

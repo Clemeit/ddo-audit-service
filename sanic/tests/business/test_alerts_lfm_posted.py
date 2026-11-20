@@ -169,6 +169,14 @@ def test_refresh_keeps_old_names_when_loader_fails():
     assert t.render(_data(), _rule()).title == "The Pit on Argonnessen"
 
 
+def test_dedupe_key_survives_lfm_id_change_when_leader_joins():
+    t = LfmPostedAlertType(quest_name_loader=lambda: {})
+    before = _data(lfm_id=555, leader_id=555)  # id == leader id until someone joins
+    after = _data(lfm_id=987654, leader_id=555)  # game assigns a group id
+    assert t.dedupe_key(before) == t.dedupe_key(after)
+    assert t.dedupe_key(before) != t.dedupe_key(_data(lfm_id=555, leader_id=555, quest_id=101))
+
+
 def test_dedupe_key_identifies_lfm_and_quest():
     t = LfmPostedAlertType(quest_name_loader=lambda: {})
     assert t.dedupe_key(_data(server_name="Argonnessen")) == "lfm:argonnessen:10:100"
