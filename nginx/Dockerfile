@@ -1,4 +1,4 @@
-FROM nginx:1.29.1-alpine
+FROM nginx:1.30.7-alpine
 
 # Remove the default Nginx configuration file
 RUN rm -rf /usr/share/nginx/html/*
