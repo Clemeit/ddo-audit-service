@@ -79,6 +79,16 @@ async def _parse_rule_body(request: Request, user_id: int):
     return body, criteria.model_dump(mode="json")
 
 
+def _duplicate_response(e: "alerts_db.DuplicateRule"):
+    return json(
+        {
+            "error": "You already have an alert with these settings.",
+            "rule_id": e.rule["id"],
+        },
+        status=409,
+    )
+
+
 def _user_id(request: Request):
     return getattr(request.ctx, "user_id", None)
 
@@ -118,6 +128,7 @@ async def get_alert_rules(request: Request):
 @openapi.secured("BearerAuth")
 @openapi.body({"application/json": AlertRuleInput})
 @openapi.response(400, description="Validation error or rule limit reached")
+@openapi.response(409, description="The user already has an alert with these settings")
 async def create_alert_rule(request: Request):
     user_id = _user_id(request)
     if not user_id:
@@ -128,8 +139,15 @@ async def create_alert_rule(request: Request):
         return json({"error": str(e)}, status=400)
     try:
         row = await alerts_db.async_create_rule(
-            user_id, body.type, criteria, body.enabled, body.expires_at
+            user_id,
+            body.type,
+            criteria,
+            body.enabled,
+            body.expires_at,
+            criteria_key=registry.get_type(body.type).criteria_key,
         )
+    except alerts_db.DuplicateRule as e:
+        return _duplicate_response(e)
     except alerts_db.RuleLimitReached:
         return json(
             {
@@ -148,6 +166,7 @@ async def create_alert_rule(request: Request):
 @openapi.secured("BearerAuth")
 @openapi.body({"application/json": AlertRuleInput})
 @openapi.response(404, description="Rule not found")
+@openapi.response(409, description="Another of the user's alerts has these settings")
 async def update_alert_rule(request: Request, rule_id: int):
     user_id = _user_id(request)
     if not user_id:
@@ -163,8 +182,16 @@ async def update_alert_rule(request: Request, rule_id: int):
         if existing["type"] != body.type:
             return json({"error": "An alert's type cannot be changed"}, status=400)
         row = await alerts_db.async_update_rule(
-            user_id, rule_id, criteria, body.enabled, body.expires_at
+            user_id,
+            rule_id,
+            criteria,
+            body.enabled,
+            body.expires_at,
+            rule_type=body.type,
+            criteria_key=registry.get_type(body.type).criteria_key,
         )
+    except alerts_db.DuplicateRule as e:
+        return _duplicate_response(e)
     except Exception:
         return json({"error": "Internal server error"}, status=500)
     if not row:

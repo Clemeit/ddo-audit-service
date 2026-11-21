@@ -9,12 +9,25 @@ adding a channel never touches the types.
 
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, ClassVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+
+
+def _canonical(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _canonical(v) for k, v in value.items()}
+    if isinstance(value, list):
+        # Every list in a rule's criteria is a set (servers, quests, characters): order doesn't count.
+        return sorted(
+            (_canonical(v) for v in value),
+            key=lambda v: json.dumps(v, sort_keys=True),
+        )
+    return value
 
 
 @dataclass(frozen=True)
@@ -60,6 +73,23 @@ class AlertType:
     user_creatable: ClassVar[bool] = True
     # How long the dispatcher remembers that a user got this event (``dedupe_key``), in seconds.
     dedupe_ttl_secs: ClassVar[int] = 6 * 60 * 60
+    # Criteria fields the server fills in for display only; ignored when comparing two rules.
+    display_only_fields: ClassVar[frozenset[str]] = frozenset()
+
+    def criteria_key(self, criteria: dict | None) -> str:
+        """A fingerprint of a rule's criteria: two rules with the same key alert on exactly the same things.
+
+        Stored criteria are re-validated first, so a rule saved before a field was added (or with
+        other spelling) still matches a new rule that means the same thing.
+        """
+        data = criteria or {}
+        if self.Criteria is not None:
+            try:
+                data = self.Criteria.model_validate(data).model_dump(mode="json")
+            except ValidationError:
+                pass
+        trimmed = {k: v for k, v in data.items() if k not in self.display_only_fields}
+        return json.dumps(_canonical(trimmed), sort_keys=True)
 
     async def validate_for_user(self, criteria: BaseModel, user_id: int) -> BaseModel:
         """Checks that need the database or the user (ownership, existence), run when a rule is saved.

@@ -91,6 +91,7 @@ class ShardExchangeListedAlertType(AlertType):
     label = "Shard Exchange listing"
     Criteria = ShardExchangeListedCriteria
     dedupe_ttl_secs = 24 * 60 * 60
+    display_only_fields = frozenset({"item_name"})
 
     async def validate_for_user(self, criteria, user_id: int):
         import services.shard_exchange_db as shard_exchange_db

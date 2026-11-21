@@ -123,7 +123,7 @@ def test_create_rule_validates_and_normalises_criteria(
 ):
     captured = {}
 
-    def _create(user_id, rule_type, criteria, enabled, expires_at):
+    def _create(user_id, rule_type, criteria, enabled, expires_at, **_kw):
         captured.update(user_id=user_id, type=rule_type, criteria=criteria, enabled=enabled)
         return _row(criteria=criteria)
 
@@ -164,7 +164,7 @@ def test_create_rule_rejects_large_body(make_request, run_async):
 
 
 def test_create_rule_reports_limit(monkeypatch, make_request, run_async, response_json):
-    def _create(*_a):
+    def _create(*_a, **_kw):
         raise alerts_endpoints.alerts_db.RuleLimitReached()
 
     monkeypatch.setattr(alerts_endpoints.alerts_db, "async_create_rule", _amock(_create))
@@ -202,7 +202,7 @@ def test_update_rule_saves(monkeypatch, make_request, run_async, response_json):
     monkeypatch.setattr(
         alerts_endpoints.alerts_db,
         "async_update_rule",
-        _amock(lambda user_id, rule_id, criteria, enabled, expires_at: _row(enabled=enabled)),
+        _amock(lambda user_id, rule_id, criteria, enabled, expires_at, **_kw: _row(enabled=enabled)),
     )
 
     body = {**VALID_BODY, "enabled": False}
@@ -210,6 +210,41 @@ def test_update_rule_saves(monkeypatch, make_request, run_async, response_json):
 
     assert response.status == 200
     assert response_json(response)["data"]["enabled"] is False
+
+
+def test_create_rule_rejects_duplicate(monkeypatch, make_request, run_async, response_json):
+    captured = {}
+
+    def _create(*_a, criteria_key=None, **_kw):
+        captured["criteria_key"] = criteria_key
+        raise alerts_endpoints.alerts_db.DuplicateRule(_row(rule_id=7))
+
+    monkeypatch.setattr(alerts_endpoints.alerts_db, "async_create_rule", _amock(_create))
+
+    response = run_async(_call("create_alert_rule", _req(make_request, "POST", json_body=VALID_BODY)))
+
+    assert response.status == 409
+    assert response_json(response)["rule_id"] == 7
+    assert "already have" in response_json(response)["error"]
+    assert callable(captured["criteria_key"])
+
+
+def test_update_rule_rejects_duplicate(monkeypatch, make_request, run_async, response_json):
+    monkeypatch.setattr(alerts_endpoints.alerts_db, "async_get_rule", _amock(lambda user_id, rule_id: _row()))
+    captured = {}
+
+    def _update(*_a, rule_type=None, criteria_key=None, **_kw):
+        captured.update(rule_type=rule_type, criteria_key=criteria_key)
+        raise alerts_endpoints.alerts_db.DuplicateRule(_row(rule_id=2))
+
+    monkeypatch.setattr(alerts_endpoints.alerts_db, "async_update_rule", _amock(_update))
+
+    response = run_async(_call("update_alert_rule", _req(make_request, "PUT", json_body=VALID_BODY), 1))
+
+    assert response.status == 409
+    assert response_json(response)["rule_id"] == 2
+    assert captured["rule_type"] == "lfm_posted"
+    assert callable(captured["criteria_key"])
 
 
 def test_delete_rule(monkeypatch, make_request, run_async):
@@ -341,7 +376,7 @@ def test_create_listed_rule_stores_server_side_item_name(
     monkeypatch.setattr(shard_exchange_db, "async_get_item_by_slug", _item)
     captured = {}
 
-    def _create(user_id, rule_type, criteria, enabled, expires_at):
+    def _create(user_id, rule_type, criteria, enabled, expires_at, **_kw):
         captured.update(criteria=criteria)
         return _row(type=rule_type, criteria=criteria)
 

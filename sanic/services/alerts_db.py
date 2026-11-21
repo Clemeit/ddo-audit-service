@@ -7,7 +7,7 @@ dispatch worker uses the sync pool, like the other workers.
 import json
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Callable, Optional
 
 from services.postgres import get_async_dict_cursor, get_dict_cursor
 
@@ -17,9 +17,47 @@ MAX_RULES_PER_USER = 50
 
 _COLUMNS = "id, user_id, type, criteria, enabled, expires_at, created_at, updated_at"
 
+# Fingerprints a rule's criteria (AlertType.criteria_key); equal keys mean duplicate rules.
+CriteriaKey = Callable[[Optional[dict]], str]
+
 
 class RuleLimitReached(Exception):
     pass
+
+
+class DuplicateRule(Exception):
+    """The user already has a rule of this type with the same criteria."""
+
+    def __init__(self, rule: dict):
+        super().__init__(f"duplicate of rule {rule['id']}")
+        self.rule = rule
+
+
+async def _lock_user_rules(cursor, user_id: int) -> None:
+    # Serialise a user's rule writes (for the cap and the duplicate check); released on commit.
+    await cursor.execute("SELECT pg_advisory_xact_lock(%s, %s)", (7301, user_id))
+
+
+async def _raise_if_duplicate(
+    cursor,
+    user_id: int,
+    rule_type: str,
+    criteria: dict,
+    criteria_key: CriteriaKey,
+    exclude_rule_id: Optional[int] = None,
+) -> None:
+    await cursor.execute(
+        f"""
+        SELECT {_COLUMNS} FROM alert_rules
+        WHERE user_id = %s AND type = %s AND id <> %s
+        ORDER BY id
+        """,
+        (user_id, rule_type, exclude_rule_id or 0),
+    )
+    key = criteria_key(criteria)
+    for row in await cursor.fetchall():
+        if criteria_key(row["criteria"]) == key:
+            raise DuplicateRule(dict(row))
 
 
 async def async_list_rules(user_id: int) -> list[dict]:
@@ -37,17 +75,21 @@ async def async_create_rule(
     criteria: dict,
     enabled: bool,
     expires_at: Optional[datetime],
+    *,
+    criteria_key: Optional[CriteriaKey] = None,
 ) -> dict:
-    """Insert a rule. Raises RuleLimitReached when the user already has MAX_RULES_PER_USER rules."""
+    """Insert a rule. Raises RuleLimitReached when the user already has MAX_RULES_PER_USER rules,
+    and DuplicateRule (when ``criteria_key`` is given) if they already have the same rule."""
     async with get_async_dict_cursor(commit=True) as cursor:
-        # Serialise concurrent creates for one user so the cap holds.
-        await cursor.execute("SELECT pg_advisory_xact_lock(%s, %s)", (7301, user_id))
+        await _lock_user_rules(cursor, user_id)
         await cursor.execute(
             "SELECT count(*) AS n FROM alert_rules WHERE user_id = %s", (user_id,)
         )
         row = await cursor.fetchone()
         if row and int(row["n"]) >= MAX_RULES_PER_USER:
             raise RuleLimitReached()
+        if criteria_key:
+            await _raise_if_duplicate(cursor, user_id, rule_type, criteria, criteria_key)
         await cursor.execute(
             f"""
             INSERT INTO alert_rules (user_id, type, criteria, enabled, expires_at)
@@ -65,9 +107,20 @@ async def async_update_rule(
     criteria: dict,
     enabled: bool,
     expires_at: Optional[datetime],
+    *,
+    rule_type: Optional[str] = None,
+    criteria_key: Optional[CriteriaKey] = None,
 ) -> Optional[dict]:
-    """Replace a rule's settings. Returns None if the rule does not exist for this user."""
+    """Replace a rule's settings. Returns None if the rule does not exist for this user.
+
+    With ``rule_type`` and ``criteria_key``, raises DuplicateRule if the new settings match
+    another of the user's rules."""
     async with get_async_dict_cursor(commit=True) as cursor:
+        if rule_type and criteria_key:
+            await _lock_user_rules(cursor, user_id)
+            await _raise_if_duplicate(
+                cursor, user_id, rule_type, criteria, criteria_key, rule_id
+            )
         await cursor.execute(
             f"""
             UPDATE alert_rules
