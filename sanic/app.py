@@ -1,6 +1,8 @@
 import os
+import hmac
 import logging
 import services.redis as redis_client
+import services.auth as auth_service
 
 from endpoints.activity import activity_blueprint
 from endpoints.characters import characters_blueprint, characters_blueprint_v2
@@ -131,6 +133,12 @@ async def set_up_connections(app, loop):
     start_game_info_polling()
 
 
+@app.listener("after_server_start")
+async def start_auth_session_purge(app, loop):
+    # Every worker runs the loop; a Redis lock inside lets only one purge per interval.
+    app.add_task(auth_service.async_run_auth_session_purge_loop())
+
+
 @app.listener("after_server_stop")
 async def close_connections(app, loop):
     await close_redis_async()
@@ -155,7 +163,10 @@ async def check_api_key(request: Request):
     if not api_key.startswith("Bearer "):
         return json({"error": "Invalid API key format"}, status=401)
     api_key = api_key[7:]
-    if api_key != API_KEY:
+    # Constant-time comparison so response timing doesn't leak the key prefix.
+    if not API_KEY or not hmac.compare_digest(
+        api_key.encode("utf-8"), API_KEY.encode("utf-8")
+    ):
         return json({"error": "Invalid API key"}, status=403)
 
 

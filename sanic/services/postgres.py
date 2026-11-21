@@ -5715,15 +5715,28 @@ async def async_create_auth_session(
         return None
 
 
-async def async_get_auth_session(session_id: str) -> Optional[dict]:
-    """Get an auth session by its session id (async)."""
+_AUTH_SESSION_COLUMNS = """
+    session_id, user_id, refresh_token_hash, auth_version,
+    created_at, last_used_at, expires_at, revoked_at,
+    revoke_reason, created_ip, created_user_agent, updated_at,
+    previous_refresh_token_hash, refresh_rotated_at
+"""
+
+
+async def async_get_auth_session(
+    session_id: str, raise_on_error: bool = False
+) -> Optional[dict]:
+    """Get an auth session by its session id (async).
+
+    With ``raise_on_error`` a database failure raises instead of returning None, so
+    callers that must not mistake an outage for "no such session" (refresh) can tell
+    the two apart.
+    """
     try:
         async with get_async_dict_cursor(commit=False) as cursor:
             await cursor.execute(
-                """
-                SELECT session_id, user_id, refresh_token_hash, auth_version,
-                       created_at, last_used_at, expires_at, revoked_at,
-                       revoke_reason, created_ip, created_user_agent, updated_at
+                f"""
+                SELECT {_AUTH_SESSION_COLUMNS}
                 FROM auth_sessions
                 WHERE session_id = %s
                 """,
@@ -5733,30 +5746,45 @@ async def async_get_auth_session(session_id: str) -> Optional[dict]:
             return dict(row) if row else None
     except Exception as e:
         logger.error(f"async_get_auth_session failed: {e}")
+        if raise_on_error:
+            raise
         return None
 
 
 async def async_get_auth_session_by_refresh_token_hash(
     refresh_token_hash: str,
 ) -> Optional[dict]:
-    """Get an auth session by the stored refresh token hash (async)."""
+    """Find the auth session that holds this refresh token hash, current or previous (async).
+
+    The returned dict carries ``matched``: "current" when the hash is the session's live
+    refresh token, "previous" when it is the one most recently rotated out (see
+    refresh_rotated_at). Returns None when no session has it. Database errors raise:
+    reporting an outage as "unknown token" would log the user out.
+    """
     try:
         async with get_async_dict_cursor(commit=False) as cursor:
             await cursor.execute(
-                """
-                SELECT session_id, user_id, refresh_token_hash, auth_version,
-                       created_at, last_used_at, expires_at, revoked_at,
-                       revoke_reason, created_ip, created_user_agent, updated_at
+                f"""
+                SELECT {_AUTH_SESSION_COLUMNS},
+                       CASE WHEN refresh_token_hash = %s THEN 'current' ELSE 'previous' END
+                           AS matched
                 FROM auth_sessions
-                WHERE refresh_token_hash = %s
+                WHERE refresh_token_hash = %s OR previous_refresh_token_hash = %s
+                ORDER BY (refresh_token_hash = %s) DESC
+                LIMIT 1
                 """,
-                (refresh_token_hash,),
+                (
+                    refresh_token_hash,
+                    refresh_token_hash,
+                    refresh_token_hash,
+                    refresh_token_hash,
+                ),
             )
             row = await cursor.fetchone()
             return dict(row) if row else None
     except Exception as e:
         logger.error(f"async_get_auth_session_by_refresh_token_hash failed: {e}")
-        return None
+        raise
 
 
 async def async_rotate_auth_session_refresh_token(
@@ -5765,13 +5793,21 @@ async def async_rotate_auth_session_refresh_token(
     refresh_token_hash: str,
     expires_at: datetime,
 ) -> Optional[dict]:
-    """Rotate the refresh token for an existing session using compare-and-set (async)."""
+    """Rotate the refresh token for an existing session using compare-and-set (async).
+
+    The outgoing hash moves to previous_refresh_token_hash (Postgres evaluates every SET
+    expression against the pre-update row) so a concurrent or retried request that still
+    carries it can be recognised. Returns None when the compare-and-set loses (token
+    already rotated, session revoked/expired); database errors raise.
+    """
     try:
         async with get_async_dict_cursor(commit=True) as cursor:
             await cursor.execute(
-                """
+                f"""
                 UPDATE auth_sessions
-                SET refresh_token_hash = %s,
+                SET previous_refresh_token_hash = refresh_token_hash,
+                    refresh_rotated_at = NOW(),
+                    refresh_token_hash = %s,
                     expires_at = %s,
                     last_used_at = NOW(),
                     updated_at = NOW()
@@ -5779,9 +5815,7 @@ async def async_rotate_auth_session_refresh_token(
                   AND refresh_token_hash = %s
                   AND revoked_at IS NULL
                   AND expires_at > NOW()
-                RETURNING session_id, user_id, refresh_token_hash, auth_version,
-                          created_at, last_used_at, expires_at, revoked_at,
-                          revoke_reason, created_ip, created_user_agent, updated_at
+                RETURNING {_AUTH_SESSION_COLUMNS}
                 """,
                 (
                     refresh_token_hash,
@@ -5794,6 +5828,28 @@ async def async_rotate_auth_session_refresh_token(
             return dict(row) if row else None
     except Exception as e:
         logger.error(f"async_rotate_auth_session_refresh_token failed: {e}")
+        raise
+
+
+async def async_purge_dead_auth_sessions(retention_seconds: int) -> Optional[int]:
+    """Delete sessions that expired or were revoked more than ``retention_seconds`` ago (async).
+
+    Returns the number of rows deleted, or None on a database error.
+    """
+    try:
+        async with get_async_dict_cursor(commit=True) as cursor:
+            await cursor.execute(
+                """
+                DELETE FROM auth_sessions
+                WHERE expires_at < NOW() - make_interval(secs => %s)
+                   OR (revoked_at IS NOT NULL
+                       AND revoked_at < NOW() - make_interval(secs => %s))
+                """,
+                (retention_seconds, retention_seconds),
+            )
+            return cursor.rowcount
+    except Exception as e:
+        logger.error(f"async_purge_dead_auth_sessions failed: {e}")
         return None
 
 

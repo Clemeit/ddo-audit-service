@@ -39,8 +39,11 @@ class TestIsJwtProtected:
     def test_user_password_change_is_jwt_protected(self):
         assert is_jwt_protected(_request("POST", "/v1/user/profile/password")) is True
 
-    def test_logout_is_jwt_protected(self):
-        assert is_jwt_protected(_request("POST", "/v3/auth/logout")) is True
+    def test_logout_is_not_jwt_protected(self):
+        # Logout authenticates itself from the refresh cookie so it works after the
+        # access token has expired.
+        assert is_jwt_protected(_request("POST", "/v3/auth/logout")) is False
+        assert is_route_open(_request("POST", "/v1/auth/logout")) is True
 
     def test_delete_account_is_jwt_protected(self):
         assert is_jwt_protected(_request("DELETE", "/v2/auth/account")) is True

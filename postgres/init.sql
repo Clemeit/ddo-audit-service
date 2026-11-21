@@ -394,6 +394,22 @@ CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id_revoked_at
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at
     ON public."auth_sessions" (expires_at);
 
+-- Refresh-token rotation grace window + reuse detection.
+-- Keep in sync with postgres/migrations/2026-11-auth-session-rotation.sql.
+ALTER TABLE IF EXISTS public."auth_sessions"
+    ADD COLUMN IF NOT EXISTS previous_refresh_token_hash text;
+
+ALTER TABLE IF EXISTS public."auth_sessions"
+    ADD COLUMN IF NOT EXISTS refresh_rotated_at timestamp with time zone;
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_previous_refresh_token_hash
+    ON public."auth_sessions" (previous_refresh_token_hash)
+    WHERE previous_refresh_token_hash IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked_at
+    ON public."auth_sessions" (revoked_at)
+    WHERE revoked_at IS NOT NULL;
+
 -- Shard Exchange (the in-game auction house) scans uploaded by DDO Audit Collections.
 -- Keep in sync with postgres/migrations/2026-11-shard-exchange.sql, which applies the same DDL to an existing database.
 

@@ -7,8 +7,10 @@ and per-user rate limiting for authenticated endpoints.
 
 from sanic import Request
 from sanic.response import json
+import hashlib
 import services.redis as redis_client
 from utils.access_log import get_client_ip
+from utils.auth_cookies import get_refresh_cookie
 import re
 
 
@@ -18,9 +20,28 @@ AUTH_RATE_LIMIT = {
     "window": 900,  # 15 minutes
 }
 
+# Per browser session (IP + refresh cookie): one browser refreshes about every 14 minutes,
+# plus page loads; tabs share one refresh via a cross-tab lock.
 REFRESH_RATE_LIMIT = {
     "requests": 10,
     "window": 60,  # 1 minute
+}
+
+# Per IP across all sessions, loose enough for many users behind one NAT/CGNAT address.
+REFRESH_IP_RATE_LIMIT = {
+    "requests": 120,
+    "window": 60,
+}
+
+LOGOUT_RATE_LIMIT = {
+    "requests": 30,
+    "window": 60,
+}
+
+# Failed logins per username across all IPs (credential stuffing / distributed guessing).
+LOGIN_FAILURE_LIMIT = {
+    "requests": 20,
+    "window": 900,  # 15 minutes
 }
 
 USER_RATE_LIMIT = {
@@ -42,8 +63,9 @@ MY_BIDS_RATE_LIMIT = {
 MY_BIDS_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/shard-exchange/my-bids/?$")
 AUTH_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/auth/(register|login)$")
 REFRESH_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/auth/refresh$")
+LOGOUT_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/auth/logout$")
 USER_ENDPOINT_PATTERN = re.compile(
-    r"^/v?\d*/(user/(?:settings/persistent|profile/password|alerts/(?:rules|types|test)|push-subscriptions)|auth/logout)(?:/\d+)?$"
+    r"^/v?\d*/(user/(?:settings/persistent|profile/password|alerts/(?:rules|types|test)|push-subscriptions)|auth/account)(?:/\d+)?$"
 )
 ALERTS_INBOX_ENDPOINT_PATTERN = re.compile(r"^/v?\d*/user/alerts/inbox/?$")
 
@@ -85,6 +107,56 @@ async def _async_increment_and_check_limit(
         return True, ttl
     except RuntimeError:
         return True, None
+
+
+def _too_many_requests(message: str, retry_after, window: int):
+    return json(
+        {"error": message, "retry_after": retry_after},
+        status=429,
+        headers={
+            "Retry-After": str(retry_after if retry_after is not None else window)
+        },
+    )
+
+
+def _login_failure_key(username: str) -> str:
+    return f"rate_limit:login_fail:{username.strip().lower()}"
+
+
+async def async_get_login_failure_retry_after(username: str):
+    """Seconds until this username may try again, or None if it isn't throttled.
+
+    Fails open (None) when Redis is unavailable.
+    """
+    try:
+        client = await redis_client.get_async_redis_client()
+        key = _login_failure_key(username)
+        count = await client.get(key)
+        if count is None or int(count) < LOGIN_FAILURE_LIMIT["requests"]:
+            return None
+        ttl = await client.ttl(key)
+        return ttl if ttl and ttl > 0 else LOGIN_FAILURE_LIMIT["window"]
+    except Exception:
+        return None
+
+
+async def async_record_login_failure(username: str) -> None:
+    try:
+        await _async_increment_and_check_limit(
+            _login_failure_key(username),
+            LOGIN_FAILURE_LIMIT["requests"],
+            LOGIN_FAILURE_LIMIT["window"],
+        )
+    except Exception:
+        pass
+
+
+async def async_clear_login_failures(username: str) -> None:
+    try:
+        client = await redis_client.get_async_redis_client()
+        await client.delete(_login_failure_key(username))
+    except Exception:
+        pass
 
 
 async def rate_limit_middleware(request: Request):
@@ -159,35 +231,50 @@ async def rate_limit_middleware(request: Request):
 
     elif REFRESH_ENDPOINT_PATTERN.match(path):
         ip = get_client_ip(request)
-
-        # Create a rate limit key for this IP and specific refresh endpoint path
-        rate_limit_key = f"rate_limit:refresh:{ip}:{path}"
+        # Key the tight limit on the browser session (the cookie), not just the IP, so
+        # users sharing an address don't exhaust each other's budget.
+        cookie = get_refresh_cookie(request) or ""
+        session_key = (
+            hashlib.sha256(cookie.encode("utf-8")).hexdigest()[:16]
+            if cookie
+            else "none"
+        )
 
         try:
-            allowed, retry_after = await _async_increment_and_check_limit(
-                rate_limit_key,
-                REFRESH_RATE_LIMIT["requests"],
-                REFRESH_RATE_LIMIT["window"],
-            )
-
-            if not allowed:
-                # Rate limit exceeded
-                return json(
-                    {
-                        "error": "Rate limit exceeded. Try again in 1 minute.",
-                        "retry_after": retry_after,
-                    },
-                    status=429,
-                    headers={
-                        "Retry-After": (
-                            str(retry_after)
-                            if retry_after is not None
-                            else str(REFRESH_RATE_LIMIT["window"])
-                        )
-                    },
+            for rate_limit_key, limits in (
+                (f"rate_limit:refresh:{ip}:{session_key}", REFRESH_RATE_LIMIT),
+                (f"rate_limit:refresh_ip:{ip}", REFRESH_IP_RATE_LIMIT),
+            ):
+                allowed, retry_after = await _async_increment_and_check_limit(
+                    rate_limit_key,
+                    limits["requests"],
+                    limits["window"],
                 )
-        except Exception as e:
+                if not allowed:
+                    return _too_many_requests(
+                        "Rate limit exceeded. Try again in 1 minute.",
+                        retry_after,
+                        limits["window"],
+                    )
+        except Exception:
             # Fail open - allow request if Redis is down
+            pass
+
+    elif LOGOUT_ENDPOINT_PATTERN.match(path):
+        ip = get_client_ip(request)
+        try:
+            allowed, retry_after = await _async_increment_and_check_limit(
+                f"rate_limit:logout:{ip}",
+                LOGOUT_RATE_LIMIT["requests"],
+                LOGOUT_RATE_LIMIT["window"],
+            )
+            if not allowed:
+                return _too_many_requests(
+                    "Rate limit exceeded. Try again in 1 minute.",
+                    retry_after,
+                    LOGOUT_RATE_LIMIT["window"],
+                )
+        except Exception:
             pass
 
     elif ALERTS_INBOX_ENDPOINT_PATTERN.match(path):
