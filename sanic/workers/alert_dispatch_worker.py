@@ -31,7 +31,7 @@ from business.alerts.dispatcher import (  # type: ignore
     record_metrics,
 )
 from business.alerts.events import EVENTS_KEY  # type: ignore
-from services.alerts_db import get_enabled_rules_by_type  # type: ignore
+from services.alerts_db import get_all_quiet_hours, get_enabled_rules_by_type  # type: ignore
 from services.postgres import initialize_postgres  # type: ignore
 from services.redis import get_redis_client, initialize_redis  # type: ignore
 
@@ -82,6 +82,7 @@ def build_dispatcher() -> AlertDispatcher:
         channels=build_channels(),
         refresh_seconds=env_float("ALERT_RULE_REFRESH_SECS", 30.0),
         rules_version=read_rules_version,
+        load_quiet_hours=get_all_quiet_hours,
     )
 
 

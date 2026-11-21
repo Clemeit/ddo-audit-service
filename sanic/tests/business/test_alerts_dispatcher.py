@@ -10,6 +10,7 @@ from business.alerts.channels.inbox import INBOX_FIELD, InboxChannel, inbox_key
 from business.alerts.dispatcher import (
     USER_CAP,
     AlertDispatcher,
+    is_quiet,
     parse_rule,
     record_metrics,
 )
@@ -346,3 +347,138 @@ def test_dedupe_marker_uses_the_types_ttl():
     )
     key = "alerts:sent:1:server:thrane:offline"
     assert redis.expiries[key] == ServerStatusAlertType.dedupe_ttl_secs == server_status.dedupe_ttl_secs
+
+
+# ----- quiet hours -----
+
+
+def _window(start="23:00", end="07:00", tz="UTC", user_id=7):
+    def minutes(t):
+        h, m = t.split(":")
+        return int(h) * 60 + int(m)
+
+    return {
+        "user_id": user_id,
+        "quiet_enabled": True,
+        "quiet_start_minute": minutes(start),
+        "quiet_end_minute": minutes(end),
+        "timezone": tz,
+    }
+
+
+def _at(hour, minute=0):
+    return datetime(2026, 11, 19, hour, minute, tzinfo=timezone.utc)
+
+
+def test_is_quiet_same_day_window_is_start_inclusive_end_exclusive():
+    w = _window("09:00", "17:00")
+    assert is_quiet(w, _at(9, 0))
+    assert is_quiet(w, _at(16, 59))
+    assert not is_quiet(w, _at(17, 0))
+    assert not is_quiet(w, _at(8, 59))
+
+
+def test_is_quiet_window_crossing_midnight():
+    w = _window("23:00", "07:00")
+    assert is_quiet(w, _at(23, 0))
+    assert is_quiet(w, _at(2, 0))
+    assert is_quiet(w, _at(6, 59))
+    assert not is_quiet(w, _at(7, 0))
+    assert not is_quiet(w, _at(12, 0))
+
+
+def test_is_quiet_uses_the_users_timezone_including_dst():
+    # 02:00 UTC on Nov 19 is 21:00 in New York (EST) and 18:00 in Los Angeles.
+    assert is_quiet(_window("20:00", "23:00", "America/New_York"), _at(2, 0))
+    assert not is_quiet(_window("20:00", "23:00", "America/Los_Angeles"), _at(2, 0))
+    # In July New York is on EDT (UTC-4): 01:30 UTC is 21:30 local.
+    summer = datetime(2026, 7, 1, 1, 30, tzinfo=timezone.utc)
+    assert is_quiet(_window("21:00", "22:00", "America/New_York"), summer)
+
+
+def test_is_quiet_ignores_unusable_windows():
+    assert not is_quiet(_window(tz="Not/AZone", start="00:00", end="23:59"), _at(12))
+    assert not is_quiet(_window("07:00", "07:00"), _at(7))
+    assert not is_quiet({}, _at(12))
+
+
+def _quiet_dispatcher(rows, channels, windows):
+    d = AlertDispatcher(
+        load_rules=lambda t: rows if t == "lfm_posted" else [],
+        channels=channels,
+        now=lambda: NOW,
+        load_quiet_hours=lambda: windows,
+    )
+    d.refresh()
+    return d
+
+
+def test_alert_inside_quiet_hours_is_skipped_but_other_users_still_get_it():
+    channel = RecordingChannel()
+    d = _quiet_dispatcher(
+        [_row(1, 7), _row(2, 8)], [channel], [_window("11:00", "13:00", user_id=7)]
+    )
+
+    stats = d.process_event(FakeRedis(), _event())
+
+    assert stats["quiet_hours"] == 1
+    assert [uid for uid, _ in channel.sent] == [8]
+
+
+def test_alert_outside_quiet_hours_is_delivered():
+    channel = RecordingChannel()
+    d = _quiet_dispatcher([_row(1, 7)], [channel], [_window("22:00", "23:00", user_id=7)])
+
+    d.process_event(FakeRedis(), _event())
+
+    assert len(channel.sent) == 1
+
+
+def test_quiet_hours_skips_do_not_use_the_cap_and_are_not_resent_later():
+    channel = RecordingChannel()
+    redis = FakeRedis()
+    d = _quiet_dispatcher([_row(1, 7)], [channel], [_window("11:00", "13:00", user_id=7)])
+
+    for lfm_id in range(USER_CAP + 3):
+        d.process_event(redis, _event(lfm_id=lfm_id))
+    assert channel.sent == []
+    assert not any(key.startswith("alerts:cap") for key in redis.values)
+
+    # Same event again after quiet hours end: deduped, not delivered late.
+    d._now = lambda: _at(15)
+    stats = d.process_event(redis, _event(lfm_id=0))
+    assert stats["deduped"] == 1
+    assert channel.sent == []
+
+
+def test_test_alerts_ignore_quiet_hours():
+    channel = RecordingChannel()
+    d = _quiet_dispatcher([], [channel], [_window("11:00", "13:00", user_id=42)])
+
+    d.process_event(FakeRedis(), {"type": "test", "data": {"user_id": 42, "nonce": "abc"}})
+
+    assert len(channel.sent) == 1
+
+
+def test_failed_quiet_hours_reload_keeps_the_last_good_windows():
+    channel = RecordingChannel()
+    state = {"fail": False}
+
+    def load():
+        if state["fail"]:
+            raise RuntimeError("db down")
+        return [_window("11:00", "13:00", user_id=7)]
+
+    d = AlertDispatcher(
+        load_rules=lambda t: [_row(1, 7)] if t == "lfm_posted" else [],
+        channels=[channel],
+        now=lambda: NOW,
+        load_quiet_hours=load,
+    )
+    d.refresh()
+    state["fail"] = True
+    d.refresh()
+
+    d.process_event(FakeRedis(), _event())
+
+    assert channel.sent == []
