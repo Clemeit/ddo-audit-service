@@ -280,7 +280,15 @@ async def get_characters_by_ids(request: Request, character_ids: str):
                 discovered_characters[character.id] = character.model_dump()
 
     except Exception as e:
-        return json({"message": str(e)}, status=500)
+        # Fail the whole request rather than answer with a partial set: clients treat
+        # the response as the full set of characters that exist.
+        logMessage(
+            message="Error getting characters by IDs",
+            level="error",
+            action="get_characters_by_ids",
+            metadata={"error": str(e)},
+        )
+        return json({"message": "Failed to look up characters"}, status=500)
 
     return json({"data": discovered_characters})
 

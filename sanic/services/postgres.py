@@ -4900,7 +4900,11 @@ async def async_get_character_by_id(character_id: int) -> Character | None:
 
 
 async def async_get_characters_by_ids(character_ids: list[int]) -> list[Character]:
-    """Get multiple characters by IDs (async)."""
+    """Get multiple characters by IDs (async).
+
+    Raises on database errors. Returning an empty list would be read as "these
+    characters don't exist", and clients prune friend/ignore lists on that basis.
+    """
     if not character_ids:
         return []
 
@@ -4916,7 +4920,7 @@ async def async_get_characters_by_ids(character_ids: list[int]) -> list[Characte
             return [_build_character_from_dict_row(row) for row in rows]
     except Exception as e:
         logger.error(f"Error getting characters by IDs: {e}")
-        return []
+        raise
 
 
 async def async_get_character_by_name_and_server(
@@ -6047,7 +6051,12 @@ async def async_change_password_and_create_session(
 
 
 async def async_get_user_settings(user_id: int) -> Optional[dict]:
-    """Get user settings (async)."""
+    """Get user settings (async).
+
+    Returns None only when the user has no settings row. Raises on database errors:
+    a None there would surface as 404, and clients answer a 404 by overwriting the
+    account's settings with their local copy.
+    """
     try:
         async with get_async_dict_cursor(commit=False) as cursor:
             await cursor.execute(
@@ -6058,7 +6067,7 @@ async def async_get_user_settings(user_id: int) -> Optional[dict]:
             return dict(row) if row else None
     except Exception as e:
         logger.error(f"async_get_user_settings failed: {e}")
-        return None
+        raise
 
 
 async def async_update_user_settings(user_id: int, settings: dict) -> bool:

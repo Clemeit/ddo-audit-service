@@ -580,6 +580,32 @@ def test_async_get_characters_by_ids_returns_empty_for_empty_input(run_async):
     assert result == []
 
 
+def test_async_get_characters_by_ids_raises_on_db_error(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.execute.side_effect = RuntimeError("connection lost")
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    with pytest.raises(RuntimeError):
+        run_async(postgres_service.async_get_characters_by_ids([1, 2]))
+
+
+def test_async_get_user_settings_raises_on_db_error(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.execute.side_effect = RuntimeError("connection lost")
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    with pytest.raises(RuntimeError):
+        run_async(postgres_service.async_get_user_settings(14))
+
+
+def test_async_get_user_settings_returns_none_when_missing(monkeypatch, run_async):
+    cursor, fake_ctx = _mock_async_cursor()
+    cursor.fetchone.return_value = None
+    monkeypatch.setattr(postgres_service, "get_async_dict_cursor", fake_ctx)
+
+    assert run_async(postgres_service.async_get_user_settings(14)) is None
+
+
 def test_async_get_character_by_name_and_server_returns_character(
     monkeypatch, run_async
 ):

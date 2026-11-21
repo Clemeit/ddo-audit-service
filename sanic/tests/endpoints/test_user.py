@@ -184,6 +184,28 @@ def test_get_persistent_settings_returns_404_when_missing(
     assert response_json(response)["error"] == "Settings not found"
 
 
+def test_get_persistent_settings_returns_500_not_404_on_db_error(
+    monkeypatch, make_request, run_async, response_json
+):
+    # A 404 tells the client the account has no settings, and it then overwrites the
+    # account with its local copy. A database error must not look like that.
+    async def _db_down(_user_id):
+        raise RuntimeError("connection pool exhausted")
+
+    monkeypatch.setattr(
+        user_endpoints.postgres_client, "async_get_user_settings", _db_down
+    )
+    request = make_request(
+        method="GET",
+        path="/v1/user/settings/persistent",
+        ctx=SimpleNamespace(user_id=14),
+    )
+
+    response = run_async(user_endpoints.get_persistent_settings(request))
+
+    assert response.status == 500
+
+
 def test_get_persistent_settings_returns_200(
     monkeypatch, make_request, run_async, response_json
 ):

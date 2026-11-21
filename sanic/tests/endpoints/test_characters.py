@@ -147,6 +147,32 @@ def test_get_characters_by_ids_merges_cache_and_database(
     assert data["2"]["is_online"] is False
 
 
+def test_get_characters_by_ids_returns_500_instead_of_partial_on_db_error(
+    monkeypatch, make_request, run_async, response_json
+):
+    monkeypatch.setattr(
+        character_endpoints.redis_client,
+        "get_characters_by_ids_as_dict",
+        lambda _ids: {1: {"id": 1, "name": "Cached One"}},
+    )
+
+    async def _db_down(_ids):
+        raise RuntimeError("connection pool exhausted")
+
+    monkeypatch.setattr(
+        character_endpoints.postgres_client, "async_get_characters_by_ids", _db_down
+    )
+    monkeypatch.setattr(character_endpoints, "logMessage", lambda **_kw: None)
+
+    request = make_request(path="/v1/characters/ids/1,2")
+    response = run_async(character_endpoints.get_characters_by_ids(request, "1,2"))
+
+    assert response.status == 500
+    body = response_json(response)
+    assert "data" not in body
+    assert "pool" not in body["message"]
+
+
 def test_get_character_by_server_and_name_returns_403_for_anonymous(
     monkeypatch, make_request, run_async, response_json
 ):
