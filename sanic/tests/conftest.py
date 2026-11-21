@@ -44,6 +44,30 @@ def response_json():
     return _parse
 
 
+from sanic.request import Request as _SanicRequest
+
+
+class FakeRequest(_SanicRequest):
+    """Attribute bag that still passes ``isinstance(x, sanic.Request)``.
+
+    sanic-ext's ``@openapi.body`` wrapper locates the request by type, so a plain
+    SimpleNamespace is rejected. Instance attributes take precedence over the
+    parent's read-only properties/slots so tests can assign anything (``args``...).
+    """
+
+    def __init__(self, **attrs):
+        self.__dict__.update(attrs)
+
+    def __getattribute__(self, name):
+        instance_attrs = object.__getattribute__(self, "__dict__")
+        if name in instance_attrs:
+            return instance_attrs[name]
+        return object.__getattribute__(self, name)
+
+    def __setattr__(self, name, value):
+        object.__getattribute__(self, "__dict__")[name] = value
+
+
 @pytest.fixture
 def make_request():
     def _make_request(
@@ -66,7 +90,7 @@ def make_request():
         if cookies is None:
             cookies = {}
 
-        return SimpleNamespace(
+        return FakeRequest(
             method=method,
             path=path,
             json=json_body,

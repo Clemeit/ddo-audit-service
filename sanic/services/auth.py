@@ -5,6 +5,7 @@ Handles password hashing, access token generation and validation,
 refresh-session lifecycle management, and user CRUD operations.
 """
 
+import asyncio
 import hashlib
 import os
 import secrets
@@ -25,6 +26,7 @@ AUTH_ERROR_INVALID_CREDENTIALS = "invalid_credentials"
 AUTH_ERROR_INVALID_REFRESH_TOKEN = "invalid_refresh_token"
 AUTH_ERROR_USERNAME_EXISTS = "username_exists"
 AUTH_ERROR_USER_NOT_FOUND = "user_not_found"
+AUTH_ERROR_PASSWORD_REQUIRED = "password_required"
 AUTH_ERROR_INTERNAL = "internal_error"
 
 
@@ -37,7 +39,20 @@ ACCESS_TOKEN_EXPIRATION_SECONDS = int(
 REFRESH_TOKEN_EXPIRATION_SECONDS = int(
     os.getenv("REFRESH_TOKEN_EXPIRATION_SECONDS", "2592000")
 )
+# Hard ceiling on a session's age, however often it is refreshed (OWASP absolute timeout).
+SESSION_ABSOLUTE_LIFETIME_SECONDS = int(
+    os.getenv("SESSION_ABSOLUTE_LIFETIME_SECONDS", str(90 * 24 * 3600))
+)
+# How long a just-rotated-out refresh token is still honoured (concurrent tabs, retried
+# requests whose response was lost). Seen after this window, it counts as token reuse.
+REFRESH_REUSE_GRACE_SECONDS = int(os.getenv("REFRESH_REUSE_GRACE_SECONDS", "60"))
 TOKEN_TYPE = "Bearer"
+
+# Why a refresh was refused; returned to clients so they can explain the logout.
+REFRESH_FAILURE_INVALID = "invalid"
+REFRESH_FAILURE_EXPIRED = "session_expired"
+REFRESH_FAILURE_REVOKED = "session_revoked"
+REVOKE_REASON_REFRESH_REUSE = "refresh_token_reuse"
 
 # Validate JWT secret key on import
 if not JWT_SECRET_KEY:
@@ -101,6 +116,28 @@ def verify_password(password: str, password_hash: str) -> bool:
         return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
     except Exception:
         return False
+
+
+# bcrypt at cost 12 takes ~250ms of CPU. Run it in a worker thread so a login doesn't
+# freeze every other request (and SSE stream) on this event loop.
+async def async_hash_password(password: str) -> str:
+    return await asyncio.to_thread(hash_password, password)
+
+
+async def async_verify_password(password: str, password_hash: str) -> bool:
+    return await asyncio.to_thread(verify_password, password, password_hash)
+
+
+_dummy_password_hash: Optional[str] = None
+
+
+async def _async_burn_password_check(password: str) -> None:
+    """Spend the same bcrypt time as a real check, so response timing doesn't reveal
+    whether a username exists."""
+    global _dummy_password_hash
+    if _dummy_password_hash is None:
+        _dummy_password_hash = await async_hash_password(secrets.token_urlsafe(16))
+    await async_verify_password(password, _dummy_password_hash)
 
 
 def hash_refresh_token(refresh_token: str) -> str:
@@ -349,7 +386,7 @@ async def async_register_user(
         if existing_user:
             return False, None, AUTH_ERROR_USERNAME_EXISTS
 
-        password_hash = hash_password(password)
+        password_hash = await async_hash_password(password)
         session_id = uuid.uuid4().hex
         refresh_token = generate_refresh_token()
         refresh_token_hash = hash_refresh_token(refresh_token)
@@ -411,9 +448,10 @@ async def async_login_user(
         user = await postgres_client.async_get_user_by_username(username)
 
         if not user:
+            await _async_burn_password_check(password)
             return False, None, AUTH_ERROR_INVALID_CREDENTIALS
 
-        if not verify_password(password, user["password_hash"]):
+        if not await async_verify_password(password, user["password_hash"]):
             return False, None, AUTH_ERROR_INVALID_CREDENTIALS
 
         session_created, session_data, session_error = await _async_create_session(
@@ -446,69 +484,180 @@ async def async_login_user(
         return False, None, AUTH_ERROR_INTERNAL
 
 
+def _refresh_failure(reason: str) -> Tuple[bool, dict, str]:
+    return False, {"reason": reason}, AUTH_ERROR_INVALID_REFRESH_TOKEN
+
+
+def _session_failure_reason(session: Optional[dict]) -> Optional[str]:
+    """Why a persisted session can't be refreshed, or None if it is active."""
+    if not session:
+        return REFRESH_FAILURE_INVALID
+    if session.get("revoked_at"):
+        return REFRESH_FAILURE_REVOKED
+    if not is_auth_session_active(session):
+        return REFRESH_FAILURE_EXPIRED
+    return None
+
+
+def get_capped_refresh_expiry(session: dict) -> datetime:
+    """Sliding refresh expiry, never past the session's absolute lifetime."""
+    sliding_expiry = get_refresh_token_expiry()
+    created_at = _normalize_datetime(session.get("created_at"))
+    if created_at is None:
+        return sliding_expiry
+    absolute_expiry = created_at + timedelta(seconds=SESSION_ABSOLUTE_LIFETIME_SECONDS)
+    return min(sliding_expiry, absolute_expiry)
+
+
+async def _async_load_refresh_identity(session: dict):
+    """Resolve (user, auth_version) for a session being refreshed.
+
+    Returns a failure tuple instead when the user is gone (internal error) or the
+    session predates a password change (revoked).
+    """
+    user = await postgres_client.async_get_user_by_id(int(session["user_id"]))
+    if not user:
+        logger.error("Refresh failed: session references a missing user")
+        return None, (False, None, AUTH_ERROR_INTERNAL)
+
+    current_auth_version = await _async_get_user_auth_version(int(user["id"]))
+    if current_auth_version is None:
+        logger.error("Refresh failed: could not resolve current auth version")
+        return None, (False, None, AUTH_ERROR_INTERNAL)
+
+    if int(current_auth_version) != int(session["auth_version"]):
+        await redis_client.async_clear_cached_auth_session(str(session["session_id"]))
+        return None, _refresh_failure(REFRESH_FAILURE_REVOKED)
+
+    return (user, int(current_auth_version)), None
+
+
+async def _async_refresh_with_previous_token(session: dict):
+    """Handle a refresh that presents the token rotated out most recently.
+
+    Inside the grace window this is a concurrent tab or a retry whose response was lost:
+    answer with an access token and leave the browser's (newer) cookie alone. Outside it,
+    a rotated-out token showing up again means it may have been copied, so the whole
+    session is revoked (RFC 9700 section 4.14.2).
+    """
+    session_id = str(session["session_id"])
+    failure = _session_failure_reason(session)
+    if failure:
+        await redis_client.async_clear_cached_auth_session(session_id)
+        return _refresh_failure(failure)
+
+    rotated_at = _normalize_datetime(session.get("refresh_rotated_at"))
+    now = datetime.now(timezone.utc)
+    if rotated_at is None or (now - rotated_at).total_seconds() > (
+        REFRESH_REUSE_GRACE_SECONDS
+    ):
+        logger.warning(
+            "Refresh token reuse detected; revoking session %s for user %s",
+            session_id,
+            session.get("user_id"),
+        )
+        await postgres_client.async_revoke_auth_session(
+            session_id, REVOKE_REASON_REFRESH_REUSE
+        )
+        await redis_client.async_clear_cached_auth_session(session_id)
+        return _refresh_failure(REFRESH_FAILURE_REVOKED)
+
+    identity, identity_failure = await _async_load_refresh_identity(session)
+    if identity_failure:
+        return identity_failure
+    user, auth_version = identity
+
+    # No refresh_token in the result: the endpoint must not touch the cookie.
+    return (
+        True,
+        _build_token_response(
+            user_id=int(user["id"]),
+            username=user["username"],
+            session_id=session_id,
+            auth_version=auth_version,
+        ),
+        "",
+    )
+
+
 async def async_refresh_session(
     refresh_token: str,
 ) -> Tuple[bool, Optional[dict], str]:
-    """Rotate a refresh token and return a fresh token pair (async)."""
+    """Rotate a refresh token and return a fresh token pair (async).
+
+    Returns (success, data, error). On success ``data`` holds the access token and, when
+    the refresh token was rotated, ``refresh_token`` + ``refresh_expires_in`` for the
+    cookie. On AUTH_ERROR_INVALID_REFRESH_TOKEN, ``data["reason"]`` is one of the
+    REFRESH_FAILURE_* codes. Database errors yield AUTH_ERROR_INTERNAL (never "invalid"),
+    so an outage can't log anyone out.
+    """
     try:
         refresh_token_hash = hash_refresh_token(refresh_token)
         session = await postgres_client.async_get_auth_session_by_refresh_token_hash(
             refresh_token_hash
         )
-        if not is_auth_session_active(session):
-            if session:
-                await redis_client.async_clear_cached_auth_session(
-                    str(session["session_id"])
-                )
-            return False, None, AUTH_ERROR_INVALID_REFRESH_TOKEN
+        if not session:
+            return _refresh_failure(REFRESH_FAILURE_INVALID)
 
-        user = await postgres_client.async_get_user_by_id(int(session["user_id"]))
-        if not user:
-            logger.error("Refresh failed: session references a missing user")
-            return False, None, AUTH_ERROR_INTERNAL
+        session_id = str(session["session_id"])
+        if session.get("matched", "current") == "previous":
+            return await _async_refresh_with_previous_token(session)
 
-        current_auth_version = await _async_get_user_auth_version(int(user["id"]))
-        if current_auth_version is None:
-            logger.error("Refresh failed: could not resolve current auth version")
-            return False, None, AUTH_ERROR_INTERNAL
+        failure = _session_failure_reason(session)
+        if failure:
+            await redis_client.async_clear_cached_auth_session(session_id)
+            return _refresh_failure(failure)
 
-        if int(current_auth_version) != int(session["auth_version"]):
-            await redis_client.async_clear_cached_auth_session(
-                str(session["session_id"])
-            )
-            return False, None, AUTH_ERROR_INVALID_REFRESH_TOKEN
+        identity, identity_failure = await _async_load_refresh_identity(session)
+        if identity_failure:
+            return identity_failure
+        user, current_auth_version = identity
+
+        new_expires_at = get_capped_refresh_expiry(session)
+        if new_expires_at <= datetime.now(timezone.utc):
+            # Past the absolute lifetime; the user has to log in again.
+            await redis_client.async_clear_cached_auth_session(session_id)
+            return _refresh_failure(REFRESH_FAILURE_EXPIRED)
 
         new_refresh_token = generate_refresh_token()
         rotated_session = await postgres_client.async_rotate_auth_session_refresh_token(
-            session_id=str(session["session_id"]),
+            session_id=session_id,
             current_refresh_token_hash=refresh_token_hash,
             refresh_token_hash=hash_refresh_token(new_refresh_token),
-            expires_at=get_refresh_token_expiry(),
+            expires_at=new_expires_at,
         )
         if not rotated_session:
-            await redis_client.async_clear_cached_auth_session(
-                str(session["session_id"])
+            # Lost the compare-and-set: another request rotated this token a moment ago
+            # (or the session was revoked meanwhile). Judge it as a previous-token holder.
+            latest = await postgres_client.async_get_auth_session(
+                session_id, raise_on_error=True
             )
-            return False, None, AUTH_ERROR_INVALID_REFRESH_TOKEN
+            if latest and latest.get("previous_refresh_token_hash") == (
+                refresh_token_hash
+            ):
+                return await _async_refresh_with_previous_token(latest)
+            await redis_client.async_clear_cached_auth_session(session_id)
+            return _refresh_failure(
+                _session_failure_reason(latest) or REFRESH_FAILURE_INVALID
+            )
 
         await redis_client.async_cache_user_auth_version(
-            int(user["id"]), int(current_auth_version)
+            int(user["id"]), current_auth_version
         )
-        await redis_client.async_cache_auth_session(
-            str(session["session_id"]), rotated_session
-        )
+        await redis_client.async_cache_auth_session(session_id, rotated_session)
 
-        return (
-            True,
-            _build_token_response(
-                user_id=int(user["id"]),
-                username=user["username"],
-                session_id=str(session["session_id"]),
-                auth_version=int(current_auth_version),
-                refresh_token=new_refresh_token,
-            ),
-            "",
+        token_data = _build_token_response(
+            user_id=int(user["id"]),
+            username=user["username"],
+            session_id=session_id,
+            auth_version=current_auth_version,
+            refresh_token=new_refresh_token,
         )
+        remaining = int(
+            (new_expires_at - datetime.now(timezone.utc)).total_seconds()
+        )
+        token_data["refresh_expires_in"] = max(1, remaining)
+        return True, token_data, ""
 
     except Exception:
         logger.exception("Async refresh session failed")
@@ -520,6 +669,76 @@ async def async_logout_session(session_id: str) -> bool:
     success = await postgres_client.async_revoke_auth_session(session_id, "logout")
     await redis_client.async_clear_cached_auth_session(session_id)
     return success
+
+
+AUTH_SESSION_PURGE_INTERVAL_SECONDS = int(
+    os.getenv("AUTH_SESSION_PURGE_INTERVAL_SECONDS", "3600")
+)
+# Dead sessions are kept this long first, for support/debugging of recent logouts.
+AUTH_SESSION_PURGE_RETENTION_SECONDS = int(
+    os.getenv("AUTH_SESSION_PURGE_RETENTION_SECONDS", str(7 * 24 * 3600))
+)
+_AUTH_SESSION_PURGE_LOCK_KEY = "lock:auth_session_purge"
+
+
+async def async_purge_dead_auth_sessions_once() -> Optional[int]:
+    """Purge long-expired/revoked sessions if no other worker did so this interval.
+
+    Returns rows deleted, or None when skipped (lock held elsewhere) or failed.
+    """
+    try:
+        client = await redis_client.get_async_redis_client()
+        acquired = await client.set(
+            _AUTH_SESSION_PURGE_LOCK_KEY,
+            "1",
+            nx=True,
+            ex=max(60, AUTH_SESSION_PURGE_INTERVAL_SECONDS - 60),
+        )
+        if not acquired:
+            return None
+    except Exception:
+        logger.warning("Auth session purge skipped: Redis lock unavailable")
+        return None
+
+    deleted = await postgres_client.async_purge_dead_auth_sessions(
+        AUTH_SESSION_PURGE_RETENTION_SECONDS
+    )
+    if deleted:
+        logger.info("Purged %s dead auth sessions", deleted)
+    return deleted
+
+
+async def async_run_auth_session_purge_loop() -> None:
+    """Background task: purge dead sessions once per interval, forever."""
+    while True:
+        try:
+            await async_purge_dead_auth_sessions_once()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Auth session purge failed")
+        await asyncio.sleep(AUTH_SESSION_PURGE_INTERVAL_SECONDS)
+
+
+async def async_logout_by_refresh_token(refresh_token: str) -> Optional[bool]:
+    """Revoke the session holding this refresh token (current or just-rotated-out).
+
+    Lets logout work from the HttpOnly cookie alone, even when the access token has
+    already expired. Returns True when a session was revoked, False when the token
+    matches no session (already logged out), None on a database error.
+    """
+    try:
+        session = await postgres_client.async_get_auth_session_by_refresh_token_hash(
+            hash_refresh_token(refresh_token)
+        )
+    except Exception:
+        logger.exception("Logout lookup by refresh token failed")
+        return None
+    if not session:
+        return False
+    if not await async_logout_session(str(session["session_id"])):
+        return None
+    return True
 
 
 async def async_change_password(
@@ -537,16 +756,16 @@ async def async_change_password(
         if not user:
             return False, None, "User not found"
 
-        if not verify_password(old_password, user["password_hash"]):
+        if not await async_verify_password(old_password, user["password_hash"]):
             return False, None, "Current password is incorrect"
 
         if new_password == username:
             return False, None, "Password cannot be the same as username"
 
-        if verify_password(new_password, user["password_hash"]):
+        if await async_verify_password(new_password, user["password_hash"]):
             return False, None, "New password must be different from current password"
 
-        new_password_hash = hash_password(new_password)
+        new_password_hash = await async_hash_password(new_password)
 
         new_session_id = uuid.uuid4().hex
         new_refresh_token = generate_refresh_token()
@@ -602,9 +821,25 @@ async def async_get_user_by_id(user_id: int) -> Optional[dict]:
 
 async def async_delete_user_account(
     user_id: int,
+    password: Optional[str] = None,
+    require_password: bool = False,
 ) -> Tuple[bool, str]:
-    """Delete a user account and all auth/settings rows tied to it (async)."""
+    """Delete a user account and all auth/settings rows tied to it (async).
+
+    When ``password`` is given it must match the account's current password
+    (re-authentication for a destructive action). ``require_password`` refuses the
+    deletion outright when no password is supplied.
+    """
     try:
+        if password is None and require_password:
+            return False, AUTH_ERROR_PASSWORD_REQUIRED
+        if password is not None:
+            user = await postgres_client.async_get_user_by_id(user_id)
+            if not user:
+                return False, AUTH_ERROR_USER_NOT_FOUND
+            if not await async_verify_password(password, user["password_hash"]):
+                return False, AUTH_ERROR_INVALID_CREDENTIALS
+
         deletion_result = await postgres_client.async_delete_user_account(user_id)
         if deletion_result is None:
             return False, AUTH_ERROR_INTERNAL

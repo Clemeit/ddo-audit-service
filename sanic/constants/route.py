@@ -8,6 +8,9 @@ OPEN_ROUTES = [
     ("POST", "/auth/register"),
     ("POST", "/auth/login"),
     ("POST", "/auth/refresh"),
+    # Authenticates itself from the refresh cookie (or a Bearer token), so a user whose
+    # access token has expired can still end their session.
+    ("POST", "/auth/logout$"),
     ("POST", "/shard-exchange/my-bids$"),
 ]
 
@@ -15,7 +18,6 @@ OPEN_ROUTES = [
 JWT_PROTECTED_ROUTES = [
     r"^/v?\d*/user/profile(?:/password)?$",
     r"^/v?\d*/user/settings/persistent",
-    r"^/v?\d*/auth/logout$",
     r"^/v?\d*/auth/account$",
     r"^/v?\d*/user/alerts(?:/.*)?$",
     r"^/v?\d*/user/push-subscriptions/?$",

@@ -1,6 +1,7 @@
 import app as app_module
 import middleware.jwt as jwt_middleware_module
 import middleware.rate_limit as rate_limit_module
+from conftest import _amock
 
 
 def test_jwt_middleware_skips_unprotected_routes(monkeypatch, make_request, run_async):
@@ -318,3 +319,107 @@ def test_check_api_key_allows_valid_key(monkeypatch, make_request, run_async):
     response = run_async(app_module.check_api_key(request))
 
     assert response is None
+
+
+def test_rate_limit_refresh_keys_on_session_and_ip(
+    monkeypatch, make_request, run_async
+):
+    """Users behind one NAT address get separate per-session buckets, with a looser
+    shared per-IP ceiling on top."""
+    keys = []
+
+    async def _record(key, limit, window):
+        keys.append((key, limit))
+        return (True, window)
+
+    monkeypatch.setattr(rate_limit_module, "get_client_ip", lambda request: "203.0.113.9")
+    monkeypatch.setattr(rate_limit_module, "_async_increment_and_check_limit", _record)
+
+    for cookie in ("tab-a-token", "tab-b-token"):
+        request = make_request(
+            method="POST", path="/v1/auth/refresh", cookies={"refresh_token": cookie}
+        )
+        assert run_async(rate_limit_module.rate_limit_middleware(request)) is None
+
+    session_keys = {k for k, limit in keys if k.startswith("rate_limit:refresh:")}
+    ip_keys = {k for k, limit in keys if k.startswith("rate_limit:refresh_ip:")}
+    assert len(session_keys) == 2
+    assert ip_keys == {"rate_limit:refresh_ip:203.0.113.9"}
+    assert all("tab-a-token" not in k and "tab-b-token" not in k for k, _ in keys)
+
+
+def test_rate_limit_logout_is_limited_by_ip(
+    monkeypatch, make_request, run_async, response_json
+):
+    async def _over(key, limit, window):
+        assert key == "rate_limit:logout:203.0.113.9"
+        return (False, 30)
+
+    monkeypatch.setattr(rate_limit_module, "get_client_ip", lambda request: "203.0.113.9")
+    monkeypatch.setattr(rate_limit_module, "_async_increment_and_check_limit", _over)
+
+    response = run_async(
+        rate_limit_module.rate_limit_middleware(
+            make_request(method="POST", path="/v1/auth/logout")
+        )
+    )
+
+    assert response.status == 429
+
+
+class _FakeLoginFailureRedis:
+    def __init__(self, count=None, ttl=120):
+        self.count = count
+        self._ttl = ttl
+        self.deleted = []
+
+    async def get(self, key):
+        return self.count
+
+    async def ttl(self, key):
+        return self._ttl
+
+    async def delete(self, key):
+        self.deleted.append(key)
+
+
+def test_login_failure_throttle(monkeypatch, run_async):
+    limit = rate_limit_module.LOGIN_FAILURE_LIMIT["requests"]
+    fake = _FakeLoginFailureRedis(count=str(limit))
+    monkeypatch.setattr(
+        rate_limit_module.redis_client, "get_async_redis_client", _amock(lambda: fake)
+    )
+
+    assert run_async(rate_limit_module.async_get_login_failure_retry_after("Alice")) == 120
+    fake.count = str(limit - 1)
+    assert run_async(rate_limit_module.async_get_login_failure_retry_after("alice")) is None
+
+    run_async(rate_limit_module.async_clear_login_failures("ALICE"))
+    assert fake.deleted == ["rate_limit:login_fail:alice"]
+
+
+def test_login_failure_throttle_fails_open(monkeypatch, run_async):
+    async def _down():
+        raise RuntimeError("redis down")
+
+    monkeypatch.setattr(rate_limit_module.redis_client, "get_async_redis_client", _down)
+
+    assert run_async(rate_limit_module.async_get_login_failure_retry_after("a")) is None
+
+
+def test_check_api_key_rejects_wrong_key_and_empty_configured_key(
+    monkeypatch, make_request, run_async
+):
+    monkeypatch.setattr(app_module, "is_method_open", lambda request: False)
+    monkeypatch.setattr(app_module, "is_route_open", lambda request: False)
+    monkeypatch.setattr(app_module, "is_jwt_protected", lambda request: False)
+
+    monkeypatch.setattr(app_module, "API_KEY", "real-key")
+    wrong = make_request(method="POST", path="/x", headers={"Authorization": "Bearer nope"})
+    right = make_request(method="POST", path="/x", headers={"Authorization": "Bearer real-key"})
+    assert run_async(app_module.check_api_key(wrong)).status == 403
+    assert run_async(app_module.check_api_key(right)) is None
+
+    monkeypatch.setattr(app_module, "API_KEY", "")
+    blank = make_request(method="POST", path="/x", headers={"Authorization": "Bearer "})
+    assert run_async(app_module.check_api_key(blank)).status == 403

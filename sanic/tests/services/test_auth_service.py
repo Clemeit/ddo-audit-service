@@ -404,7 +404,7 @@ def test_refresh_session_rejects_inactive_or_unknown_session(monkeypatch, run_as
     )
 
     assert success is False
-    assert data is None
+    assert data == {"reason": auth_service.REFRESH_FAILURE_INVALID}
     assert error == auth_service.AUTH_ERROR_INVALID_REFRESH_TOKEN
 
 
@@ -442,13 +442,14 @@ def test_refresh_session_rejects_auth_version_mismatch(monkeypatch, run_async):
     )
 
     assert success is False
-    assert data is None
+    # Sessions from before a password change count as revoked.
+    assert data == {"reason": auth_service.REFRESH_FAILURE_REVOKED}
     assert error == auth_service.AUTH_ERROR_INVALID_REFRESH_TOKEN
     assert cleared_session_ids == ["session-20"]
 
 
 def test_refresh_session_success(monkeypatch, run_async):
-    now = datetime(2026, 3, 14, 11, 0, tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
     cached_versions = []
     cached_sessions = []
     captured_rotate_args = {}
@@ -1393,6 +1394,18 @@ def test_refresh_session_rejects_when_refresh_rotation_fails(monkeypatch, run_as
         "async_rotate_auth_session_refresh_token",
         _amock(lambda **kwargs: None),
     )
+    # Re-read after the lost compare-and-set: the session moved on without this token
+    # ever being its previous one, so it's simply invalid.
+    monkeypatch.setattr(
+        auth_service.postgres_client,
+        "async_get_auth_session",
+        _amock(
+            lambda session_id, raise_on_error=False: {
+                **session,
+                "previous_refresh_token_hash": "someone-elses-hash",
+            }
+        ),
+    )
     monkeypatch.setattr(
         auth_service.redis_client,
         "async_clear_cached_auth_session",
@@ -1404,7 +1417,7 @@ def test_refresh_session_rejects_when_refresh_rotation_fails(monkeypatch, run_as
     )
 
     assert success is False
-    assert data is None
+    assert data == {"reason": auth_service.REFRESH_FAILURE_INVALID}
     assert error == auth_service.AUTH_ERROR_INVALID_REFRESH_TOKEN
     assert cleared_sessions == ["rotate-fail-session"]
 
