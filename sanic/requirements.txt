@@ -30,6 +30,7 @@ setuptools==75.4.0
 slowapi==0.1.9
 tracerite==1.1.1
 typing_extensions==4.12.2
+tzdata==2024.2
 ujson==5.10.0
 urllib3==2.2.3
 websockets==14.0

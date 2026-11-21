@@ -68,6 +68,8 @@ def _req(make_request, method="GET", path="/v1/user/alerts/rules", user_id=1, js
         ("delete_alert_rule", (1,)),
         ("get_alert_inbox", ()),
         ("send_test_alert", ()),
+        ("get_alert_preferences", ()),
+        ("put_alert_preferences", ()),
     ],
 )
 def test_every_endpoint_requires_user(handler, args, make_request, run_async, response_json):
@@ -81,7 +83,7 @@ def test_alert_routes_are_jwt_protected():
 
     from utils.route import is_jwt_protected
 
-    for path in ["/v1/user/alerts/rules", "/v1/user/alerts/rules/3", "/v1/user/alerts/inbox", "/v1/user/alerts/test"]:
+    for path in ["/v1/user/alerts/rules", "/v1/user/alerts/rules/3", "/v1/user/alerts/inbox", "/v1/user/alerts/test", "/v1/user/alerts/preferences"]:
         assert is_jwt_protected(NS(path=path))
 
 
@@ -353,3 +355,86 @@ def test_create_listed_rule_stores_server_side_item_name(
     )
     assert response.status == 201
     assert captured["criteria"]["item_name"] == "Some Item"
+
+
+# ----- preferences (quiet hours) -----
+
+PREFS_BODY = {
+    "quiet_enabled": True,
+    "quiet_start": "22:30",
+    "quiet_end": "06:00",
+    "timezone": "America/New_York",
+}
+
+
+def _prefs_req(make_request, method="GET", json_body=None):
+    return _req(make_request, method, "/v1/user/alerts/preferences", json_body=json_body)
+
+
+def test_get_preferences_defaults_when_never_saved(monkeypatch, make_request, run_async, response_json):
+    monkeypatch.setattr(alerts_endpoints.alerts_db, "async_get_preferences", _amock(lambda user_id: None))
+
+    response = run_async(_call("get_alert_preferences", _prefs_req(make_request)))
+
+    data = response_json(response)["data"]
+    assert response.status == 200
+    assert data["quiet_enabled"] is False
+    assert data["saved"] is False
+
+
+def test_put_preferences_saves_minutes_and_bumps_version(
+    monkeypatch, make_request, run_async, response_json, _rules_version
+):
+    saved = {}
+
+    def _upsert(user_id, enabled, start, end, tz):
+        saved.update(user_id=user_id, enabled=enabled, start=start, end=end, tz=tz)
+        return {
+            "quiet_enabled": enabled,
+            "quiet_start_minute": start,
+            "quiet_end_minute": end,
+            "timezone": tz,
+        }
+
+    monkeypatch.setattr(alerts_endpoints.alerts_db, "async_upsert_preferences", _amock(_upsert))
+
+    response = run_async(_call("put_alert_preferences", _prefs_req(make_request, "PUT", PREFS_BODY)))
+
+    assert response.status == 200
+    assert saved == {"user_id": 1, "enabled": True, "start": 22 * 60 + 30, "end": 6 * 60, "tz": "America/New_York"}
+    assert response_json(response)["data"]["quiet_start"] == "22:30"
+    assert _rules_version == [1]
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"timezone": "Not/AZone"},
+        {"quiet_start": "25:00"},
+        {"quiet_end": "7am"},
+        {"quiet_start": "07:00", "quiet_end": "07:00"},
+        {"unexpected": 1},
+    ],
+)
+def test_put_preferences_rejects_invalid_bodies(overrides, make_request, run_async):
+    body = {**PREFS_BODY, **overrides}
+    response = run_async(_call("put_alert_preferences", _prefs_req(make_request, "PUT", body)))
+    assert response.status == 400
+
+
+def test_put_preferences_allows_equal_times_when_disabled(monkeypatch, make_request, run_async):
+    monkeypatch.setattr(
+        alerts_endpoints.alerts_db,
+        "async_upsert_preferences",
+        _amock(
+            lambda *a: {
+                "quiet_enabled": False,
+                "quiet_start_minute": 0,
+                "quiet_end_minute": 0,
+                "timezone": "UTC",
+            }
+        ),
+    )
+    body = {**PREFS_BODY, "quiet_enabled": False, "quiet_start": "07:00", "quiet_end": "07:00"}
+    response = run_async(_call("put_alert_preferences", _prefs_req(make_request, "PUT", body)))
+    assert response.status == 200

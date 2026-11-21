@@ -15,7 +15,13 @@ from business.alerts import registry
 from business.alerts.channels.inbox import INBOX_FIELD, inbox_key
 from business.alerts.dispatcher import async_bump_rules_version
 from business.alerts.events import async_emit_alert_event
-from models.alerts import MAX_ALERT_RULE_BODY_BYTES, AlertRuleInput
+from models.alerts import (
+    MAX_ALERT_PREFERENCES_BODY_BYTES,
+    MAX_ALERT_RULE_BODY_BYTES,
+    AlertPreferencesInput,
+    AlertRuleInput,
+    minute_to_time,
+)
 
 import orjson
 from pydantic import ValidationError
@@ -183,6 +189,68 @@ async def delete_alert_rule(request: Request, rule_id: int):
         return json({"error": "Rule not found"}, status=404)
     await async_bump_rules_version()
     return json({"data": {"deleted": True}})
+
+
+def _preferences_to_api(row: dict | None) -> dict:
+    """API shape of the preferences row; the defaults when the user never saved any."""
+    if not row:
+        return {
+            "quiet_enabled": False,
+            "quiet_start": "23:00",
+            "quiet_end": "07:00",
+            "timezone": "UTC",
+            "saved": False,
+        }
+    return {
+        "quiet_enabled": row["quiet_enabled"],
+        "quiet_start": minute_to_time(row["quiet_start_minute"]),
+        "quiet_end": minute_to_time(row["quiet_end_minute"]),
+        "timezone": row["timezone"],
+        "saved": True,
+    }
+
+
+@alerts_blueprint.get("/preferences")
+@openapi.summary("Get the authenticated user's alert preferences (quiet hours)")
+@openapi.secured("BearerAuth")
+async def get_alert_preferences(request: Request):
+    user_id = _user_id(request)
+    if not user_id:
+        return json({"error": "Unauthorized"}, status=401)
+    try:
+        row = await alerts_db.async_get_preferences(user_id)
+    except Exception:
+        return json({"error": "Internal server error"}, status=500)
+    return json({"data": _preferences_to_api(row)})
+
+
+@alerts_blueprint.put("/preferences")
+@openapi.summary("Replace the authenticated user's alert preferences (quiet hours)")
+@openapi.secured("BearerAuth")
+@openapi.body({"application/json": AlertPreferencesInput})
+@openapi.response(400, description="Validation error")
+async def put_alert_preferences(request: Request):
+    user_id = _user_id(request)
+    if not user_id:
+        return json({"error": "Unauthorized"}, status=401)
+    if len(request.body or b"") > MAX_ALERT_PREFERENCES_BODY_BYTES:
+        return json({"error": "Request body too large"}, status=400)
+    try:
+        body = AlertPreferencesInput(**(request.json or {}))
+    except ValidationError as e:
+        return json({"error": _validation_message(e)}, status=400)
+    try:
+        row = await alerts_db.async_upsert_preferences(
+            user_id,
+            body.quiet_enabled,
+            body.start_minute,
+            body.end_minute,
+            body.timezone,
+        )
+    except Exception:
+        return json({"error": "Internal server error"}, status=500)
+    await async_bump_rules_version()
+    return json({"data": _preferences_to_api(row)})
 
 
 def _decode(value):

@@ -10,6 +10,7 @@ import time
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 import orjson
 from business.alerts import registry
@@ -24,6 +25,9 @@ USER_CAP_WINDOW_SECONDS = 10 * 60
 METRICS_KEY = RedisKeys.ALERT_METRICS.value
 
 RuleLoader = Callable[[str], list[dict]]
+QuietHoursLoader = Callable[[], list[dict]]
+# Alert types that ignore quiet hours: the user pressed "send test" and expects to see it.
+QUIET_HOURS_EXEMPT_TYPES = frozenset({"test"})
 RULES_VERSION_KEY = RedisKeys.ALERT_RULES_VERSION.value
 
 
@@ -46,6 +50,27 @@ def parse_rule(row: dict) -> AlertRule | None:
     )
 
 
+def is_quiet(window: dict, now_utc: datetime) -> bool:
+    """Whether ``now_utc`` falls inside a quiet-hours window.
+
+    ``window`` has ``quiet_start_minute``, ``quiet_end_minute`` (minutes after local midnight) and
+    ``timezone`` (IANA). The window starts inclusive and ends exclusive, and may cross midnight
+    (start > end). Anything unusable counts as not quiet: a bad row should never silence alerts.
+    """
+    try:
+        start = int(window["quiet_start_minute"])
+        end = int(window["quiet_end_minute"])
+        local = now_utc.astimezone(ZoneInfo(window["timezone"]))
+    except Exception:
+        return False
+    if start == end:
+        return False
+    minute = local.hour * 60 + local.minute
+    if start < end:
+        return start <= minute < end
+    return minute >= start or minute < end
+
+
 class AlertDispatcher:
     def __init__(
         self,
@@ -56,8 +81,11 @@ class AlertDispatcher:
         clock: Callable[[], float] = time.monotonic,
         now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
         rules_version: Callable[[], Any] | None = None,
+        load_quiet_hours: QuietHoursLoader | None = None,
     ) -> None:
         self._load_rules = load_rules
+        self._load_quiet_hours = load_quiet_hours
+        self._quiet_hours: dict[int, dict] = {}
         # Bumped by the API when rules change, so new rules apply right away instead of at the next
         # periodic refresh (which still runs, e.g. to drop rules that have expired).
         self._get_rules_version = rules_version
@@ -109,7 +137,19 @@ class AlertDispatcher:
             rules = [r for r in rules if r.is_active(now)]
             indexes[alert_type.name] = alert_type.build_index(rules)
         self._indexes = indexes
+        self._refresh_quiet_hours()
         self._last_refresh = self._clock()
+
+    def _refresh_quiet_hours(self) -> None:
+        if self._load_quiet_hours is None:
+            return
+        try:
+            rows = self._load_quiet_hours()
+        except Exception as e:
+            # Keep the last good windows rather than suddenly alerting people mid-night.
+            logger.error(f"Could not load alert quiet hours: {e}")
+            return
+        self._quiet_hours = {int(row["user_id"]): row for row in rows}
 
     # ----- events -----
 
@@ -153,6 +193,13 @@ class AlertDispatcher:
             if not client.set(sent_key, 1, nx=True, ex=alert_type.dedupe_ttl_secs):
                 stats["deduped"] += 1
                 continue
+            if alert_type.name not in QUIET_HOURS_EXEMPT_TYPES:
+                window = self._quiet_hours.get(user_id)
+                if window and is_quiet(window, now):
+                    # After the dedupe marker so the same event is not sent when quiet hours end, and
+                    # before the cap so skipped alerts do not use up the user's allowance.
+                    stats["quiet_hours"] += 1
+                    continue
             if self._over_cap(client, user_id):
                 stats["capped"] += 1
                 continue

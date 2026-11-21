@@ -114,6 +114,57 @@ def get_enabled_rules_by_type(rule_type: str) -> list[dict]:
         return [dict(row) for row in cursor.fetchall()]
 
 
+# ----- account-wide preferences (quiet hours; table ``alert_preferences``) -----
+
+_PREFS_COLUMNS = "quiet_enabled, quiet_start_minute, quiet_end_minute, timezone"
+
+
+async def async_get_preferences(user_id: int) -> Optional[dict]:
+    """The user's preferences row, or None when they never saved any (callers apply defaults)."""
+    async with get_async_dict_cursor(commit=False) as cursor:
+        await cursor.execute(
+            f"SELECT {_PREFS_COLUMNS} FROM alert_preferences WHERE user_id = %s",
+            (user_id,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def async_upsert_preferences(
+    user_id: int,
+    quiet_enabled: bool,
+    start_minute: int,
+    end_minute: int,
+    timezone_name: str,
+) -> dict:
+    async with get_async_dict_cursor(commit=True) as cursor:
+        await cursor.execute(
+            f"""
+            INSERT INTO alert_preferences
+                (user_id, quiet_enabled, quiet_start_minute, quiet_end_minute, timezone)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (user_id) DO UPDATE SET
+                quiet_enabled = EXCLUDED.quiet_enabled,
+                quiet_start_minute = EXCLUDED.quiet_start_minute,
+                quiet_end_minute = EXCLUDED.quiet_end_minute,
+                timezone = EXCLUDED.timezone,
+                updated_at = NOW()
+            RETURNING {_PREFS_COLUMNS}
+            """,
+            (user_id, quiet_enabled, start_minute, end_minute, timezone_name),
+        )
+        return dict(await cursor.fetchone())
+
+
+def get_all_quiet_hours() -> list[dict]:
+    """Every enabled quiet-hours window (sync, for the dispatch worker)."""
+    with get_dict_cursor(commit=False) as cursor:
+        cursor.execute(
+            f"SELECT user_id, {_PREFS_COLUMNS} FROM alert_preferences WHERE quiet_enabled"
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
 # ----- per-user context for alert types (friends, verified characters) -----
 #
 # The UI syncs a user's friends (character IDs) and verified-character access tokens into

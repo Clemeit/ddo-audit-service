@@ -621,3 +621,23 @@ ALTER TABLE IF EXISTS public."push_subscriptions"
 
 CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
     ON public."push_subscriptions" (user_id);
+
+-- Alert quiet hours (see postgres/migrations/2026-11-alert-quiet-hours.sql).
+CREATE TABLE IF NOT EXISTS public."alert_preferences"
+(
+    user_id integer NOT NULL REFERENCES public."users"(id) ON DELETE CASCADE,
+    quiet_enabled boolean NOT NULL DEFAULT false,
+    quiet_start_minute smallint NOT NULL DEFAULT 1380 CHECK (quiet_start_minute BETWEEN 0 AND 1439),
+    quiet_end_minute smallint NOT NULL DEFAULT 420 CHECK (quiet_end_minute BETWEEN 0 AND 1439),
+    timezone text NOT NULL DEFAULT 'UTC',
+    updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    PRIMARY KEY (user_id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."alert_preferences"
+    OWNER to pgadmin;
+
+CREATE INDEX IF NOT EXISTS idx_alert_preferences_quiet
+    ON public."alert_preferences" (user_id) WHERE quiet_enabled;
