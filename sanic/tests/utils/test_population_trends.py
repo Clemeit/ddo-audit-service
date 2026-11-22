@@ -151,7 +151,64 @@ class TestGetPopulationTrends:
             }
         ]
 
-    def test_all_range_starts_at_epoch_and_hour_ttl(self, monkeypatch):
+    def test_all_range_starts_at_first_rollup_bucket(self, monkeypatch):
+        calls = {}
+        monkeypatch.setattr(
+            population,
+            "_start_of_hour_utc",
+            lambda: datetime(2026, 11, 21, 15, tzinfo=UTC),
+        )
+        monkeypatch.setattr(
+            population, "get_cached_data_with_fallback", _passthrough_cache(calls)
+        )
+        monkeypatch.setattr(
+            population.population_db,
+            "get_first_rollup_bucket",
+            lambda: datetime(2025, 5, 21, 3, tzinfo=UTC),
+        )
+        monkeypatch.setattr(
+            population.population_db,
+            "get_population_buckets",
+            lambda start, stop, unit: calls.setdefault("start", start) and [],
+        )
+        monkeypatch.setattr(
+            population.population_db,
+            "get_total_population_buckets",
+            lambda start, stop, unit: [],
+        )
+
+        result = population.get_population_trends("all", "month")
+
+        assert calls["start"] == datetime(2025, 5, 1, tzinfo=UTC)
+        assert result["start"] == "2025-05-01T00:00:00Z"
+
+    def test_all_range_is_empty_when_rollup_is_empty(self, monkeypatch):
+        calls = {}
+        end = datetime(2026, 11, 21, 15, tzinfo=UTC)
+        monkeypatch.setattr(population, "_start_of_hour_utc", lambda: end)
+        monkeypatch.setattr(
+            population, "get_cached_data_with_fallback", _passthrough_cache(calls)
+        )
+        monkeypatch.setattr(
+            population.population_db, "get_first_rollup_bucket", lambda: None
+        )
+        monkeypatch.setattr(
+            population.population_db,
+            "get_population_buckets",
+            lambda start, stop, unit: calls.setdefault("window", (start, stop)) and [],
+        )
+        monkeypatch.setattr(
+            population.population_db,
+            "get_total_population_buckets",
+            lambda start, stop, unit: [],
+        )
+
+        population.get_population_trends("all", "week")
+
+        # Start aligns down to the week containing `end`; no epoch-long empty range.
+        assert calls["window"] == (datetime(2026, 11, 16, tzinfo=UTC), end)
+
+    def test_hour_buckets_use_short_ttl(self, monkeypatch):
         calls = {}
         monkeypatch.setattr(
             population,
@@ -171,9 +228,6 @@ class TestGetPopulationTrends:
             "get_total_population_buckets",
             lambda start, stop, unit: [],
         )
-
-        population.get_population_trends("all", "month")
-        assert calls["start"] == population.TRENDS_EPOCH
 
         population.get_population_trends("week", "hour")
         assert calls["cache"][1] == population.POPULATION_TRENDS_HOURLY_CACHE_TTL
@@ -214,7 +268,9 @@ class TestComparisonWindows:
 class TestSummarizeWindow:
     def test_returns_none_without_data(self, monkeypatch):
         monkeypatch.setattr(
-            population.population_db, "get_population_window", lambda s, e: ({}, 0)
+            population.population_db,
+            "get_population_window",
+            lambda s, e: ({}, 0, None),
         )
         start = datetime(2026, 11, 1, tzinfo=UTC)
         assert population.summarize_window(start, start + timedelta(days=1)) is None
@@ -229,6 +285,8 @@ class TestSummarizeWindow:
                     "Cannith": {"players": 50.0, "lfms": 4.5},
                 },
                 12,
+                # Combined total comes from hourly sums, not the sum of server averages.
+                {"players": 140.004, "lfms": 13.0},
             ),
         )
         start = datetime(2026, 11, 1, tzinfo=UTC)
@@ -236,7 +294,7 @@ class TestSummarizeWindow:
         result = population.summarize_window(start, start + timedelta(days=1))
 
         assert result["coverage"] == 0.5
-        assert result["total"] == {"players": 150.12, "lfms": 14.5}
+        assert result["total"] == {"players": 140.0, "lfms": 13.0}
         assert result["servers"]["Argonnessen"]["players"] == 100.12
         assert result["start"] == "2026-11-01T00:00:00Z"
 
@@ -345,3 +403,44 @@ class TestLegacyLongRangeGetters:
 
         assert getattr(population, getter_name)() == totals
         assert calls["window"] == (today - timedelta(days=days), today)
+
+
+class FakeRedis:
+    def __init__(self, keys):
+        self.keys = set(keys)
+        self.deleted = []
+
+    def scan_iter(self, match):
+        prefix = match.rstrip("*")
+        return [k for k in sorted(self.keys) if k.startswith(prefix)]
+
+    def delete(self, *keys):
+        self.deleted.extend(keys)
+        return len([k for k in keys if k in self.keys])
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_invalidate_long_range_population_caches(monkeypatch):
+    fake = FakeRedis(
+        [
+            "get_game_population_year",
+            "population_trends_all_week",
+            "population_trends_year_day",
+            "get_game_population_week",
+        ]
+    )
+    monkeypatch.setattr(population.redis_client, "get_redis_client", lambda: fake)
+
+    removed = population.invalidate_long_range_population_caches()
+
+    assert removed == 3
+    assert "get_game_population_week" not in fake.deleted
+    assert {"population_trends_all_week", "population_trends_year_day"} <= set(
+        fake.deleted
+    )
+    assert "get_game_population_totals_quarter" in fake.deleted

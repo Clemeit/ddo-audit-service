@@ -1,5 +1,4 @@
-"""Hourly population rollups (table ``population_hourly``; see
-postgres/migrations/2026-11-population-rollups.sql).
+"""Hourly population rollups (table ``population_hourly``; schema in postgres/init.sql).
 
 ``game_info`` holds one JSONB snapshot every 5 minutes. Long-range reports read this table
 instead: one row per server per UTC hour with the sample count and avg/min/max of player and LFM
@@ -18,6 +17,7 @@ from services.postgres import get_db_cursor
 from utils.time import datetime_to_datetime_string
 
 logger = logging.getLogger(__name__)
+
 
 def iso_utc(value: datetime) -> str:
     """Format a naive-UTC or timezone-aware datetime as ``YYYY-MM-DDTHH:MM:SSZ``."""
@@ -52,9 +52,15 @@ def rollup_population_hours(start: datetime, end: datetime) -> int:
             FROM public."game_info" gi
             CROSS JOIN LATERAL jsonb_each(gi.data->'servers') AS s(key, value)
             CROSS JOIN LATERAL (
+                -- Only JSON numbers count; anything else (null, missing, a stray string) is 0, so
+                -- one malformed snapshot can't abort the whole statement.
                 SELECT
-                    COALESCE((s.value->>'character_count')::int, 0) AS players,
-                    COALESCE((s.value->>'lfm_count')::int, 0) AS lfms
+                    CASE WHEN jsonb_typeof(s.value->'character_count') = 'number'
+                         THEN round((s.value->>'character_count')::numeric)::int
+                         ELSE 0 END AS players,
+                    CASE WHEN jsonb_typeof(s.value->'lfm_count') = 'number'
+                         THEN round((s.value->>'lfm_count')::numeric)::int
+                         ELSE 0 END AS lfms
             ) AS v
             WHERE gi."timestamp" >= %s AND gi."timestamp" < %s
               AND jsonb_typeof(gi.data->'servers') = 'object'
@@ -85,6 +91,40 @@ def get_latest_rollup_bucket() -> Optional[datetime]:
         cursor.execute('SELECT MAX(bucket) FROM public."population_hourly"')
         row = cursor.fetchone()
         return row[0] if row else None
+
+
+def get_first_rollup_bucket() -> Optional[datetime]:
+    with get_db_cursor(commit=False) as cursor:
+        cursor.execute('SELECT MIN(bucket) FROM public."population_hourly"')
+        row = cursor.fetchone()
+        return row[0] if row else None
+
+
+def get_missing_rollup_hours(end: datetime) -> list[datetime]:
+    """UTC hour starts before ``end`` that have server snapshots in game_info but no rollup rows.
+
+    Lets the worker repair holes left by a failed backfill or a long database outage.
+    """
+    with get_db_cursor(commit=False) as cursor:
+        cursor.execute(
+            """
+            SELECT g.hour
+            FROM (
+                SELECT DISTINCT
+                    date_trunc('hour', "timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS hour
+                FROM public."game_info"
+                WHERE "timestamp" < %s
+                  AND jsonb_typeof(data->'servers') = 'object'
+                  AND data->'servers' <> '{}'::jsonb
+            ) AS g
+            WHERE NOT EXISTS (
+                SELECT 1 FROM public."population_hourly" ph WHERE ph.bucket = g.hour
+            )
+            ORDER BY g.hour
+            """,
+            (end,),
+        )
+        return [row[0] for row in cursor.fetchall()]
 
 
 def get_population_buckets(start: datetime, end: datetime, unit: str) -> list[dict]:
@@ -203,9 +243,16 @@ def get_population_totals(start: datetime, end: datetime) -> dict[str, dict]:
         }
 
 
-def get_population_window(start: datetime, end: datetime) -> tuple[dict[str, dict], int]:
-    """Sample-weighted average players/LFMs per server over [start, end), plus the number of
-    distinct hours that have any data (for coverage checks)."""
+def get_population_window(
+    start: datetime, end: datetime
+) -> tuple[dict[str, dict], int, Optional[dict]]:
+    """Averages over [start, end): per server (sample-weighted), the number of distinct hours
+    with any data (for coverage checks), and the combined total.
+
+    The combined total is the mean of each hour's all-server sum, the same figure the trends
+    chart plots. Summing per-server averages instead would overstate it whenever a server only
+    reported for part of the window.
+    """
     with get_db_cursor(commit=False) as cursor:
         cursor.execute(
             """
@@ -226,14 +273,21 @@ def get_population_window(start: datetime, end: datetime) -> tuple[dict[str, dic
         }
         cursor.execute(
             """
-            SELECT COUNT(DISTINCT bucket)
-            FROM public."population_hourly"
-            WHERE bucket >= %s AND bucket < %s
+            SELECT COUNT(*), AVG(players), AVG(lfms)
+            FROM (
+                SELECT bucket, SUM(players_avg) AS players, SUM(lfms_avg) AS lfms
+                FROM public."population_hourly"
+                WHERE bucket >= %s AND bucket < %s
+                GROUP BY bucket
+            ) AS hourly
             """,
             (start, end),
         )
-        hours = cursor.fetchone()[0] or 0
-        return servers, int(hours)
+        hours, players, lfms = cursor.fetchone()
+        total = (
+            {"players": float(players), "lfms": float(lfms)} if hours else None
+        )
+        return servers, int(hours or 0), total
 
 
 def get_peak_total_hour(start: datetime, end: datetime) -> Optional[dict]:

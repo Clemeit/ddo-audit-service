@@ -100,6 +100,8 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_MIN_CONN=${POSTGRES_MIN_CONN}
       - POSTGRES_MAX_CONN=${POSTGRES_MAX_CONN}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
       - POPULATION_ROLLUP_INTERVAL_SECS=${POPULATION_ROLLUP_INTERVAL_SECS:-600}
       - WORKER_LOG_LEVEL=${WORKER_LOG_LEVEL:-INFO}
     expose:
@@ -109,6 +111,8 @@ services:
     depends_on:
       postgres:
         condition: service_started
+      redis:
+        condition: service_healthy
 
   alert_dispatch_worker:
     build:

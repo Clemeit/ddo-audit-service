@@ -1015,7 +1015,13 @@ def get_population_trends(range_name: str, bucket: str) -> dict:
     def fetch_data():
         end = _start_of_hour_utc()
         days = TRENDS_RANGES[range_name]
-        start = TRENDS_EPOCH if days is None else end - timedelta(days=days)
+        if days is None:
+            # "All" starts where the data does, not at the epoch, so the chart has no
+            # years of empty axis in front of the first line. Empty table -> empty range.
+            first = population_db.get_first_rollup_bucket()
+            start = max(first, TRENDS_EPOCH) if first is not None else end
+        else:
+            start = end - timedelta(days=days)
         start = truncate_to_bucket(start, bucket)
         rows = population_db.get_population_buckets(start, end, bucket)
         total_rows = population_db.get_total_population_buckets(start, end, bucket)
@@ -1051,18 +1057,15 @@ def summarize_window(start: datetime, end: datetime) -> Optional[dict]:
     ``coverage`` is the fraction of hours in the window that have data, so the UI can flag
     comparisons against a period with gaps.
     """
-    servers, hours_with_data = population_db.get_population_window(start, end)
-    if not servers:
+    servers, hours_with_data, total = population_db.get_population_window(start, end)
+    if not servers or total is None:
         return None
     expected_hours = max(1, int((end - start).total_seconds() // 3600))
     return {
         "start": datetime_to_datetime_string(start),
         "end": datetime_to_datetime_string(end),
         "coverage": round(min(1.0, hours_with_data / expected_hours), 3),
-        "total": {
-            "players": _round(sum(s["players"] for s in servers.values())),
-            "lfms": _round(sum(s["lfms"] for s in servers.values())),
-        },
+        "total": {"players": _round(total["players"]), "lfms": _round(total["lfms"])},
         "servers": {
             name: {"players": _round(s["players"]), "lfms": _round(s["lfms"])}
             for name, s in servers.items()
@@ -1137,3 +1140,24 @@ def get_population_trends_summary() -> dict:
         fetch_data,
         POPULATION_TRENDS_SUMMARY_CACHE_TTL,
     )
+
+
+# Caches built from population_hourly with long TTLs. The rollup worker clears these after it
+# fills in history (initial backfill, gap repair, catching up after an outage), so results
+# computed against a half-built table don't outlive the gap.
+LONG_RANGE_POPULATION_CACHE_KEYS = (
+    "get_game_population_quarter",
+    "get_game_population_year",
+    "get_game_population_totals_quarter",
+    "get_game_population_totals_year",
+    "population_trends_summary",
+)
+POPULATION_TRENDS_CACHE_PATTERN = "population_trends_*"
+
+
+def invalidate_long_range_population_caches() -> int:
+    """Delete cached reports derived from population_hourly. Returns the number of keys removed."""
+    with redis_client.get_redis_client() as client:
+        keys = list(LONG_RANGE_POPULATION_CACHE_KEYS)
+        keys.extend(client.scan_iter(match=POPULATION_TRENDS_CACHE_PATTERN))
+        return int(client.delete(*keys)) if keys else 0
