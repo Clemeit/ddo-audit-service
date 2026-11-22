@@ -85,6 +85,31 @@ services:
         soft: 65536
         hard: 65536
 
+  population_rollup_worker:
+    build:
+      context: ./sanic
+      dockerfile: Dockerfile
+    image: clemeit/ddoaudit-sanic:latest
+    restart: always
+    command: ["python", "-m", "workers.population_rollup_worker"]
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_MIN_CONN=${POSTGRES_MIN_CONN}
+      - POSTGRES_MAX_CONN=${POSTGRES_MAX_CONN}
+      - POPULATION_ROLLUP_INTERVAL_SECS=${POPULATION_ROLLUP_INTERVAL_SECS:-600}
+      - WORKER_LOG_LEVEL=${WORKER_LOG_LEVEL:-INFO}
+    expose:
+      - 0
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_started
+
   alert_dispatch_worker:
     build:
       context: ./sanic

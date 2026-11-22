@@ -73,3 +73,52 @@ def test_get_population_by_hour_and_day_of_week_rejects_invalid_period(
 
     assert response.status == 400
     assert "Supported periods" in response_json(response)["message"]
+
+
+def test_get_population_trends_passes_resolved_query(
+    monkeypatch, make_request, run_async, response_json
+):
+    calls = {}
+
+    def fake_trends(range_name, bucket):
+        calls["args"] = (range_name, bucket)
+        return {"range": range_name, "bucket": bucket, "series": {}}
+
+    monkeypatch.setattr(
+        population_endpoints.population_utils, "get_population_trends", fake_trends
+    )
+
+    request = make_request(path="/v1/population/trends")
+    request.args = {"range": "Year"}
+    response = run_async(population_endpoints.get_population_trends(request))
+
+    assert response.status == 200
+    assert calls["args"] == ("year", "day")
+    assert response_json(response)["data"]["bucket"] == "day"
+
+
+def test_get_population_trends_returns_400_for_invalid_bucket(
+    make_request, run_async, response_json
+):
+    request = make_request(path="/v1/population/trends")
+    request.args = {"range": "all", "bucket": "hour"}
+    response = run_async(population_endpoints.get_population_trends(request))
+
+    assert response.status == 400
+    assert "Invalid bucket" in response_json(response)["message"]
+
+
+def test_get_population_trends_summary_returns_500_when_utility_raises(
+    monkeypatch, make_request, run_async, response_json
+):
+    monkeypatch.setattr(
+        population_endpoints.population_utils,
+        "get_population_trends_summary",
+        lambda: (_ for _ in ()).throw(RuntimeError("rollup missing")),
+    )
+
+    request = make_request(path="/v1/population/trends/summary")
+    response = run_async(population_endpoints.get_population_trends_summary(request))
+
+    assert response.status == 500
+    assert response_json(response)["message"] == "rollup missing"

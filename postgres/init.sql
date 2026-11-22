@@ -641,3 +641,29 @@ ALTER TABLE IF EXISTS public."alert_preferences"
 
 CREATE INDEX IF NOT EXISTS idx_alert_preferences_quiet
     ON public."alert_preferences" (user_id) WHERE quiet_enabled;
+
+CREATE INDEX IF NOT EXISTS idx_game_info_timestamp
+    ON public."game_info" ("timestamp");
+
+-- One row per server per UTC hour, rolled up from the 5-minute game_info snapshots
+-- by workers/population_rollup_worker.py. Day/week/month buckets are derived at query time.
+CREATE TABLE IF NOT EXISTS public."population_hourly"
+(
+    bucket timestamp with time zone NOT NULL,
+    server_name text COLLATE pg_catalog."default" NOT NULL,
+    samples smallint NOT NULL,
+    players_avg real NOT NULL,
+    players_min integer NOT NULL,
+    players_max integer NOT NULL,
+    lfms_avg real NOT NULL,
+    lfms_min integer NOT NULL,
+    lfms_max integer NOT NULL,
+    PRIMARY KEY (server_name, bucket)
+)
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."population_hourly"
+    OWNER to pgadmin;
+
+CREATE INDEX IF NOT EXISTS idx_population_hourly_bucket
+    ON public."population_hourly" (bucket);

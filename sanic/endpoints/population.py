@@ -337,3 +337,73 @@ async def get_population_by_hour_and_day_of_week(request: Request, period: str):
         return json({"message": str(e)}, status=500)
 
     return json({"data": data})
+
+
+@population_blueprint.get("/trends")
+@openapi.summary("Get population trends from the hourly rollup")
+@openapi.parameter("range", str, "query", description="week, month, quarter, year, all")
+@openapi.parameter(
+    "bucket",
+    str,
+    "query",
+    description="hour, day, week, month (allowed values depend on range)",
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "description": "Per-server player and LFM avg/min/max for each UTC bucket"
+        }
+    },
+)
+@openapi.response(400, description="Invalid range or bucket")
+async def get_population_trends(request: Request):
+    """
+    Method: GET
+
+    Route: /trends?range=<range>&bucket=<bucket>
+
+    Description: Per-server population (players and LFMs: avg, min, max) aggregated into UTC
+    buckets. Defaults: range=month; bucket depends on range (week->hour, month/quarter/year->day,
+    all->week). The last bucket may be marked "partial" if it is still in progress.
+    """
+    try:
+        range_name, bucket = population_utils.resolve_trends_query(
+            request.args.get("range"), request.args.get("bucket")
+        )
+    except ValueError as e:
+        return json({"message": str(e)}, status=400)
+
+    try:
+        data = population_utils.get_population_trends(range_name, bucket)
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})
+
+
+@population_blueprint.get("/trends/summary")
+@openapi.summary("Get population trend comparisons and records")
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "description": "Period-over-period averages and all-time/yearly records"
+        }
+    },
+)
+async def get_population_trends_summary(request: Request):
+    """
+    Method: GET
+
+    Route: /trends/summary
+
+    Description: Average population for the last 7 and 30 days versus the periods before them,
+    month-to-date versus the same period last year, and population records.
+    """
+    try:
+        data = population_utils.get_population_trends_summary()
+    except Exception as e:
+        return json({"message": str(e)}, status=500)
+
+    return json({"data": data})

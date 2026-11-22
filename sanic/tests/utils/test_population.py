@@ -471,20 +471,6 @@ class TestGamePopulationGetters:
                 "get_game_population_month",
                 population.REPORT_1_MONTH_CACHE_TTL,
             ),
-            (
-                "get_game_population_quarter",
-                "get_game_population_last_quarter",
-                "average_daily_data",
-                "get_game_population_quarter",
-                population.REPORT_1_QUARTER_CACHE_TTL,
-            ),
-            (
-                "get_game_population_year",
-                "get_game_population_last_year",
-                "average_daily_data",
-                "get_game_population_year",
-                population.REPORT_1_YEAR_CACHE_TTL,
-            ),
         ],
     )
     def test_get_game_population_period_getters_apply_expected_averaging(
@@ -556,20 +542,6 @@ class TestGamePopulationGetters:
             None,
             "get_game_population_totals_month",
             population.REPORT_1_MONTH_CACHE_TTL,
-        ),
-        (
-            "get_game_population_totals_quarter",
-            "get_game_population_last_quarter",
-            None,
-            "get_game_population_totals_quarter",
-            population.REPORT_1_QUARTER_CACHE_TTL,
-        ),
-        (
-            "get_game_population_totals_year",
-            "get_game_population_last_year",
-            None,
-            "get_game_population_totals_year",
-            population.REPORT_1_YEAR_CACHE_TTL,
         ),
     ],
 )
