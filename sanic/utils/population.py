@@ -1,5 +1,6 @@
 import services.redis as redis_client
 import services.postgres as postgres_client
+import services.population_db as population_db
 from models.game import PopulationPointInTime, PopulationDataPoint
 from utils.time import datetime_to_datetime_string
 from typing import Optional
@@ -11,9 +12,12 @@ from constants.redis import (
     REPORT_1_MONTH_CACHE_TTL,
     REPORT_1_YEAR_CACHE_TTL,
     REPORT_1_QUARTER_CACHE_TTL,
+    POPULATION_TRENDS_HOURLY_CACHE_TTL,
+    POPULATION_TRENDS_CACHE_TTL,
+    POPULATION_TRENDS_SUMMARY_CACHE_TTL,
 )
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 
 # def sum_server_population(
@@ -131,10 +135,10 @@ def get_game_population_quarter() -> list[dict]:
     """
 
     def fetch_data():
-        postgres_data = postgres_client.get_game_population_last_quarter()
-        averaged_data = average_daily_data(postgres_data)
-        # normalized_data = normalize_population_data(averaged_data)
-        return [datum.model_dump() for datum in averaged_data]
+        end = _start_of_today_utc()
+        start = end - timedelta(days=90)
+        daily_points = population_db.get_daily_population_points(start, end)
+        return [datum.model_dump() for datum in daily_points]
 
     return get_cached_data_with_fallback(
         "get_game_population_quarter",
@@ -170,11 +174,9 @@ def get_game_population_totals_quarter() -> list[dict]:
     """
 
     def fetch_data():
-        postgres_data = postgres_client.get_game_population_last_quarter()
-        _, total_data = summed_population_data_points(postgres_data)
-        return {
-            serverName: datum.model_dump() for serverName, datum in total_data.items()
-        }
+        end = _start_of_today_utc()
+        start = end - timedelta(days=90)
+        return population_db.get_population_totals(start, end)
 
     return get_cached_data_with_fallback(
         "get_game_population_totals_quarter",
@@ -190,10 +192,10 @@ def get_game_population_year() -> list[dict]:
     """
 
     def fetch_data():
-        postgres_data = postgres_client.get_game_population_last_year()
-        averaged_data = average_daily_data(postgres_data)
-        # normalized_data = normalize_population_data(averaged_data)
-        return [datum.model_dump() for datum in averaged_data]
+        end = _start_of_today_utc()
+        start = end - timedelta(days=365)
+        daily_points = population_db.get_daily_population_points(start, end)
+        return [datum.model_dump() for datum in daily_points]
 
     return get_cached_data_with_fallback(
         "get_game_population_year",
@@ -209,11 +211,9 @@ def get_game_population_totals_year() -> list[dict]:
     """
 
     def fetch_data():
-        postgres_data = postgres_client.get_game_population_last_year()
-        _, total_data = summed_population_data_points(postgres_data)
-        return {
-            serverName: datum.model_dump() for serverName, datum in total_data.items()
-        }
+        end = _start_of_today_utc()
+        start = end - timedelta(days=365)
+        return population_db.get_population_totals(start, end)
 
     return get_cached_data_with_fallback(
         "get_game_population_totals_year",
@@ -873,3 +873,291 @@ def normalize_population_data(
         )
 
     return normalized_data
+
+
+# ===== TRENDS (backed by the population_hourly rollup) =====
+
+# Range name -> lookback in days (None = everything we have).
+TRENDS_RANGES: dict[str, Optional[int]] = {
+    "week": 7,
+    "month": 30,
+    "quarter": 90,
+    "year": 365,
+    "all": None,
+}
+
+# Range name -> (default bucket, allowed buckets). Keeps every response to a few thousand
+# points per server at most.
+TRENDS_BUCKETS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "week": ("hour", ("hour", "day")),
+    "month": ("day", ("hour", "day", "week")),
+    "quarter": ("day", ("day", "week")),
+    "year": ("day", ("day", "week", "month")),
+    "all": ("week", ("day", "week", "month")),
+}
+
+# Earliest bucket considered for range=all; older than any game_info data.
+TRENDS_EPOCH = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+
+def _start_of_today_utc() -> datetime:
+    return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _start_of_hour_utc() -> datetime:
+    return datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+
+
+def truncate_to_bucket(value: datetime, unit: str) -> datetime:
+    """Start of the UTC bucket containing ``value`` (weeks start on Monday, like date_trunc)."""
+    value = value.replace(minute=0, second=0, microsecond=0)
+    if unit == "hour":
+        return value
+    value = value.replace(hour=0)
+    if unit == "day":
+        return value
+    if unit == "week":
+        return value - timedelta(days=value.weekday())
+    if unit == "month":
+        return value.replace(day=1)
+    raise ValueError(f"Invalid bucket unit '{unit}'")
+
+
+def resolve_trends_query(
+    range_name: Optional[str], bucket: Optional[str]
+) -> tuple[str, str]:
+    """Validate and normalize ?range=&bucket=. Raises ValueError with a user-facing message."""
+    range_name = (range_name or "month").lower()
+    if range_name not in TRENDS_RANGES:
+        raise ValueError(
+            f"Invalid range '{range_name}'. Supported ranges: {', '.join(TRENDS_RANGES)}"
+        )
+    default_bucket, allowed = TRENDS_BUCKETS[range_name]
+    bucket = (bucket or default_bucket).lower()
+    if bucket not in allowed:
+        raise ValueError(
+            f"Invalid bucket '{bucket}' for range '{range_name}'. "
+            f"Supported buckets: {', '.join(allowed)}"
+        )
+    return range_name, bucket
+
+
+def _round(value: Optional[float]) -> Optional[float]:
+    return None if value is None else round(float(value), 2)
+
+
+def build_trends_series(rows: list[dict], end: datetime, bucket: str) -> dict:
+    """Group rollup rows into {server: [point, ...]} and flag the in-progress bucket."""
+    current_bucket = truncate_to_bucket(end, bucket).replace(tzinfo=None)
+    has_partial = current_bucket != end.replace(tzinfo=None)
+    series: dict[str, list[dict]] = {}
+    for row in rows:
+        t = row["t"]
+        if t.tzinfo is not None:
+            t = t.astimezone(timezone.utc).replace(tzinfo=None)
+        point = {
+            "t": datetime_to_datetime_string(t),
+            "samples": int(row["samples"]),
+            "players": {
+                "avg": _round(row["players_avg"]),
+                "min": int(row["players_min"]),
+                "max": int(row["players_max"]),
+            },
+            "lfms": {
+                "avg": _round(row["lfms_avg"]),
+                "min": int(row["lfms_min"]),
+                "max": int(row["lfms_max"]),
+            },
+        }
+        if has_partial and t == current_bucket:
+            point["partial"] = True
+        series.setdefault(row["server_name"], []).append(point)
+    return series
+
+
+def build_trends_total(rows: list[dict], end: datetime, bucket: str) -> list[dict]:
+    """Combined-server points; min/max are the lowest/highest hourly total in each bucket."""
+    current_bucket = truncate_to_bucket(end, bucket).replace(tzinfo=None)
+    has_partial = current_bucket != end.replace(tzinfo=None)
+    points = []
+    for row in rows:
+        t = row["t"]
+        if t.tzinfo is not None:
+            t = t.astimezone(timezone.utc).replace(tzinfo=None)
+        point = {
+            "t": datetime_to_datetime_string(t),
+            "hours": int(row["hours"]),
+            "players": {
+                "avg": _round(row["players_avg"]),
+                "min": _round(row["players_min"]),
+                "max": _round(row["players_max"]),
+            },
+            "lfms": {
+                "avg": _round(row["lfms_avg"]),
+                "min": _round(row["lfms_min"]),
+                "max": _round(row["lfms_max"]),
+            },
+        }
+        if has_partial and t == current_bucket:
+            point["partial"] = True
+        points.append(point)
+    return points
+
+
+def get_population_trends(range_name: str, bucket: str) -> dict:
+    """Per-server population series for a validated (range, bucket). Checks cache then database.
+
+    The range ends at the start of the current UTC hour. For day/week/month buckets the start is
+    aligned down to a bucket boundary so the first bucket is complete; the last one may be
+    in progress and is marked ``partial``.
+    """
+
+    def fetch_data():
+        end = _start_of_hour_utc()
+        days = TRENDS_RANGES[range_name]
+        if days is None:
+            # "All" starts where the data does, not at the epoch, so the chart has no
+            # years of empty axis in front of the first line. Empty table -> empty range.
+            first = population_db.get_first_rollup_bucket()
+            start = max(first, TRENDS_EPOCH) if first is not None else end
+        else:
+            start = end - timedelta(days=days)
+        start = truncate_to_bucket(start, bucket)
+        rows = population_db.get_population_buckets(start, end, bucket)
+        total_rows = population_db.get_total_population_buckets(start, end, bucket)
+        return {
+            "range": range_name,
+            "bucket": bucket,
+            "start": datetime_to_datetime_string(start),
+            "end": datetime_to_datetime_string(end),
+            "series": build_trends_series(rows, end, bucket),
+            "total": build_trends_total(total_rows, end, bucket),
+        }
+
+    ttl = (
+        POPULATION_TRENDS_HOURLY_CACHE_TTL
+        if bucket == "hour"
+        else POPULATION_TRENDS_CACHE_TTL
+    )
+    return get_cached_data_with_fallback(
+        f"population_trends_{range_name}_{bucket}", fetch_data, ttl
+    )
+
+
+def _minus_one_year(value: datetime) -> datetime:
+    try:
+        return value.replace(year=value.year - 1)
+    except ValueError:  # Feb 29
+        return value.replace(year=value.year - 1, day=28)
+
+
+def summarize_window(start: datetime, end: datetime) -> Optional[dict]:
+    """Average players/LFMs over [start, end), or None when there is no data at all.
+
+    ``coverage`` is the fraction of hours in the window that have data, so the UI can flag
+    comparisons against a period with gaps.
+    """
+    servers, hours_with_data, total = population_db.get_population_window(start, end)
+    if not servers or total is None:
+        return None
+    expected_hours = max(1, int((end - start).total_seconds() // 3600))
+    return {
+        "start": datetime_to_datetime_string(start),
+        "end": datetime_to_datetime_string(end),
+        "coverage": round(min(1.0, hours_with_data / expected_hours), 3),
+        "total": {"players": _round(total["players"]), "lfms": _round(total["lfms"])},
+        "servers": {
+            name: {"players": _round(s["players"]), "lfms": _round(s["lfms"])}
+            for name, s in servers.items()
+        },
+    }
+
+
+def comparison_windows(end: datetime) -> dict[str, tuple[tuple, tuple]]:
+    """(current, previous) windows for each headline comparison, all ending at ``end``."""
+    week = timedelta(days=7)
+    month = timedelta(days=30)
+    month_start = end.replace(day=1, hour=0)
+    if end - month_start < timedelta(days=1):
+        # First hours of a month: compare the month that just finished instead.
+        current_end = month_start
+        month_start = (month_start - timedelta(days=1)).replace(day=1)
+    else:
+        current_end = end
+    return {
+        "week": ((end - week, end), (end - 2 * week, end - week)),
+        "month": ((end - month, end), (end - 2 * month, end - month)),
+        "year_over_year": (
+            (month_start, current_end),
+            (_minus_one_year(month_start), _minus_one_year(current_end)),
+        ),
+    }
+
+
+def get_population_trends_summary() -> dict:
+    """Headline comparisons and records for the Trends page. Checks cache then database."""
+
+    def fetch_data():
+        end = _start_of_hour_utc()
+        comparisons = {
+            name: {
+                "current": summarize_window(*current),
+                "previous": summarize_window(*previous),
+            }
+            for name, (current, previous) in comparison_windows(end).items()
+        }
+        by_weekday, by_hour = population_db.get_average_total_by_weekday_and_hour(
+            end - timedelta(days=90), end
+        )
+        peak_all_time = population_db.get_peak_total_hour(TRENDS_EPOCH, end)
+        peak_last_year = population_db.get_peak_total_hour(
+            end - timedelta(days=365), end
+        )
+        for peak in (peak_all_time, peak_last_year):
+            if peak:
+                peak["players"] = _round(peak["players"])
+        records = {
+            "peak_hour_all_time": peak_all_time,
+            "peak_hour_last_year": peak_last_year,
+            "peak_server_all_time": population_db.get_peak_server_snapshot(
+                TRENDS_EPOCH, end
+            ),
+            "last_90_days_by_weekday": [
+                {"day": d["day"], "players": _round(d["players"])} for d in by_weekday
+            ],
+            "last_90_days_by_hour": [
+                {"hour": h["hour"], "players": _round(h["players"])} for h in by_hour
+            ],
+        }
+        return {
+            "generated_at": datetime_to_datetime_string(end),
+            "comparisons": comparisons,
+            "records": records,
+        }
+
+    return get_cached_data_with_fallback(
+        "population_trends_summary",
+        fetch_data,
+        POPULATION_TRENDS_SUMMARY_CACHE_TTL,
+    )
+
+
+# Caches built from population_hourly with long TTLs. The rollup worker clears these after it
+# fills in history (initial backfill, gap repair, catching up after an outage), so results
+# computed against a half-built table don't outlive the gap.
+LONG_RANGE_POPULATION_CACHE_KEYS = (
+    "get_game_population_quarter",
+    "get_game_population_year",
+    "get_game_population_totals_quarter",
+    "get_game_population_totals_year",
+    "population_trends_summary",
+)
+POPULATION_TRENDS_CACHE_PATTERN = "population_trends_*"
+
+
+def invalidate_long_range_population_caches() -> int:
+    """Delete cached reports derived from population_hourly. Returns the number of keys removed."""
+    with redis_client.get_redis_client() as client:
+        keys = list(LONG_RANGE_POPULATION_CACHE_KEYS)
+        keys.extend(client.scan_iter(match=POPULATION_TRENDS_CACHE_PATTERN))
+        return int(client.delete(*keys)) if keys else 0
