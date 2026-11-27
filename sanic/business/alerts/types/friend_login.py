@@ -23,6 +23,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 MAX_CHARACTERS_PER_RULE = 50
 
+# Pseudo-classes that track epic/legendary levels rather than a playable class.
+NON_CLASS_NAMES = frozenset({"epic", "legendary"})
+
 
 class FriendLoginCriteria(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -49,7 +52,11 @@ class FriendLoginCriteria(BaseModel):
 def _classes_text(classes) -> str:
     parts = []
     for c in classes or []:
-        if isinstance(c, dict) and c.get("name"):
+        if (
+            isinstance(c, dict)
+            and c.get("name")
+            and str(c["name"]).strip().lower() not in NON_CLASS_NAMES
+        ):
             level = c.get("level")
             parts.append(f"{c['name']} {level}" if level else str(c["name"]))
     return " / ".join(parts)

@@ -141,6 +141,25 @@ def test_friend_login_render_has_no_ids():
     assert "123456" not in alert.title + alert.body + alert.url + alert.tag
 
 
+def test_friend_login_render_omits_epic_and_legendary_levels():
+    t = FriendLoginAlertType(context_loader=lambda ids: {})
+    alert = t.render(
+        {
+            "character_id": 1,
+            "name": "Somebody",
+            "server_name": "thrane",
+            "total_level": 36,
+            "classes": [
+                {"name": "Cleric", "level": 20},
+                {"name": "Epic", "level": 10},
+                {"name": "Legendary", "level": 6},
+            ],
+        },
+        _rule(t, {"character_ids": [1]}),
+    )
+    assert alert.body == "Level 36 · Cleric 20 · on Thrane"
+
+
 # ----- shard_exchange_listed -----
 
 LISTING = {
